@@ -1,0 +1,8 @@
+portfolio:
+  tier_1:
+    - pglib_opf_case14_ieee
+    - pglib_opf_case57_ieee
+    - pglib_opf_case118_ieee
+  tier_2:
+    - pglib_opf_case500_goc
+    - activsg500

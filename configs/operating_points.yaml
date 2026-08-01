@@ -1,0 +1,12 @@
+operating_points:
+  regimes:
+    - baseline
+    - low_load
+    - summer_peak
+    - winter_peak
+    - high_renewable
+    - high_import
+    - generator_cost_shift
+    - branch_derating
+  correlated_sampling:
+    local_noise_stddev: 0.02

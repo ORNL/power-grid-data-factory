@@ -1,0 +1,21 @@
+solvers:
+  - solver_id: powermodels_dc_opf_highs
+    framework: PowerModels.jl
+    task: dc_opf
+    formulation: DCPPowerModel
+    optimizer: HiGHS
+  - solver_id: powermodels_ac_opf_ipopt
+    framework: PowerModels.jl
+    task: ac_opf
+    formulation: ACPPowerModel
+    optimizer: Ipopt
+  - solver_id: exago_scopflow_ipopt
+    framework: ExaGO
+    task: scopf
+    formulation: SCOPFLOW
+    optimizer: Ipopt
+  - solver_id: matpower_runopf_mips
+    framework: MATPOWER
+    task: ac_opf
+    formulation: runopf
+    optimizer: MIPS

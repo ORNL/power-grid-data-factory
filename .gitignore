@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.venv/
+
+# OS/editor
+.DS_Store
+.vscode/
+
+# Runtime artifacts
+core
+*.core
+
+# Generated data and logs
+data/runs/
+data/canonical/
+
+# External dependencies and large builds
+external/
+
+# Local build outputs
+build/
+build-*/
+install/
+
+# Julia local state
+julia/.julia/

@@ -1,0 +1,7 @@
+exago:
+  opflow:
+    enabled: true
+    solver_id: exago_opflow_ipopt
+  scopflow:
+    enabled: true
+    solver_id: exago_scopflow_ipopt

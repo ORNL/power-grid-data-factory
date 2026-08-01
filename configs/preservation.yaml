@@ -1,0 +1,9 @@
+preservation:
+  retain_local_directory: true
+  create_archive: true
+  archive_format: tar.gz
+  verify_after_archive: true
+  secondary_copy:
+    enabled: false
+    destination: null
+    verify_checksum: true

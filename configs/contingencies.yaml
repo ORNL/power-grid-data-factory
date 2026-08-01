@@ -1,0 +1,10 @@
+contingencies:
+  enable_n1: true
+  enable_n2: true
+  enable_sequential_n1n1: true
+  selection_stream_mix:
+    coverage: 0.45
+    severity: 0.25
+    structural_diversity: 0.12
+    uncertainty: 0.10
+    extreme: 0.08
