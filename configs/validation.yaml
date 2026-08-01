@@ -1,0 +1,6 @@
+validation:
+  power_balance_tolerance_pu: 1.0e-5
+  voltage_tolerance_pu: 1.0e-6
+  generator_limit_tolerance_pu: 1.0e-5
+  branch_limit_tolerance_pu: 1.0e-5
+  objective_relative_tolerance: 1.0e-5

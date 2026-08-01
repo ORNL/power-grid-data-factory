@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "power-grid-data-factory"
+version = "0.1.0"
+description = "Preservation-first power-grid simulation data factory"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "pydantic>=2.7",
+  "pyyaml>=6.0",
+  "pandas>=2.0",
+  "pyarrow>=14.0",
+]
+
+[project.scripts]
+pgdf-finalize-attempt = "grid_data_factory.cli.finalize_attempt:main"
+pgdf-verify-attempt = "grid_data_factory.cli.verify_attempt_integrity:main"
+pgdf-audit-preservation = "grid_data_factory.cli.audit_preservation:main"
+pgdf-validate-layout = "grid_data_factory.cli.validate_run_layout:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

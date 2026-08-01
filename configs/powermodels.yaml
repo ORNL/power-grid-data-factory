@@ -1,0 +1,13 @@
+powermodels:
+  dc_opf:
+    formulation: DCPPowerModel
+    optimizer: HiGHS
+  ac_opf:
+    formulation: ACPPowerModel
+    optimizer: Ipopt
+  ac_pf:
+    mode: native_or_ipopt
+  runtime:
+    compiled_modules: false
+    julia_num_threads: 1
+    openblas_num_threads: 1

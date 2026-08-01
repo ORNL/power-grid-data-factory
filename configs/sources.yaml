@@ -1,0 +1,16 @@
+sources:
+  exago:
+    repo: https://github.com/ORNL/ExaGO
+    target_dir: external/ExaGO
+    git_commit: 545a8deb6fa35552f0ee402ca83672fe1255f61a
+  pglib_opf:
+    repo: https://github.com/power-grid-lib/pglib-opf
+    target_dir: external/pglib-opf
+  rts_gmlc:
+    repo: https://github.com/GridMod/RTS-GMLC
+    target_dir: external/RTS-GMLC
+  tamu:
+    target_dir: external/tamu
+  go_challenge1:
+    oedi_record: https://data.openei.org/submissions/6153
+    target_dir: external/go_challenge1
