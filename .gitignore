@@ -16,6 +16,7 @@ core
 # Generated data and logs
 data/runs/
 data/canonical/
+data/analysis/
 
 # External dependencies and large builds
 external/

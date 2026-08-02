@@ -1,6 +1,12 @@
 using Pkg
 Pkg.activate(@__DIR__)
 
+# Frontier-safe defaults: avoid unstable precompile path on this environment.
+ENV["JULIA_PKG_PRECOMPILE_AUTO"] = "0"
+if !haskey(ENV, "JULIA_PKG_SERVER")
+	ENV["JULIA_PKG_SERVER"] = ""
+end
+
 try
 	Pkg.Registry.add("General")
 catch
@@ -8,5 +14,5 @@ catch
 end
 
 Pkg.resolve()
-Pkg.instantiate()
+Pkg.instantiate(; allow_autoprecomp=false)
 println("Environment instantiated.")
