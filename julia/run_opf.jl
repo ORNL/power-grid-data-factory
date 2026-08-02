@@ -15,6 +15,22 @@ payload = JSON3.read(read(payload_path, String))
 
 task = haskey(payload, :task) ? String(payload[:task]) : "ac_opf"
 
+function sanitize_json_value(x)
+    if x isa AbstractDict
+        out = Dict{String, Any}()
+        for (k, v) in x
+            out[string(k)] = sanitize_json_value(v)
+        end
+        return out
+    elseif x isa AbstractVector
+        return [sanitize_json_value(v) for v in x]
+    elseif x isa AbstractFloat
+        return isfinite(x) ? x : nothing
+    else
+        return x
+    end
+end
+
 function to_powermodels_data(case_data)
     base_mva = haskey(case_data, :base_mva) ? Float64(case_data[:base_mva]) : 100.0
     buses = case_data[:buses]
@@ -42,8 +58,9 @@ function to_powermodels_data(case_data)
             "index" => idx,
             "bus_i" => bid,
             "bus_type" => btype,
-            "pd" => get(pd_by_bus, bid, 0.0) / base_mva,
-            "qd" => get(qd_by_bus, bid, 0.0) / base_mva,
+            # Keep bus-level demand at zero and model demands explicitly in `load`.
+            "pd" => 0.0,
+            "qd" => 0.0,
             "gs" => 0.0,
             "bs" => 0.0,
             "vm" => vm,
@@ -61,7 +78,6 @@ function to_powermodels_data(case_data)
     end
 
     pm_gen = Dict{String, Any}()
-    pm_gencost = Dict{String, Any}()
     for (idx, g) in enumerate(gens)
         bus_id = parse(Int, String(g[:bus_id]))
         bus_idx = bus_index_by_id[bus_id]
@@ -69,6 +85,12 @@ function to_powermodels_data(case_data)
         pmax = Float64(g[:pmax]) / base_mva
         qmin = Float64(g[:qmin]) / base_mva
         qmax = Float64(g[:qmax]) / base_mva
+        c = haskey(g, :cost) ? g[:cost] : [0.0, 1.0, 0.0]
+        # Interpret provided coefficients as [quad, linear, const].
+        c2 = length(c) >= 1 ? Float64(c[1]) : 0.0
+        c1 = length(c) >= 2 ? Float64(c[2]) : 1.0
+        c0 = length(c) >= 3 ? Float64(c[3]) : 0.0
+
         pm_gen[string(idx)] = Dict(
             "index" => idx,
             "gen_bus" => bus_id,
@@ -83,15 +105,6 @@ function to_powermodels_data(case_data)
             "pmin" => pmin,
             "source_id" => Any["gen", bus_id, String(g[:gen_id])],
             "bus_idx" => bus_idx,
-        )
-
-        c = haskey(g, :cost) ? g[:cost] : [0.0, 1.0, 0.0]
-        # Interpret provided coefficients as [quad, linear, const].
-        c2 = length(c) >= 1 ? Float64(c[1]) : 0.0
-        c1 = length(c) >= 2 ? Float64(c[2]) : 1.0
-        c0 = length(c) >= 3 ? Float64(c[3]) : 0.0
-        pm_gencost[string(idx)] = Dict(
-            "index" => idx,
             "model" => 2,
             "ncost" => 3,
             "cost" => [c2, c1, c0],
@@ -126,14 +139,30 @@ function to_powermodels_data(case_data)
         )
     end
 
+    pm_load = Dict{String, Any}()
+    for (idx, ld) in enumerate(loads)
+        bus_id = parse(Int, String(ld[:bus_id]))
+        load_id = haskey(ld, :load_id) ? String(ld[:load_id]) : string(idx)
+        pm_load[string(idx)] = Dict(
+            "index" => idx,
+            "status" => 1,
+            "load_bus" => bus_id,
+            "pd" => Float64(ld[:pd]) / base_mva,
+            "qd" => Float64(ld[:qd]) / base_mva,
+            "source_id" => Any["load", bus_id, load_id],
+        )
+    end
+
     return Dict(
         "name" => haskey(case_data, :case_id) ? String(case_data[:case_id]) : "case",
         "baseMVA" => base_mva,
+        "per_unit" => true,
         "source_type" => "json",
         "bus" => pm_bus,
         "gen" => pm_gen,
+        "load" => pm_load,
+        "shunt" => Dict{String, Any}(),
         "branch" => pm_branch,
-        "gencost" => pm_gencost,
         "dcline" => Dict{String, Any}(),
         "storage" => Dict{String, Any}(),
         "switch" => Dict{String, Any}(),
@@ -161,13 +190,14 @@ if task == "ac_opf"
         ok = term in ("LOCALLY_SOLVED", "OPTIMAL", "ALMOST_LOCALLY_SOLVED", "ALMOST_OPTIMAL")
         result["success"] = ok
         result["termination_status"] = term
-        result["objective"] = get(pm_out, "objective", nothing)
-        result["solve_time"] = get(pm_out, "solve_time", nothing)
-        result["raw_result"] = pm_out
+        result["objective"] = sanitize_json_value(get(pm_out, "objective", nothing))
+        result["solve_time"] = sanitize_json_value(get(pm_out, "solve_time", nothing))
+        result["raw_result"] = sanitize_json_value(pm_out)
     catch err
         result["success"] = false
         result["termination_status"] = "exception"
         result["error"] = sprint(showerror, err)
+        result["stacktrace"] = sprint(showerror, err, catch_backtrace())
     end
 else
     result["success"] = false

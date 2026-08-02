@@ -52,7 +52,7 @@ class PowerModelsAdapter:
         return sorted(pkgs)
 
     def _run_preflight(self, env: dict[str, str], timeout_s: float | None) -> dict | None:
-        preflight_timeout = 60.0 if timeout_s is None else min(timeout_s, 60.0)
+        preflight_timeout = 180.0 if timeout_s is None else max(60.0, min(timeout_s, 300.0))
         preflight_cmd = [
             "julia",
             f"--project={self.julia_project_dir}",
