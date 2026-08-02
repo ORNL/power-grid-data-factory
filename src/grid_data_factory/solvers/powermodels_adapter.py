@@ -125,7 +125,10 @@ class PowerModelsAdapter:
 
         preflight_result = self._run_preflight(env=env, timeout_s=timeout_s)
         if preflight_result is not None:
-            return preflight_result
+            # In unstable HPC environments preflight can timeout even when the solver
+            # run itself succeeds; continue to the solve path in that specific case.
+            if preflight_result.get("termination_status") != "preflight_timeout":
+                return preflight_result
 
         case_path = None
         payload_path = None
