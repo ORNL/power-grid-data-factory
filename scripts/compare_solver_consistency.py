@@ -79,7 +79,7 @@ def _powermodels_status(repo_root: Path) -> dict[str, Any]:
         "loads": [{"load_id": "1", "bus_id": "2", "pd": 80.0, "qd": 20.0}],
         "branches": [{"branch_id": "1", "from": "1", "to": "2", "r": 0.01, "x": 0.05, "rate_a": 150.0}],
     }
-    return adapter.solve_ac_opf(tiny_case, options={"timeout_s": 60})
+    return adapter.solve_ac_opf(tiny_case, options={"timeout_s": 300})
 
 
 def main() -> None:
