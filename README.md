@@ -14,6 +14,7 @@ This repository is initialized from the planning document:
 - `docs/external_sources.md`
 - `docs/reproducibility.md`
 - `docs/scripts_reference.md`
+- `docs/production_readiness_checklist.md`
 - `docs/first_reproducible_run.md`
 - `docs/first_real_case_run.md`
 

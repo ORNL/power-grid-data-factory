@@ -14,6 +14,7 @@ This documentation describes the purpose, architecture, setup, and reproducibili
 8. [First Reproducible Run Walkthrough](first_reproducible_run.md)
 9. [First Real-Case Input Run with Registry Append](first_real_case_run.md)
 10. [Three-Solver Runbook (ExaGO + pandapower + PowerModels)](three_solver_runbook.md)
+11. [Production Readiness Checklist](production_readiness_checklist.md)
 
 ## Intended audience
 
