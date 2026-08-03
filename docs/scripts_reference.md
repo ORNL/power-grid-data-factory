@@ -59,6 +59,10 @@ The following are scaffolded placeholders and should be implemented for producti
   - Audits per-case source identity metadata and local availability from `configs/sources.yaml`.
   - Reports source lineage, acquisition mode, expected source file, checksum, TAMU correspondence, and PF/DC-OPF/AC-OPF readiness.
   - Enforces explicit non-equivalence metadata for similar-size but distinct grid families.
+- `scripts/export_manual_source_bundle.py`
+  - Exports a git-tracked reproducibility bundle from manual TAMU case ingestion state.
+  - Copies per-case manifests, checksums, and inventories into `data/imported/manual_sources/cases/`.
+  - Writes `data/imported/manual_sources/repro_bundle.json` with archive checksums and metadata.
 
 ## Topology creation helper
 

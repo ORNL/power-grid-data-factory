@@ -1,0 +1,18 @@
+source: tamu
+source_type: manual_catalog
+case_id: activsg25k
+registered_at: '2026-08-03T16:57:39.217038+00:00'
+catalog_url: https://electricgrids.engr.tamu.edu/electric-grid-test-cases/
+case_page_url: null
+archive:
+  original_filename: ACTIVSg25k.zip
+  relative_path: raw/ACTIVSg25k.zip
+  size_bytes: 34044130
+  sha256: dff6d6250f3b8c5f155e4f83efdf299b3a02b8910c921efcfe4a452015e867ec
+  expected_sha256: null
+  sha256_match: null
+  archive_type: zip
+extraction:
+  requested: true
+  status: ok
+  destination: /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/tamu/activsg25k/extracted

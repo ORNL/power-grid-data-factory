@@ -1,0 +1,11 @@
+extracted/ACTIVSg70k.EPC
+extracted/ACTIVSg70k.PWB
+extracted/ACTIVSg70k.RAW
+extracted/ACTIVSg70k.aux
+extracted/ACTIVSg70k.pwd
+extracted/ACTIVSg70k_GIC_data.gic
+extracted/ACTIVSg70k_dynamics.aux
+extracted/ACTIVSg70k_dynamics.dyd
+extracted/ACTIVSg70k_dynamics.dyr
+extracted/case_ACTIVSg70k.m
+raw/ACTIVSg70k.zip

@@ -1,0 +1,259 @@
+{
+  "generated_from": "external/tamu",
+  "generated_at": "2026-08-03T16:59:37.961317+00:00",
+  "policy_note": "Manual source archives remain under external/tamu (gitignored). This bundle stores reproducibility metadata, manifests, checksums, and inventories.",
+  "cases": [
+    {
+      "case_id": "activsg500",
+      "required": true,
+      "acquisition_mode": "manual",
+      "grid_family": "activsg",
+      "metadata": {
+        "source_repository": "tamu",
+        "source_origin": "tamu",
+        "source_case_name": "ACTIVSg500",
+        "bus_count": 500,
+        "exact_source_topology": true,
+        "exact_tamu_topology": true,
+        "non_equivalent_similar_size_cases": [
+          "pglib_opf_case500_goc"
+        ]
+      },
+      "copied_files": {
+        "source_manifest.yaml": "data/imported/manual_sources/cases/activsg500/source_manifest.yaml",
+        "checksums.sha256": "data/imported/manual_sources/cases/activsg500/checksums.sha256",
+        "inventory.txt": "data/imported/manual_sources/cases/activsg500/inventory.txt"
+      },
+      "archives": [
+        {
+          "filename": "ACTIVSg500.zip",
+          "size_bytes": 624386,
+          "sha256": "53bdfff115fff445cf175205c9be0ae21a72d1c5272159eed5f52fccf0a05fe0",
+          "relative_external_path": "external/tamu/activsg500/raw/ACTIVSg500.zip"
+        }
+      ],
+      "archive_count": 1,
+      "extracted_file_count": 11,
+      "present": true
+    },
+    {
+      "case_id": "activsg2000",
+      "required": false,
+      "acquisition_mode": "manual",
+      "grid_family": "activsg",
+      "metadata": {
+        "source_repository": "tamu",
+        "source_origin": "tamu",
+        "source_case_name": "ACTIVSg2000",
+        "bus_count": 2000,
+        "exact_source_topology": true,
+        "exact_tamu_topology": true,
+        "non_equivalent_similar_size_cases": [
+          "pglib_opf_case2000_goc"
+        ]
+      },
+      "copied_files": {
+        "source_manifest.yaml": "data/imported/manual_sources/cases/activsg2000/source_manifest.yaml",
+        "checksums.sha256": "data/imported/manual_sources/cases/activsg2000/checksums.sha256",
+        "inventory.txt": "data/imported/manual_sources/cases/activsg2000/inventory.txt"
+      },
+      "archives": [
+        {
+          "filename": "ACTIVSg2000.zip",
+          "size_bytes": 125187998,
+          "sha256": "2ca15a80f749d943564f4a49cb590b3eac5dc144335271ba27fab4835774fbef",
+          "relative_external_path": "external/tamu/activsg2000/raw/ACTIVSg2000.zip"
+        }
+      ],
+      "archive_count": 1,
+      "extracted_file_count": 16,
+      "present": true
+    },
+    {
+      "case_id": "activsg10k",
+      "required": false,
+      "acquisition_mode": "manual",
+      "grid_family": "activsg",
+      "metadata": {
+        "source_repository": "tamu",
+        "source_origin": "tamu",
+        "source_case_name": "ACTIVSg10k",
+        "bus_count": 10000,
+        "exact_source_topology": true,
+        "exact_tamu_topology": true,
+        "non_equivalent_similar_size_cases": [
+          "pglib_opf_case10000_goc"
+        ]
+      },
+      "copied_files": {
+        "source_manifest.yaml": "data/imported/manual_sources/cases/activsg10k/source_manifest.yaml",
+        "checksums.sha256": "data/imported/manual_sources/cases/activsg10k/checksums.sha256",
+        "inventory.txt": "data/imported/manual_sources/cases/activsg10k/inventory.txt"
+      },
+      "archives": [
+        {
+          "filename": "ACTIVSg10k.zip",
+          "size_bytes": 12004751,
+          "sha256": "c1e5a3f0a55d5315a70bc4a499be1d41291b351ec693e5cbe908339e5e9d45c1",
+          "relative_external_path": "external/tamu/activsg10k/raw/ACTIVSg10k.zip"
+        }
+      ],
+      "archive_count": 1,
+      "extracted_file_count": 12,
+      "present": true
+    },
+    {
+      "case_id": "activsg25k",
+      "required": false,
+      "acquisition_mode": "manual",
+      "grid_family": "activsg",
+      "metadata": {
+        "source_repository": "tamu",
+        "source_origin": "tamu",
+        "source_case_name": "ACTIVSg25k",
+        "bus_count": 25000,
+        "exact_source_topology": true,
+        "exact_tamu_topology": true,
+        "non_equivalent_similar_size_cases": []
+      },
+      "copied_files": {
+        "source_manifest.yaml": "data/imported/manual_sources/cases/activsg25k/source_manifest.yaml",
+        "checksums.sha256": "data/imported/manual_sources/cases/activsg25k/checksums.sha256",
+        "inventory.txt": "data/imported/manual_sources/cases/activsg25k/inventory.txt"
+      },
+      "archives": [
+        {
+          "filename": "ACTIVSg25k.zip",
+          "size_bytes": 34044130,
+          "sha256": "dff6d6250f3b8c5f155e4f83efdf299b3a02b8910c921efcfe4a452015e867ec",
+          "relative_external_path": "external/tamu/activsg25k/raw/ACTIVSg25k.zip"
+        }
+      ],
+      "archive_count": 1,
+      "extracted_file_count": 9,
+      "present": true
+    },
+    {
+      "case_id": "activsg70k",
+      "required": false,
+      "acquisition_mode": "manual",
+      "grid_family": "activsg",
+      "metadata": {
+        "source_repository": "tamu",
+        "source_origin": "tamu",
+        "source_case_name": "ACTIVSg70k",
+        "bus_count": 70000,
+        "exact_source_topology": true,
+        "exact_tamu_topology": true,
+        "non_equivalent_similar_size_cases": []
+      },
+      "copied_files": {
+        "source_manifest.yaml": "data/imported/manual_sources/cases/activsg70k/source_manifest.yaml",
+        "checksums.sha256": "data/imported/manual_sources/cases/activsg70k/checksums.sha256",
+        "inventory.txt": "data/imported/manual_sources/cases/activsg70k/inventory.txt"
+      },
+      "archives": [
+        {
+          "filename": "ACTIVSg70k.zip",
+          "size_bytes": 60346475,
+          "sha256": "7404fce0221b0b134fbf5011427417b4f82d885b089e1fc2fcf8b7c6c10243a8",
+          "relative_external_path": "external/tamu/activsg70k/raw/ACTIVSg70k.zip"
+        }
+      ],
+      "archive_count": 1,
+      "extracted_file_count": 10,
+      "present": true
+    },
+    {
+      "case_id": "activsg82k",
+      "required": false,
+      "acquisition_mode": "manual",
+      "grid_family": "activsg",
+      "metadata": {
+        "source_repository": "tamu",
+        "source_origin": "tamu",
+        "source_case_name": "ACTIVSg82k",
+        "bus_count": 82000,
+        "exact_source_topology": true,
+        "exact_tamu_topology": true,
+        "non_equivalent_similar_size_cases": []
+      },
+      "copied_files": {},
+      "archives": [],
+      "archive_count": 0,
+      "extracted_file_count": 0,
+      "present": true
+    },
+    {
+      "case_id": "memphis2026",
+      "required": true,
+      "acquisition_mode": "manual",
+      "grid_family": "memphis_synthetic",
+      "metadata": {
+        "source_repository": "tamu",
+        "source_origin": "tamu",
+        "source_case_name": "Memphis 2026",
+        "bus_count": null,
+        "exact_source_topology": true,
+        "exact_tamu_topology": true,
+        "non_equivalent_similar_size_cases": []
+      },
+      "copied_files": {
+        "source_manifest.yaml": "data/imported/manual_sources/cases/memphis2026/source_manifest.yaml",
+        "checksums.sha256": "data/imported/manual_sources/cases/memphis2026/checksums.sha256",
+        "inventory.txt": "data/imported/manual_sources/cases/memphis2026/inventory.txt"
+      },
+      "archives": [
+        {
+          "filename": "MemphisCase2026_Mar7.zip",
+          "size_bytes": 4901458,
+          "sha256": "563262cd9a004b5e20d5f933296917ac185a1e0e25df31506a5d0d2e0e2e4183",
+          "relative_external_path": "external/tamu/memphis2026/raw/MemphisCase2026_Mar7.zip"
+        }
+      ],
+      "archive_count": 1,
+      "extracted_file_count": 10,
+      "present": true
+    },
+    {
+      "case_id": "epigrids_new_england_250",
+      "required": false,
+      "acquisition_mode": "manual",
+      "grid_family": "epigrids",
+      "metadata": {
+        "source_repository": "tamu",
+        "source_origin": "tamu",
+        "source_case_name": "EPIGRIDS New England 250",
+        "bus_count": 250,
+        "exact_source_topology": true,
+        "exact_tamu_topology": true,
+        "non_equivalent_similar_size_cases": []
+      },
+      "copied_files": {},
+      "archives": [],
+      "archive_count": 0,
+      "extracted_file_count": 0,
+      "present": true
+    },
+    {
+      "case_id": "epigrids_wisconsin_1664",
+      "required": false,
+      "acquisition_mode": "manual",
+      "grid_family": "epigrids",
+      "metadata": {
+        "source_repository": "tamu",
+        "source_origin": "tamu",
+        "source_case_name": "EPIGRIDS Wisconsin 1664",
+        "bus_count": 1664,
+        "exact_source_topology": true,
+        "exact_tamu_topology": true,
+        "non_equivalent_similar_size_cases": []
+      },
+      "copied_files": {},
+      "archives": [],
+      "archive_count": 0,
+      "extracted_file_count": 0,
+      "present": true
+    }
+  ]
+}

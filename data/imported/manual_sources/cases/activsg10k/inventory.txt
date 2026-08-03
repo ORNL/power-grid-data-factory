@@ -1,0 +1,13 @@
+extracted/ACTIVSg10k.EPC
+extracted/ACTIVSg10k.RAW
+extracted/ACTIVSg10k.aux
+extracted/ACTIVSg10k.con
+extracted/ACTIVSg10k.pwb
+extracted/ACTIVSg10k.pwd
+extracted/ACTIVSg10k_GIC_data.gic
+extracted/ACTIVSg10k_dynamics.aux
+extracted/ACTIVSg10k_dynamics.dyd
+extracted/ACTIVSg10k_dynamics.dyr
+extracted/case_ACTIVSg10k.m
+extracted/contab_ACTIVSg10k.m
+raw/ACTIVSg10k.zip
