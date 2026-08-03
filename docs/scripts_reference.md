@@ -21,8 +21,6 @@ This page summarizes script entrypoints currently included in the scaffold.
 
 The following are scaffolded placeholders and should be implemented for production execution:
 
-- `scripts/download_sources.py`
-- `scripts/inspect_sources.py`
 - `scripts/canonicalize_cases.py`
 - `scripts/register_case.py`
 - `scripts/create_topology.py`
@@ -35,6 +33,15 @@ The following are scaffolded placeholders and should be implemented for producti
 - `scripts/run_scopf.py`
 - `scripts/compare_solver_consistency.py`
 - `scripts/phase1_gate.py`
+
+## Source onboarding helpers
+
+- `scripts/inspect_sources.py`
+  - Reports configured source presence, git head (for git repos), and pinned commit match status.
+- `scripts/download_sources.py`
+  - Clones missing git-based sources from `configs/sources.yaml`.
+  - Optionally checks out pinned commits and creates placeholder directories for manual-download sources.
+  - Writes provenance report JSON (default: `data/imported/source_provenance.json`).
 
 ## Build and machine-profile helpers
 
