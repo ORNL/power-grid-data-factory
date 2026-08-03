@@ -34,6 +34,7 @@ The following are scaffolded placeholders and should be implemented for producti
 - `scripts/run_ac_opf.py`
 - `scripts/run_scopf.py`
 - `scripts/compare_solver_consistency.py`
+- `scripts/phase1_gate.py`
 
 ## CLI module entrypoints
 

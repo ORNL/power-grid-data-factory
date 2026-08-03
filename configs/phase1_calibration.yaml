@@ -1,0 +1,15 @@
+phase1:
+  cases:
+    - datafiles/case9/case9mod.m
+    - datafiles/case39.m
+  require_exago_converged: true
+  require_pandapower_converged: true
+  require_powermodels_success: true
+  accepted_powermodels_termination_status:
+    - LOCALLY_SOLVED
+    - OPTIMAL
+    - ALMOST_LOCALLY_SOLVED
+    - ALMOST_OPTIMAL
+  max_pandapower_vs_exago_ipopt_relative_diff: 0.005
+  min_audited_attempts: 1
+  report_path: data/analysis/solver_consistency_report.json
