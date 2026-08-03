@@ -31,6 +31,31 @@ This page lists external solver and data repositories needed to reproduce simula
 - Typical local path: `external/pglib-opf`
 - Use for: baseline and scaling portfolio across many case sizes.
 
+### TAMU-derived cases available through PGLib (automatic)
+
+These cases have explicit topology correspondence and can be acquired by cloning PGLib:
+
+- `ACTIVSg200` -> `pglib_opf_case200_activ.m`
+- `EPIGRIDS Florida` -> `pglib_opf_case5658_epigrids.m`
+- `EPIGRIDS Texas` -> `pglib_opf_case7336_epigrids.m`
+- `EPIGRIDS Midwest` -> `pglib_opf_case10192_epigrids.m`
+- `EPIGRIDS Western Network` -> `pglib_opf_case20758_epigrids.m`
+- `EPIGRIDS Eastern Network` -> `pglib_opf_case78484_epigrids.m`
+
+### Non-equivalence rule
+
+A similar bus count does not imply an identical topology. Cases are treated as equivalent only with explicit verified source relationships.
+
+- `pglib_opf_case500_goc.m` is not `ACTIVSg500`
+- `pglib_opf_case2000_goc.m` is not `ACTIVSg2000`
+- `pglib_opf_case10000_goc.m` is not `ACTIVSg10k`
+
+Grid families remain distinct even when bus counts are similar:
+
+- `goc`
+- `activsg`
+- `epigrids`
+
 ## RTS-GMLC
 
 - Repository: https://github.com/GridMod/RTS-GMLC
@@ -42,6 +67,20 @@ This page lists external solver and data repositories needed to reproduce simula
 - Index: https://electricgrids.engr.tamu.edu/electric-grid-test-cases/
 - Typical local path root: `external/tamu`
 - Use for: large synthetic grid families and stress testing.
+
+The following TAMU cases currently require manual acquisition (no assumed PGLib equivalence):
+
+- `ACTIVSg500`
+- `ACTIVSg2000`
+- `ACTIVSg10k`
+- `ACTIVSg25k`
+- `ACTIVSg70k`
+- `ACTIVSg82k`
+- `Memphis 2026`
+- `EPIGRIDS New England 250`
+- `EPIGRIDS Wisconsin 1664`
+
+Store manually downloaded archives under `external/tamu/<case_id>/raw/` and do not bypass case-form workflows.
 
 ## ARPA-E GO Competition Challenge 1
 

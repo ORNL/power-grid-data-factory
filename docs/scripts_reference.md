@@ -23,7 +23,6 @@ The following are scaffolded placeholders and should be implemented for producti
 
 - `scripts/canonicalize_cases.py`
 - `scripts/register_case.py`
-- `scripts/create_topology.py`
 - `scripts/create_operating_point.py`
 - `scripts/enumerate_contingencies.py`
 - `scripts/screen_contingencies.py`
@@ -56,6 +55,17 @@ The following are scaffolded placeholders and should be implemented for producti
   - Validates configured sources and emits policy statuses.
   - Supports statuses: `MISSING`, `DOWNLOADED_UNREGISTERED`, `REGISTERED`, `EXTRACTED`, `VALIDATED`, `CHECKSUM_MISMATCH`, `UNSUPPORTED_FORMAT`, `INCOMPLETE_FOR_PF`, `INCOMPLETE_FOR_OPF`.
   - Marks validation non-OK when required manual cases are not validated.
+- `scripts/audit_case_sources.py`
+  - Audits per-case source identity metadata and local availability from `configs/sources.yaml`.
+  - Reports source lineage, acquisition mode, expected source file, checksum, TAMU correspondence, and PF/DC-OPF/AC-OPF readiness.
+  - Enforces explicit non-equivalence metadata for similar-size but distinct grid families.
+
+## Topology creation helper
+
+- `scripts/create_topology.py`
+  - Parses MATPOWER-format case files (currently default-mapped for `pglib_opf`).
+  - Emits a topology JSON artifact under `data/topology_registry/<case_id>/topology_<index>_<description>.json`.
+  - Appends a registry record to `data/topology_registry/topology_registry.jsonl` with source file and element counts.
 
 ## Build and machine-profile helpers
 

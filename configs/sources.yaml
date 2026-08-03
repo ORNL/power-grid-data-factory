@@ -4,10 +4,139 @@ sources:
     url: https://github.com/ORNL/ExaGO
     destination: external/ExaGO
     git_commit: 545a8deb6fa35552f0ee402ca83672fe1255f61a
-  pglib_opf:
+  pglib:
     type: git
-    url: https://github.com/power-grid-lib/pglib-opf
+    repository: https://github.com/power-grid-lib/pglib-opf
     destination: external/pglib-opf
+    cases:
+      - case_id: activsg200
+        grid_family: activsg
+        source_repository: pglib
+        source_origin: tamu
+        source_file: pglib_opf_case200_activ.m
+        source_case_name: ACTIVSg200
+        bus_count: 200
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: true
+        acquisition_mode: automatic
+
+      - case_id: epigrids_florida_5658
+        grid_family: epigrids
+        source_repository: pglib
+        source_origin: tamu
+        source_file: pglib_opf_case5658_epigrids.m
+        source_case_name: EPIGRIDS Florida
+        bus_count: 5658
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: true
+        acquisition_mode: automatic
+
+      - case_id: epigrids_texas_7336
+        grid_family: epigrids
+        source_repository: pglib
+        source_origin: tamu
+        source_file: pglib_opf_case7336_epigrids.m
+        source_case_name: EPIGRIDS Texas
+        bus_count: 7336
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: true
+        acquisition_mode: automatic
+
+      - case_id: epigrids_midwest_10192
+        grid_family: epigrids
+        source_repository: pglib
+        source_origin: tamu
+        source_file: pglib_opf_case10192_epigrids.m
+        source_case_name: EPIGRIDS Midwest
+        bus_count: 10192
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: true
+        acquisition_mode: automatic
+
+      - case_id: epigrids_western_20758
+        grid_family: epigrids
+        source_repository: pglib
+        source_origin: tamu
+        source_file: pglib_opf_case20758_epigrids.m
+        source_case_name: EPIGRIDS Western Network
+        bus_count: 20758
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: true
+        acquisition_mode: automatic
+
+      - case_id: epigrids_eastern_78484
+        grid_family: epigrids
+        source_repository: pglib
+        source_origin: tamu
+        source_file: pglib_opf_case78484_epigrids.m
+        source_case_name: EPIGRIDS Eastern Network
+        bus_count: 78484
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: true
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case500_goc
+        grid_family: goc
+        source_repository: pglib
+        source_origin: arpa_e_go_challenge_1
+        source_file: pglib_opf_case500_goc.m
+        source_case_name: GO Competition 500
+        bus_count: 500
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases:
+          - activsg500
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case2000_goc
+        grid_family: goc
+        source_repository: pglib
+        source_origin: arpa_e_go_challenge_1
+        source_file: pglib_opf_case2000_goc.m
+        source_case_name: GO Competition 2000
+        bus_count: 2000
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases:
+          - activsg2000
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case10000_goc
+        grid_family: goc
+        source_repository: pglib
+        source_origin: arpa_e_go_challenge_1
+        source_file: pglib_opf_case10000_goc.m
+        source_case_name: GO Competition 10000
+        bus_count: 10000
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases:
+          - activsg10k
+        exact_tamu_topology: false
+        acquisition_mode: automatic
   rts_gmlc:
     type: git
     url: https://github.com/GridMod/RTS-GMLC
@@ -19,45 +148,170 @@ sources:
     destination: external/tamu
     cases:
       - case_id: activsg500
+        grid_family: activsg
+        source_repository: tamu
+        source_origin: tamu
+        source_file: null
+        source_case_name: ACTIVSg500
+        bus_count: 500
+        exact_source_topology: true
+        exact_tamu_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases:
+          - pglib_opf_case500_goc
+        acquisition_mode: manual
+        pglib_equivalent: null
         case_page_url: null
         archive_url: null
         expected_sha256: null
         required: true
       - case_id: activsg2000
+        grid_family: activsg
+        source_repository: tamu
+        source_origin: tamu
+        source_file: null
+        source_case_name: ACTIVSg2000
+        bus_count: 2000
+        exact_source_topology: true
+        exact_tamu_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases:
+          - pglib_opf_case2000_goc
+        acquisition_mode: manual
+        pglib_equivalent: null
         case_page_url: null
         archive_url: null
         expected_sha256: null
         required: false
       - case_id: activsg10k
+        grid_family: activsg
+        source_repository: tamu
+        source_origin: tamu
+        source_file: null
+        source_case_name: ACTIVSg10k
+        bus_count: 10000
+        exact_source_topology: true
+        exact_tamu_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases:
+          - pglib_opf_case10000_goc
+        acquisition_mode: manual
+        pglib_equivalent: null
         case_page_url: null
         archive_url: null
         expected_sha256: null
         required: false
       - case_id: activsg25k
+        grid_family: activsg
+        source_repository: tamu
+        source_origin: tamu
+        source_file: null
+        source_case_name: ACTIVSg25k
+        bus_count: 25000
+        exact_source_topology: true
+        exact_tamu_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        acquisition_mode: manual
+        pglib_equivalent: null
         case_page_url: null
         archive_url: null
         expected_sha256: null
         required: false
       - case_id: activsg70k
+        grid_family: activsg
+        source_repository: tamu
+        source_origin: tamu
+        source_file: null
+        source_case_name: ACTIVSg70k
+        bus_count: 70000
+        exact_source_topology: true
+        exact_tamu_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        acquisition_mode: manual
+        pglib_equivalent: null
         case_page_url: null
         archive_url: null
         expected_sha256: null
         required: false
       - case_id: activsg82k
+        grid_family: activsg
+        source_repository: tamu
+        source_origin: tamu
+        source_file: null
+        source_case_name: ACTIVSg82k
+        bus_count: 82000
+        exact_source_topology: true
+        exact_tamu_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        acquisition_mode: manual
+        pglib_equivalent: null
         case_page_url: null
         archive_url: null
         expected_sha256: null
         required: false
-      - case_id: epigrids_eastern
-        case_page_url: null
-        archive_url: null
-        expected_sha256: null
-        required: true
       - case_id: memphis2026
+        grid_family: memphis_synthetic
+        source_repository: tamu
+        source_origin: tamu
+        source_file: null
+        source_case_name: Memphis 2026
+        bus_count: null
+        exact_source_topology: true
+        exact_tamu_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        acquisition_mode: manual
+        pglib_equivalent: null
         case_page_url: null
         archive_url: null
         expected_sha256: null
         required: true
+      - case_id: epigrids_new_england_250
+        grid_family: epigrids
+        source_repository: tamu
+        source_origin: tamu
+        source_file: null
+        source_case_name: EPIGRIDS New England 250
+        bus_count: 250
+        exact_source_topology: true
+        exact_tamu_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        acquisition_mode: manual
+        pglib_equivalent: null
+        case_page_url: null
+        archive_url: null
+        expected_sha256: null
+        required: false
+      - case_id: epigrids_wisconsin_1664
+        grid_family: epigrids
+        source_repository: tamu
+        source_origin: tamu
+        source_file: null
+        source_case_name: EPIGRIDS Wisconsin 1664
+        bus_count: 1664
+        exact_source_topology: true
+        exact_tamu_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        acquisition_mode: manual
+        pglib_equivalent: null
+        case_page_url: null
+        archive_url: null
+        expected_sha256: null
+        required: false
   go_challenge1:
     type: archive_collection
     oedi_record: https://data.openei.org/submissions/6153

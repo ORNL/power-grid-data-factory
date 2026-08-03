@@ -39,7 +39,7 @@ def _destination(spec: dict) -> str:
 def _source_type(spec: dict) -> str:
     if spec.get("type"):
         return str(spec.get("type"))
-    if spec.get("url") or spec.get("repo"):
+    if spec.get("repository") or spec.get("url") or spec.get("repo"):
         return "git"
     if spec.get("downloads"):
         return "archive_collection"

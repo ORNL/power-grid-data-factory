@@ -26,10 +26,15 @@ def _destination(spec: dict) -> str:
     return str(spec.get("destination") or spec.get("target_dir"))
 
 
+def _source_url(spec: dict) -> str | None:
+    value = spec.get("repository") or spec.get("url") or spec.get("repo")
+    return str(value) if value else None
+
+
 def _source_type(spec: dict) -> str:
     if spec.get("type"):
         return str(spec.get("type"))
-    if spec.get("url") or spec.get("repo"):
+    if spec.get("repository") or spec.get("url") or spec.get("repo"):
         return "git"
     if spec.get("downloads"):
         return "archive_collection"
@@ -65,7 +70,7 @@ def main() -> None:
             "source_type": source_type,
             "target_dir": str(target_dir),
             "exists": exists,
-            "url": spec.get("url") or spec.get("repo"),
+            "url": _source_url(spec),
             "oedi_record": spec.get("oedi_record"),
             "catalog_url": spec.get("catalog_url"),
             "status": "present" if exists else "missing",
@@ -108,10 +113,17 @@ def main() -> None:
                 case_dir = target_dir / case_id
                 raw_dir = case_dir / "raw"
                 files = sorted([p.name for p in raw_dir.iterdir() if p.is_file()]) if raw_dir.exists() else []
+                source_file = case.get("source_file")
+                source_file_path = (target_dir / str(source_file)) if source_file else None
                 case_status.append(
                     {
                         "case_id": case_id,
+                        "grid_family": case.get("grid_family"),
+                        "acquisition_mode": case.get("acquisition_mode"),
+                        "source_file": source_file,
+                        "source_file_exists": bool(source_file_path and source_file_path.exists()),
                         "required": bool(case.get("required", False)),
+                        "pglib_equivalent": case.get("pglib_equivalent"),
                         "case_page_url": case.get("case_page_url"),
                         "archive_url": case.get("archive_url"),
                         "expected_sha256": case.get("expected_sha256"),
