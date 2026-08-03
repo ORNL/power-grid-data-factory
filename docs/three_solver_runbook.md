@@ -11,7 +11,7 @@ This runbook captures the working sequence used in this workspace to run and com
 
 ## Prerequisites
 
-1. ExaGO has been built and installed under `external/ExaGO/install`.
+1. ExaGO has been built and installed under a machine-scoped prefix, for example `external/ExaGO/builds/frontier/install`.
 2. Python environment includes `pandapower`.
 3. Julia environment for `julia/` has been instantiated.
 
@@ -47,6 +47,7 @@ SRCDIR=$PWD source buildsystem/clang-hip/frontierVariables.sh
 cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 PYTHONPATH=src $PY scripts/compare_solver_consistency.py \
   --exago-root external/ExaGO \
+  --build-profile frontier \
   --out data/analysis/solver_consistency_report.json
 ```
 
@@ -64,6 +65,21 @@ Expected success indicators:
 4. `cases.*.pandapower.convergence == "CONVERGED"`
 5. `powermodels_status.success == true`
 6. `powermodels_status.termination_status` is typically `LOCALLY_SOLVED` or `OPTIMAL`
+
+## Phase 1 gate command
+
+Use the automated gate script to enforce calibration tolerances and preservation checks:
+
+```bash
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/ExaGO
+PY=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/HydraGNN/HydraGNN-Installation-Frontier-ROCm713/hydragnn_venv_rocm713/bin/python
+SRCDIR=$PWD source buildsystem/clang-hip/frontierVariables.sh
+
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+PYTHONPATH=src $PY scripts/phase1_gate.py --config configs/phase1_calibration.yaml --exago-root external/ExaGO --build-profile frontier --runs-root data/runs
+```
+
+If the command exits with code `0`, Phase 1 gate checks passed. Non-zero exit indicates at least one required check failed.
 
 ## Notes on interpretation
 

@@ -14,6 +14,11 @@ solvers:
     task: scopf
     formulation: SCOPFLOW
     optimizer: Ipopt
+  - solver_id: pandapower_ac_opf_ipopt
+    framework: pandapower
+    task: ac_opf
+    formulation: AC_OPF
+    optimizer: Ipopt
   - solver_id: matpower_runopf_mips
     framework: MATPOWER
     task: ac_opf
