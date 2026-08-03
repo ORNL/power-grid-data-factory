@@ -1,16 +1,80 @@
 sources:
   exago:
-    repo: https://github.com/ORNL/ExaGO
-    target_dir: external/ExaGO
+    type: git
+    url: https://github.com/ORNL/ExaGO
+    destination: external/ExaGO
     git_commit: 545a8deb6fa35552f0ee402ca83672fe1255f61a
   pglib_opf:
-    repo: https://github.com/power-grid-lib/pglib-opf
-    target_dir: external/pglib-opf
+    type: git
+    url: https://github.com/power-grid-lib/pglib-opf
+    destination: external/pglib-opf
   rts_gmlc:
-    repo: https://github.com/GridMod/RTS-GMLC
-    target_dir: external/RTS-GMLC
+    type: git
+    url: https://github.com/GridMod/RTS-GMLC
+    destination: external/RTS-GMLC
+    recursive: true
   tamu:
-    target_dir: external/tamu
+    type: manual_catalog
+    catalog_url: https://electricgrids.engr.tamu.edu/electric-grid-test-cases/
+    destination: external/tamu
+    cases:
+      - case_id: activsg500
+        case_page_url: null
+        archive_url: null
+        expected_sha256: null
+        required: true
+      - case_id: activsg2000
+        case_page_url: null
+        archive_url: null
+        expected_sha256: null
+        required: false
+      - case_id: activsg10k
+        case_page_url: null
+        archive_url: null
+        expected_sha256: null
+        required: false
+      - case_id: activsg25k
+        case_page_url: null
+        archive_url: null
+        expected_sha256: null
+        required: false
+      - case_id: activsg70k
+        case_page_url: null
+        archive_url: null
+        expected_sha256: null
+        required: false
+      - case_id: activsg82k
+        case_page_url: null
+        archive_url: null
+        expected_sha256: null
+        required: false
+      - case_id: epigrids_eastern
+        case_page_url: null
+        archive_url: null
+        expected_sha256: null
+        required: true
+      - case_id: memphis2026
+        case_page_url: null
+        archive_url: null
+        expected_sha256: null
+        required: true
   go_challenge1:
+    type: archive_collection
     oedi_record: https://data.openei.org/submissions/6153
-    target_dir: external/go_challenge1
+    destination: external/go_challenge1
+    downloads:
+      - url: https://data.openei.org/files/6153/Challenge_1_Original_Dataset_1_Scenarios.zip
+        filename: Challenge_1_Original_Dataset_1_Scenarios.zip
+        expected_sha256: ce4e56a23226ca929427544443b94bbeeadd86ff62875ccd6c71f1987ec0e9d1
+      - url: https://data.openei.org/files/6153/Challenge_1_Original_Dataset_2_Scenarios.zip
+        filename: Challenge_1_Original_Dataset_2_Scenarios.zip
+        expected_sha256: b438dab6d51492ff501cea1e9acb5ed3591873b188f8b844acaad0ef75749852
+      - url: https://data.openei.org/files/6153/Challenge_1_Trial_Event_1_Used_Scenarios.zip
+        filename: Challenge_1_Trial_Event_1_Used_Scenarios.zip
+        expected_sha256: fb6c0a2cc7dad813e6d4a3df271ad02545d64e3ec1898dc2678bf4343eacb097
+      - url: https://data.openei.org/files/6153/Challenge_1_Trial_Event_2_Used_Scenarios.zip
+        filename: Challenge_1_Trial_Event_2_Used_Scenarios.zip
+        expected_sha256: b1547a73f5fd140af390f0318284d62960302d25d0828dcfc867517339d662e3
+      - url: https://data.openei.org/files/6153/Challenge_1_Trial_Event_3_Scenarios.zip
+        filename: Challenge_1_Trial_Event_3_Scenarios.zip
+        expected_sha256: 0f517dcf9b5f25577550fad8c22be5ee6c99bb43b7d5f102578c0e4b6d7ab412
