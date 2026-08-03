@@ -20,6 +20,16 @@ Reference setup docs:
 1. `docs/exago_frontier_build.md`
 2. `docs/setup.md`
 
+Optional helper to prepare machine-scoped ExaGO build/install directories:
+
+```bash
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+PYTHONPATH=src python3.11 scripts/configure_exago_build.py \
+  --exago-root external/ExaGO \
+  --profile frontier \
+  --cache buildsystem/clang-hip/cache.cmake
+```
+
 ## One-time package step for pandapower MATPOWER parsing
 
 pandapower requires `matpowercaseframes` for `.m` case ingestion.

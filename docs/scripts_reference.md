@@ -36,6 +36,12 @@ The following are scaffolded placeholders and should be implemented for producti
 - `scripts/compare_solver_consistency.py`
 - `scripts/phase1_gate.py`
 
+## Build and machine-profile helpers
+
+- `scripts/configure_exago_build.py`
+  - Configures machine-scoped ExaGO build/install directories under `external/ExaGO/builds/<profile>/`.
+  - Supports optional configure/build/install execution and emits resolved paths in JSON.
+
 ## CLI module entrypoints
 
 Equivalent module-backed entrypoints are exposed via package scripts:

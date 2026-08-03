@@ -21,10 +21,49 @@ From repository root (`external/ExaGO`):
 ```bash
 git submodule update --init --recursive
 source buildsystem/clang-hip/frontierVariables.sh
-mkdir -p build-frontier
-cd build-frontier
-cmake -C ../buildsystem/clang-hip/cache.cmake .. -DCMAKE_BUILD_TYPE=Release
+mkdir -p builds/frontier/build
+cd builds/frontier/build
+cmake -C ../../../buildsystem/clang-hip/cache.cmake ../../.. -DCMAKE_BUILD_TYPE=Release
 make -j 12 install
+```
+
+## Recommended multi-machine layout
+
+Use machine-scoped build and install prefixes so different systems do not overwrite each other:
+
+- `external/ExaGO/builds/frontier/build`
+- `external/ExaGO/builds/frontier/install`
+- `external/ExaGO/builds/<other-machine>/build`
+- `external/ExaGO/builds/<other-machine>/install`
+
+## Preferred helper script
+
+From repository root (`power_grid_data_factory`), run the helper to configure machine-scoped paths automatically:
+
+```bash
+PYTHONPATH=src python3.11 scripts/configure_exago_build.py \
+  --exago-root external/ExaGO \
+  --profile frontier \
+  --cache buildsystem/clang-hip/cache.cmake \
+  --build-type Release
+```
+
+To run configure + build + install in one shot:
+
+```bash
+PYTHONPATH=src python3.11 scripts/configure_exago_build.py \
+  --exago-root external/ExaGO \
+  --profile frontier \
+  --cache buildsystem/clang-hip/cache.cmake \
+  --build --install --parallel 12
+```
+
+To enforce install isolation, include an explicit install prefix during configure:
+
+```bash
+cmake -C ../../../buildsystem/clang-hip/cache.cmake ../../.. \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX=$PWD/../install
 ```
 
 ## Important observations
@@ -39,7 +78,7 @@ make -j 12 install
 ## Install location
 
 - Binaries and libraries were installed to:
-  - `external/ExaGO/install`
+  - `external/ExaGO/builds/frontier/install`
 
 ## Smoke test run
 
@@ -47,7 +86,7 @@ From `external/ExaGO`:
 
 ```bash
 source buildsystem/clang-hip/frontierVariables.sh
-./install/bin/opflow -netfile datafiles/case9/case9mod.m -opflow_solver IPOPT -print_output 1
+./builds/frontier/install/bin/opflow -netfile datafiles/case9/case9mod.m -opflow_solver IPOPT -print_output 1
 ```
 
 Observed result:
@@ -62,4 +101,4 @@ Observed result:
 2. Submodules are initialized.
 3. Frontier variables script is sourced in the active shell.
 4. Build directory config succeeds with `cache.cmake`.
-5. `install/bin/opflow` exists and smoke test converges.
+5. `builds/frontier/install/bin/opflow` exists and smoke test converges.
