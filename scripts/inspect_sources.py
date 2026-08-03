@@ -22,6 +22,20 @@ def _git_head(repo_dir: Path) -> str | None:
     return proc.stdout.strip() or None
 
 
+def _destination(spec: dict) -> str:
+    return str(spec.get("destination") or spec.get("target_dir"))
+
+
+def _source_type(spec: dict) -> str:
+    if spec.get("type"):
+        return str(spec.get("type"))
+    if spec.get("url") or spec.get("repo"):
+        return "git"
+    if spec.get("downloads"):
+        return "archive_collection"
+    return "manual_catalog"
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Inspect configured external source availability.")
     p.add_argument("--config", default="configs/sources.yaml")
@@ -43,22 +57,70 @@ def main() -> None:
     }
 
     for source_id, spec in sources.items():
-        target_dir = (repo_root / str(spec["target_dir"]))
+        source_type = _source_type(spec)
+        target_dir = (repo_root / _destination(spec)).resolve()
         exists = target_dir.exists()
-        repo_url = spec.get("repo")
-        pinned = spec.get("git_commit")
-        head = _git_head(target_dir) if exists else None
 
-        entry = {
+        entry: dict[str, object] = {
+            "source_type": source_type,
             "target_dir": str(target_dir),
             "exists": exists,
-            "repo": repo_url,
+            "url": spec.get("url") or spec.get("repo"),
             "oedi_record": spec.get("oedi_record"),
-            "git_head": head,
-            "pinned_commit": pinned,
-            "pinned_match": (head == pinned) if (head and pinned) else None,
+            "catalog_url": spec.get("catalog_url"),
             "status": "present" if exists else "missing",
         }
+
+        if source_type == "git":
+            head = _git_head(target_dir) if exists else None
+            pinned = spec.get("git_commit")
+            entry["git_head"] = head
+            entry["pinned_commit"] = pinned
+            entry["pinned_match"] = (head == pinned) if (head and pinned) else None
+
+        downloads = spec.get("downloads") or []
+        if downloads:
+            dl_status = []
+            for item in downloads:
+                url = str(item.get("url", "")).strip()
+                if not url:
+                    continue
+                filename = str(item.get("filename") or Path(url).name)
+                raw_path = target_dir / "raw" / filename
+                alt_path = target_dir / filename
+                file_path = raw_path if raw_path.exists() else alt_path
+                dl_status.append(
+                    {
+                        "url": url,
+                        "filename": filename,
+                        "exists": file_path.exists(),
+                        "size_bytes": file_path.stat().st_size if file_path.exists() else None,
+                        "path": str(file_path),
+                    }
+                )
+            entry["downloads"] = dl_status
+
+        cases = spec.get("cases") or []
+        if cases:
+            case_status = []
+            for case in cases:
+                case_id = str(case.get("case_id"))
+                case_dir = target_dir / case_id
+                raw_dir = case_dir / "raw"
+                files = sorted([p.name for p in raw_dir.iterdir() if p.is_file()]) if raw_dir.exists() else []
+                case_status.append(
+                    {
+                        "case_id": case_id,
+                        "required": bool(case.get("required", False)),
+                        "case_page_url": case.get("case_page_url"),
+                        "archive_url": case.get("archive_url"),
+                        "expected_sha256": case.get("expected_sha256"),
+                        "has_raw_files": len(files) > 0,
+                        "raw_files": files,
+                    }
+                )
+            entry["cases"] = case_status
+
         report["sources"][source_id] = entry
 
     print(json.dumps(report, indent=2))

@@ -1,64 +1,138 @@
 {
   "ok": true,
-  "generated_at": "2026-08-03T15:58:30.227614+00:00",
+  "generated_at": "2026-08-03T16:13:01.219117+00:00",
   "config": "/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/configs/sources.yaml",
   "sources": {
     "exago": {
+      "source_type": "git",
       "target_dir": "/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/ExaGO",
       "exists": true,
-      "repo": "https://github.com/ORNL/ExaGO",
+      "url": "https://github.com/ORNL/ExaGO",
       "oedi_record": null,
-      "actions": [
-        "checked_out_pinned_commit"
-      ],
+      "catalog_url": null,
+      "actions": [],
       "errors": [],
       "git_head": "545a8deb6fa35552f0ee402ca83672fe1255f61a",
       "pinned_commit": "545a8deb6fa35552f0ee402ca83672fe1255f61a",
       "pinned_match": true
     },
     "pglib_opf": {
+      "source_type": "git",
       "target_dir": "/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/pglib-opf",
       "exists": true,
-      "repo": "https://github.com/power-grid-lib/pglib-opf",
+      "url": "https://github.com/power-grid-lib/pglib-opf",
       "oedi_record": null,
-      "actions": [
-        "cloned"
-      ],
+      "catalog_url": null,
+      "actions": [],
       "errors": [],
       "git_head": "dc6be4b2f85ca0e776952ec22cbd4c22396ea5a3"
     },
     "rts_gmlc": {
+      "source_type": "git",
       "target_dir": "/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/RTS-GMLC",
       "exists": true,
-      "repo": "https://github.com/GridMod/RTS-GMLC",
+      "url": "https://github.com/GridMod/RTS-GMLC",
       "oedi_record": null,
-      "actions": [
-        "cloned"
-      ],
+      "catalog_url": null,
+      "actions": [],
       "errors": [],
       "git_head": "3ece0d3725c844056132393ee252b3083dd4eab4"
     },
     "tamu": {
+      "source_type": "manual_catalog",
       "target_dir": "/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/tamu",
       "exists": true,
-      "repo": null,
+      "url": null,
       "oedi_record": null,
-      "actions": [
-        "created_manual_target_dir"
-      ],
+      "catalog_url": "https://electricgrids.engr.tamu.edu/electric-grid-test-cases/",
+      "actions": [],
       "errors": [],
-      "git_head": null
+      "source_manifest": "/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/tamu/source_manifest.yaml",
+      "downloads": []
     },
     "go_challenge1": {
+      "source_type": "archive_collection",
       "target_dir": "/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/go_challenge1",
       "exists": true,
-      "repo": null,
+      "url": null,
       "oedi_record": "https://data.openei.org/submissions/6153",
+      "catalog_url": null,
       "actions": [
-        "created_manual_target_dir"
+        "skipped_verified:Challenge_1_Original_Dataset_1_Scenarios.zip",
+        "skipped_verified:Challenge_1_Original_Dataset_2_Scenarios.zip",
+        "skipped_verified:Challenge_1_Trial_Event_1_Used_Scenarios.zip",
+        "skipped_verified:Challenge_1_Trial_Event_2_Used_Scenarios.zip",
+        "skipped_verified:Challenge_1_Trial_Event_3_Scenarios.zip"
       ],
       "errors": [],
-      "git_head": null
+      "source_manifest": "/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/go_challenge1/source_manifest.yaml",
+      "downloads": [
+        {
+          "filename": "Challenge_1_Original_Dataset_1_Scenarios.zip",
+          "path": "/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/go_challenge1/raw/Challenge_1_Original_Dataset_1_Scenarios.zip",
+          "url": "https://data.openei.org/files/6153/Challenge_1_Original_Dataset_1_Scenarios.zip",
+          "source_page": "https://data.openei.org/submissions/6153",
+          "case_id": null,
+          "acquisition_mode": "direct",
+          "exists": true,
+          "sha256": "ce4e56a23226ca929427544443b94bbeeadd86ff62875ccd6c71f1987ec0e9d1",
+          "size_bytes": 14691396,
+          "expected_sha256": "ce4e56a23226ca929427544443b94bbeeadd86ff62875ccd6c71f1987ec0e9d1",
+          "sha256_match": true
+        },
+        {
+          "filename": "Challenge_1_Original_Dataset_2_Scenarios.zip",
+          "path": "/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/go_challenge1/raw/Challenge_1_Original_Dataset_2_Scenarios.zip",
+          "url": "https://data.openei.org/files/6153/Challenge_1_Original_Dataset_2_Scenarios.zip",
+          "source_page": "https://data.openei.org/submissions/6153",
+          "case_id": null,
+          "acquisition_mode": "direct",
+          "exists": true,
+          "sha256": "b438dab6d51492ff501cea1e9acb5ed3591873b188f8b844acaad0ef75749852",
+          "size_bytes": 10444056,
+          "expected_sha256": "b438dab6d51492ff501cea1e9acb5ed3591873b188f8b844acaad0ef75749852",
+          "sha256_match": true
+        },
+        {
+          "filename": "Challenge_1_Trial_Event_1_Used_Scenarios.zip",
+          "path": "/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/go_challenge1/raw/Challenge_1_Trial_Event_1_Used_Scenarios.zip",
+          "url": "https://data.openei.org/files/6153/Challenge_1_Trial_Event_1_Used_Scenarios.zip",
+          "source_page": "https://data.openei.org/submissions/6153",
+          "case_id": null,
+          "acquisition_mode": "direct",
+          "exists": true,
+          "sha256": "fb6c0a2cc7dad813e6d4a3df271ad02545d64e3ec1898dc2678bf4343eacb097",
+          "size_bytes": 16074617,
+          "expected_sha256": "fb6c0a2cc7dad813e6d4a3df271ad02545d64e3ec1898dc2678bf4343eacb097",
+          "sha256_match": true
+        },
+        {
+          "filename": "Challenge_1_Trial_Event_2_Used_Scenarios.zip",
+          "path": "/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/go_challenge1/raw/Challenge_1_Trial_Event_2_Used_Scenarios.zip",
+          "url": "https://data.openei.org/files/6153/Challenge_1_Trial_Event_2_Used_Scenarios.zip",
+          "source_page": "https://data.openei.org/submissions/6153",
+          "case_id": null,
+          "acquisition_mode": "direct",
+          "exists": true,
+          "sha256": "b1547a73f5fd140af390f0318284d62960302d25d0828dcfc867517339d662e3",
+          "size_bytes": 127845732,
+          "expected_sha256": "b1547a73f5fd140af390f0318284d62960302d25d0828dcfc867517339d662e3",
+          "sha256_match": true
+        },
+        {
+          "filename": "Challenge_1_Trial_Event_3_Scenarios.zip",
+          "path": "/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/go_challenge1/raw/Challenge_1_Trial_Event_3_Scenarios.zip",
+          "url": "https://data.openei.org/files/6153/Challenge_1_Trial_Event_3_Scenarios.zip",
+          "source_page": "https://data.openei.org/submissions/6153",
+          "case_id": null,
+          "acquisition_mode": "direct",
+          "exists": true,
+          "sha256": "0f517dcf9b5f25577550fad8c22be5ee6c99bb43b7d5f102578c0e4b6d7ab412",
+          "size_bytes": 50222733,
+          "expected_sha256": "0f517dcf9b5f25577550fad8c22be5ee6c99bb43b7d5f102578c0e4b6d7ab412",
+          "sha256_match": true
+        }
+      ]
     }
   }
 }
