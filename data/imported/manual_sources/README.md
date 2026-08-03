@@ -11,12 +11,17 @@ This directory is a git-tracked snapshot of manual TAMU source ingestion state.
 - `cases/<case_id>/source_manifest.yaml`: per-case registration metadata.
 - `cases/<case_id>/checksums.sha256`: per-case archive checksum record.
 - `cases/<case_id>/inventory.txt`: per-case file inventory snapshot.
+- `supplemental/*.json`: metadata-only records for manually uploaded files associated with automatically sourced cases.
 
 ## What is intentionally not included
 
 Large manual archives and extracted payloads under `external/tamu/` are not tracked in git because `external/` is repository-local workspace state.
 
 Use the hashes and manifests in this bundle to verify that local manual archives match the recorded ingestion state.
+
+For automatically sourced cases (for example PGLib-backed TAMU-derived topologies),
+manually uploaded files are captured as supplemental provenance metadata and do
+not change source-equivalence policy.
 
 ## Refresh procedure
 
