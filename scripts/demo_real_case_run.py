@@ -106,7 +106,7 @@ preservation_status: in_progress
     (in_progress / "logs" / "stderr.log").write_text("", encoding="utf-8")
     (in_progress / "logs" / "combined.log").write_text("demo run started\n", encoding="utf-8")
 
-    adapter = PowerModelsAdapter(julia_project_dir=repo_root / "julia")
+    adapter = PowerModelsAdapter(repo_root=repo_root)
     raw_result = adapter.solve_ac_opf(tiny_case, options={"timeout_s": 300})
 
     numeric_status = str(raw_result.get("termination_status", "unknown"))

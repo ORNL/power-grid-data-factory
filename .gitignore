@@ -28,3 +28,4 @@ install/
 
 # Julia local state
 julia/.julia/
+.julia_depot_*/

@@ -35,6 +35,43 @@ cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 julia --project=julia julia/setup_environment.jl
 ```
 
+## Machine-scoped Julia lockfiles
+
+To prevent dependency lockfile conflicts across machines, use profile-specific project directories:
+
+- `julia/lockfiles/andes/`
+- `julia/lockfiles/frontier/`
+- `julia/lockfiles/local/`
+
+Initialize the profile on each machine before running PowerModels:
+
+```bash
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+module load julia/1.8.2
+export JULIA_DEPOT_PATH=$PWD/.julia_depot_andes_profile
+julia --project=julia/lockfiles/andes -e 'using Pkg; Pkg.Registry.add("General"); Pkg.resolve(); Pkg.instantiate()'
+```
+
+Then run with the same profile:
+
+```bash
+OPENBLAS_NUM_THREADS=1 JULIA_NUM_THREADS=1 JULIA_PKG_PRECOMPILE_AUTO=0 julia --project=julia/lockfiles/andes --compiled-modules=no julia/run_opf.jl <case_json> <payload_json> <out_json>
+```
+
+See `julia/lockfiles/README.md` for details.
+
+PowerModels Python workflows now auto-select a Julia project profile based on hostname:
+
+- hosts containing `andes` -> `julia/lockfiles/andes`
+- hosts containing `frontier` -> `julia/lockfiles/frontier`
+- otherwise -> `julia/lockfiles/local` (fallback: `julia/`)
+
+You can override selection explicitly with:
+
+```bash
+export PGDF_JULIA_PROJECT_DIR=julia/lockfiles/andes
+```
+
 If your environment has precompile instability, use conservative runtime settings:
 
 ```bash

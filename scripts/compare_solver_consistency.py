@@ -84,7 +84,7 @@ def _run_pandapower_opf(exago_root: Path, case_path: str) -> dict[str, Any]:
 def _powermodels_status(repo_root: Path) -> dict[str, Any]:
     from grid_data_factory.solvers.powermodels_adapter import PowerModelsAdapter
 
-    adapter = PowerModelsAdapter(julia_project_dir=repo_root / "julia")
+    adapter = PowerModelsAdapter(repo_root=repo_root)
     tiny_case = {
         "case_id": "tiny_demo",
         "base_mva": 100.0,
