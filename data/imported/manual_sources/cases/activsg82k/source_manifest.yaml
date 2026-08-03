@@ -1,0 +1,18 @@
+source: tamu
+source_type: manual_catalog
+case_id: activsg82k
+registered_at: '2026-08-03T17:02:35.930379+00:00'
+catalog_url: https://electricgrids.engr.tamu.edu/electric-grid-test-cases/
+case_page_url: null
+archive:
+  original_filename: SyntheticUSA.zip
+  relative_path: raw/SyntheticUSA.zip
+  size_bytes: 53192492
+  sha256: e9cc27c6c211b9ae3f4907cdbaf8243dfc55e052055088c3539decd2b8514710
+  expected_sha256: null
+  sha256_match: null
+  archive_type: zip
+extraction:
+  requested: true
+  status: ok
+  destination: /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/tamu/activsg82k/extracted

@@ -1,0 +1,6 @@
+extracted/SyntheticUSA.EPC
+extracted/SyntheticUSA.RAW
+extracted/SyntheticUSA.pwb
+extracted/SyntheticUSA.pwd
+extracted/case_SyntheticUSA.m
+raw/SyntheticUSA.zip
