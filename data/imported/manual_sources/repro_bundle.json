@@ -1,6 +1,6 @@
 {
   "generated_from": "external/tamu",
-  "generated_at": "2026-08-03T16:59:37.961317+00:00",
+  "generated_at": "2026-08-03T17:02:45.562724+00:00",
   "policy_note": "Manual source archives remain under external/tamu (gitignored). This bundle stores reproducibility metadata, manifests, checksums, and inventories.",
   "cases": [
     {
@@ -178,10 +178,21 @@
         "exact_tamu_topology": true,
         "non_equivalent_similar_size_cases": []
       },
-      "copied_files": {},
-      "archives": [],
-      "archive_count": 0,
-      "extracted_file_count": 0,
+      "copied_files": {
+        "source_manifest.yaml": "data/imported/manual_sources/cases/activsg82k/source_manifest.yaml",
+        "checksums.sha256": "data/imported/manual_sources/cases/activsg82k/checksums.sha256",
+        "inventory.txt": "data/imported/manual_sources/cases/activsg82k/inventory.txt"
+      },
+      "archives": [
+        {
+          "filename": "SyntheticUSA.zip",
+          "size_bytes": 53192492,
+          "sha256": "e9cc27c6c211b9ae3f4907cdbaf8243dfc55e052055088c3539decd2b8514710",
+          "relative_external_path": "external/tamu/activsg82k/raw/SyntheticUSA.zip"
+        }
+      ],
+      "archive_count": 1,
+      "extracted_file_count": 5,
       "present": true
     },
     {
