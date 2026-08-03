@@ -15,6 +15,8 @@ This documentation describes the purpose, architecture, setup, and reproducibili
 9. [First Real-Case Input Run with Registry Append](first_real_case_run.md)
 10. [Three-Solver Runbook (ExaGO + pandapower + PowerModels)](three_solver_runbook.md)
 11. [Production Readiness Checklist](production_readiness_checklist.md)
+12. [Adaptive Campaign Strategy (Default)](adaptive_campaign_strategy.md)
+13. [ExaGO Andes CPU Build and Run](exago_andes_cpu_build.md)
 
 ## Intended audience
 
