@@ -1,0 +1,12 @@
+extracted/ACTIVSg500.EPC
+extracted/ACTIVSg500.RAW
+extracted/ACTIVSg500.aux
+extracted/ACTIVSg500.pwb
+extracted/ACTIVSg500.pwd
+extracted/ACTIVSg500_GIC_data.gic
+extracted/ACTIVSg500_dynamics.aux
+extracted/ACTIVSg500_dynamics.dyd
+extracted/ACTIVSg500_dynamics.dyr
+extracted/case_ACTIVSg500.m
+extracted/contab_ACTIVSg500.m
+raw/ACTIVSg500.zip

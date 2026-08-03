@@ -1,0 +1,10 @@
+extracted/ACTIVSg25k.RAW
+extracted/ACTIVSg25k.aux
+extracted/ACTIVSg25k.dyr
+extracted/ACTIVSg25k.pwb
+extracted/ACTIVSg25k.pwd
+extracted/ACTIVSg25k_GIC_data.gic
+extracted/ACTIVSg25k_dynamics.aux
+extracted/ACTIVSg25k_dynamics.dyd
+extracted/case_ACTIVSg25k.m
+raw/ACTIVSg25k.zip
