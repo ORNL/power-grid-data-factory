@@ -43,8 +43,7 @@ From repository root (`power_grid_data_factory`), run the helper to configure ma
 ```bash
 PYTHONPATH=src python3.11 scripts/configure_exago_build.py \
   --exago-root external/ExaGO \
-  --profile frontier \
-  --cache buildsystem/clang-hip/cache.cmake \
+  --preset frontier-gpu \
   --build-type Release
 ```
 
@@ -53,10 +52,16 @@ To run configure + build + install in one shot:
 ```bash
 PYTHONPATH=src python3.11 scripts/configure_exago_build.py \
   --exago-root external/ExaGO \
-  --profile frontier \
-  --cache buildsystem/clang-hip/cache.cmake \
+  --preset frontier-gpu \
   --build --install --parallel 12
 ```
+
+The `frontier-gpu` preset applies:
+
+- `profile=frontier`
+- cache file `buildsystem/clang-hip/cache.cmake`
+- environment setup script `buildsystem/clang-hip/frontierVariables.sh`
+- default defines enabling GPU and IPOPT
 
 To enforce install isolation, include an explicit install prefix during configure:
 

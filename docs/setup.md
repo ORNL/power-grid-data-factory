@@ -90,9 +90,65 @@ Current pinned commit in this workspace:
 
 Building ExaGO binaries is a separate step and is site-specific.
 
+## Andes CPU-only ExaGO build profile
+
+Andes workflows in this project should use a dedicated CPU-only ExaGO profile so
+they do not interfere with Frontier GPU builds:
+
+- Build dir: `external/ExaGO/builds/andes-cpu/build`
+- Install dir: `external/ExaGO/builds/andes-cpu/install`
+
+Configure the isolated profile with GPU-disabled flags:
+
+```bash
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+PYTHONPATH=src python3.11 scripts/configure_exago_build.py \
+	--exago-root external/ExaGO \
+	--preset andes-cpu \
+	--build-type Release
+```
+
+Equivalent explicit form (without preset) remains supported with `--profile` and
+`--define` flags.
+
+Do not use the HIP cache preset (`buildsystem/clang-hip/cache.cmake`) for this
+Andes CPU profile.
+
+Current known blocker on this machine: ExaGO configure requires PETSc >= 3.24,
+while the loaded default Andes software stacks provide older PETSc versions.
+Load/activate an environment with PETSc >= 3.24 and Ipopt before attempting the
+full build/install step.
+
 For the exact successful Frontier command sequence used in this workspace, see:
 
 - `docs/exago_frontier_build.md`
+
+## Frontier GPU ExaGO build profile
+
+Frontier workflows should use a dedicated GPU-enabled profile with upstream HIP
+cache and machine environment script:
+
+- Build dir: `external/ExaGO/builds/frontier/build`
+- Install dir: `external/ExaGO/builds/frontier/install`
+
+Dry-run the full command setup:
+
+```bash
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+PYTHONPATH=src python3.11 scripts/configure_exago_build.py \
+	--exago-root external/ExaGO \
+	--preset frontier-gpu \
+	--dry-run
+```
+
+Run configure + build + install:
+
+```bash
+PYTHONPATH=src python3.11 scripts/configure_exago_build.py \
+	--exago-root external/ExaGO \
+	--preset frontier-gpu \
+	--build --install --parallel 12
+```
 
 ## Recommended first checks
 

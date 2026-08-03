@@ -28,10 +28,16 @@ The following are scaffolded placeholders and should be implemented for producti
 - `scripts/screen_contingencies.py`
 - `scripts/run_pf.py`
 - `scripts/run_dc_opf.py`
-- `scripts/run_ac_opf.py`
 - `scripts/run_scopf.py`
 - `scripts/compare_solver_consistency.py`
 - `scripts/phase1_gate.py`
+
+Implemented workflow command:
+
+- `scripts/run_ac_opf.py`
+  - Runs AC-OPF through `PowerModelsAdapter` for selected MATPOWER cases.
+  - Creates full preservation-first attempt directories under `data/runs/ac_opf/...`.
+  - Writes normalized outputs, validation placeholders, manifests/checksums, terminal marker, and appends run registry records.
 
 ## Source onboarding helpers
 
@@ -76,6 +82,10 @@ The following are scaffolded placeholders and should be implemented for producti
 - `scripts/configure_exago_build.py`
   - Configures machine-scoped ExaGO build/install directories under `external/ExaGO/builds/<profile>/`.
   - Supports optional configure/build/install execution and emits resolved paths in JSON.
+- `scripts/run_exago_andes_opflow.sh`
+  - Loads the known-good Andes module stack and runs isolated ExaGO `opflow`.
+  - Defaults to case9 IPOPT smoke test when no CLI arguments are provided.
+  - Accepts custom `opflow` arguments for alternate netfiles and solver options.
 
 ## CLI module entrypoints
 
