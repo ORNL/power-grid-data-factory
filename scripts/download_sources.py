@@ -33,6 +33,11 @@ def _destination(spec: dict) -> str:
     return str(spec.get("destination") or spec.get("target_dir"))
 
 
+def _source_url(spec: dict) -> str | None:
+    value = spec.get("repository") or spec.get("url") or spec.get("repo")
+    return str(value) if value else None
+
+
 def _git_head(repo_dir: Path) -> str | None:
     if not (repo_dir / ".git").exists():
         return None
@@ -144,7 +149,7 @@ def _prepare_manual_catalog(spec: dict, target_dir: Path) -> None:
 def _source_type(spec: dict) -> str:
     if spec.get("type"):
         return str(spec.get("type"))
-    if spec.get("repo") or spec.get("url"):
+    if spec.get("repository") or spec.get("repo") or spec.get("url"):
         return "git"
     if spec.get("downloads"):
         return "archive_collection"
@@ -152,7 +157,11 @@ def _source_type(spec: dict) -> str:
 
 
 def _process_git_source(repo_root: Path, spec: dict, target_dir: Path, args: argparse.Namespace, source_report: dict, report: dict) -> None:
-    repo_url = str(spec.get("url") or spec.get("repo"))
+    repo_url = _source_url(spec)
+    if not repo_url:
+        source_report["errors"].append("missing_repository_url")
+        report["ok"] = False
+        return
     recursive = bool(spec.get("recursive", False))
 
     if not target_dir.exists() and args.clone_missing:
@@ -358,7 +367,7 @@ def main() -> None:
             "source_type": source_type,
             "target_dir": str(target_dir),
             "exists": target_dir.exists(),
-            "url": spec.get("url") or spec.get("repo"),
+            "url": _source_url(spec),
             "oedi_record": spec.get("oedi_record"),
             "catalog_url": spec.get("catalog_url"),
             "actions": [],
