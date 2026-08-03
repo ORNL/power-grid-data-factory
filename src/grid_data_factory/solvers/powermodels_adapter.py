@@ -4,15 +4,56 @@ import json
 import os
 import re
 import shlex
+import socket
 import subprocess
 import tempfile
 from pathlib import Path
 
 
 class PowerModelsAdapter:
-    def __init__(self, julia_project_dir: Path, depot_path: str | None = None):
+    def __init__(
+        self,
+        julia_project_dir: Path | None = None,
+        depot_path: str | None = None,
+        repo_root: Path | None = None,
+        julia_scripts_dir: Path | None = None,
+    ):
+        if julia_project_dir is None:
+            if repo_root is None:
+                raise ValueError("repo_root is required when julia_project_dir is not provided")
+            julia_project_dir = self.resolve_julia_project_dir(Path(repo_root))
         self.julia_project_dir = Path(julia_project_dir)
+        if julia_scripts_dir is not None:
+            self.julia_scripts_dir = Path(julia_scripts_dir)
+        elif repo_root is not None:
+            self.julia_scripts_dir = Path(repo_root) / "julia"
+        else:
+            self.julia_scripts_dir = self.julia_project_dir
         self.depot_path = depot_path
+
+    @staticmethod
+    def resolve_julia_project_dir(repo_root: Path) -> Path:
+        # Explicit override always wins.
+        override = os.environ.get("PGDF_JULIA_PROJECT_DIR", "").strip()
+        if override:
+            p = Path(override)
+            return p if p.is_absolute() else (repo_root / p).resolve()
+
+        host = socket.gethostname().lower()
+        candidates: list[Path] = []
+        if "andes" in host:
+            candidates.append(repo_root / "julia" / "lockfiles" / "andes")
+        elif "frontier" in host:
+            candidates.append(repo_root / "julia" / "lockfiles" / "frontier")
+
+        candidates.append(repo_root / "julia" / "lockfiles" / "local")
+        candidates.append(repo_root / "julia")
+
+        for candidate in candidates:
+            if (candidate / "Project.toml").exists():
+                return candidate
+
+        return repo_root / "julia"
 
     def solve_pf(self, case: dict, controls: dict | None = None, options: dict | None = None) -> dict:
         return self._run_julia_script("run_pf.jl", case, {"controls": controls or {}, "options": options or {}})
@@ -107,7 +148,7 @@ class PowerModelsAdapter:
         }
 
     def _run_julia_script(self, script_name: str, case: dict, payload: dict) -> dict:
-        script = self.julia_project_dir / script_name
+        script = self.julia_scripts_dir / script_name
         if not script.exists():
             return {"success": False, "termination_status": f"missing_script:{script_name}", "solver_name": "powermodels"}
 
