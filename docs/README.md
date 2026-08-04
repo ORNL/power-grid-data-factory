@@ -21,6 +21,7 @@ This documentation describes the purpose, architecture, setup, and reproducibili
 15. [Schema Contracts](schema_contracts.md)
 16. [Evolution Log](evolution_log.md)
 17. [Configuration Reference](configuration_reference.md)
+18. [Resumable Campaigns and the Top-Level Driver](resumable_campaigns.md)
 
 ## Intended audience
 

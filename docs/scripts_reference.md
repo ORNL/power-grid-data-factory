@@ -59,6 +59,8 @@ Implemented workflow command:
 - `scripts/run_campaign_ac_opf_round.py`
   - Runs a campaign round of AC-OPF attempts across cases, topologies, operating points, and contingencies via `PowerModelsAdapter`.
   - Applies operating-point and contingency transforms (including reference load snapshots) to each parsed case before solving.
+  - Encodes the applied contingency into the output path via a deterministic `contingency_slug` level.
+  - `--resume` skips any candidate whose deterministic output directory already has a finalized attempt; the round report then adds `skipped_count` and computes `failure_fraction` over solvable (non-skipped) candidates. See [Resumable Campaigns](resumable_campaigns.md).
 - `scripts/register_load_snapshots.py`
   - Discovers per-scenario MATPOWER snapshot files for a case and registers them as reference load operating points.
   - Writes `data/operating_point_registry/<case_id>/load_snapshots.json` with season, voltage regime, difficulty, and per-bus loads.
@@ -72,6 +74,10 @@ Implemented workflow command:
 - `scripts/launch_ultrascale_campaign.py`
   - Plans or submits chained map/reduce Slurm rounds with full parameter exports (budget, sharding, coverage gate, backfill, solver runtime settings).
   - Supports dependency-chained submission (`afterok`) for continuous multi-round campaigns.
+- `scripts/drive_campaign.py`
+  - Auto-detects the furthest incomplete round (lowest round whose reduce marker is missing or not `ok`) and resubmits it with `RESUME=1` so the job resumes interrupted work.
+  - `--chain` queues all subsequent rounds, each chained via `afterok`, for unattended multi-round completion.
+  - Splits budgets across rounds (`--total-budget` with `--budget-schedule`) and passes through extra env with repeatable `--set KEY=VALUE`; `--dry-run` prints the plan without submitting. See [Resumable Campaigns](resumable_campaigns.md#4-top-level-driver).
 
 ## Source onboarding helpers
 
