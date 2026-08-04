@@ -148,6 +148,34 @@ PYTHONPATH=src python3.11 scripts/drive_campaign.py \
 	--nodes 64 --ntasks-per-node 16 --cpus-per-task 1 --time 36:00:00 --chain
 ```
 
+## Precompiled Julia Sysimage (Skip First-Run Compilation)
+
+Each Julia solve otherwise pays first-run package + method compilation cost
+(the delay seen at the start of a fresh run). Build a PackageCompiler sysimage
+**once per platform** so the solver adapter launches Julia with `--sysimage`
+instead of `--compiled-modules=no`:
+
+```bash
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+# use the SAME depot the campaign uses
+export JULIA_DEPOT_PATH=$PWD/.julia_depot_andes_profile
+# run on a compute node (interactively or via sbatch) for a representative build
+configs/slurm/build_julia_sysimage.sh
+```
+
+This writes `julia/sysimages/<platform>/pgdf_sysimage.so` (gitignored). The
+adapter auto-detects it — no config change needed — and falls back to the normal
+path if it is absent. Override the target explicitly with
+`PGDF_JULIA_SYSIMAGE=/path/to/pgdf_sysimage.so`. Rebuild whenever the Julia
+`Project.toml`/`Manifest.toml` deps change.
+
+The `andes_powermodels_acopf_mapreduce_10n_36h.sbatch` job exports
+`PGDF_JULIA_SYSIMAGE=$ROOT/julia/sysimages/andes/pgdf_sysimage.so` and threads it
+into every `srun` map task, so all compute nodes use the image without relying on
+per-node hostname detection. A missing file cleanly falls back to the normal
+compile path, and setting `PGDF_JULIA_SYSIMAGE` before `sbatch` overrides the
+default location.
+
 ## Ultra-Scale Setup (Hundreds of Millions)
 
 Provided artifacts:

@@ -33,6 +33,8 @@ class PowerModelsAdapter:
         else:
             self.julia_scripts_dir = self.julia_project_dir
         self.depot_path = depot_path
+        self.repo_root = Path(repo_root) if repo_root is not None else None
+        self.sysimage_path = self.resolve_julia_sysimage(self.repo_root)
 
     @staticmethod
     def resolve_julia_project_dir(repo_root: Path) -> Path:
@@ -57,6 +59,37 @@ class PowerModelsAdapter:
                 return candidate
 
         return repo_root / "julia"
+
+    @staticmethod
+    def resolve_julia_sysimage(repo_root: Path | None) -> Path | None:
+        # Explicit override always wins; ignored if the file is missing.
+        override = os.environ.get("PGDF_JULIA_SYSIMAGE", "").strip()
+        if override:
+            p = Path(override)
+            return p if p.exists() else None
+        if repo_root is None:
+            return None
+
+        host = socket.gethostname().lower()
+        names: list[str] = []
+        if "andes" in host:
+            names.append("andes")
+        elif "frontier" in host:
+            names.append("frontier")
+        names.append("local")
+
+        for name in names:
+            candidate = Path(repo_root) / "julia" / "sysimages" / name / "pgdf_sysimage.so"
+            if candidate.exists():
+                return candidate
+        return None
+
+    def _julia_mode_flags(self) -> list[str]:
+        # A prebuilt sysimage already contains the compiled solve path, so it
+        # replaces the (slow) --compiled-modules=no recompile-every-run mode.
+        if self.sysimage_path is not None:
+            return [f"--sysimage={self.sysimage_path}"]
+        return ["--compiled-modules=no"]
 
     def solve_pf(self, case: dict, controls: dict | None = None, options: dict | None = None) -> dict:
         return self._run_julia_script("run_pf.jl", case, {"controls": controls or {}, "options": options or {}})
@@ -100,7 +133,7 @@ class PowerModelsAdapter:
         preflight_cmd = [
             "julia",
             f"--project={self.julia_project_dir}",
-            "--compiled-modules=no",
+            *self._julia_mode_flags(),
             "-e",
             "import JSON3, PowerModels, Ipopt; println(\"PREFLIGHT_OK\")",
         ]
@@ -205,7 +238,7 @@ class PowerModelsAdapter:
             cmd = [
                 "julia",
                 f"--project={self.julia_project_dir}",
-                "--compiled-modules=no",
+                *self._julia_mode_flags(),
                 str(script),
                 case_path,
                 payload_path,

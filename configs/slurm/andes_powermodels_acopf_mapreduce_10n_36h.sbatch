@@ -19,6 +19,12 @@ REDUCE_SCRIPT=$ROOT/scripts/reduce_campaign_shards.py
 
 module load julia/1.8.2 2>/dev/null || true
 
+# Prefer a prebuilt PackageCompiler sysimage so solves skip first-run compilation.
+# Explicit path avoids relying on per-node hostname detection; a missing file
+# cleanly falls back to the normal compile path in the solver adapter.
+PGDF_JULIA_SYSIMAGE=${PGDF_JULIA_SYSIMAGE:-$ROOT/julia/sysimages/andes/pgdf_sysimage.so}
+export PGDF_JULIA_SYSIMAGE
+
 CAMPAIGN_ID=${CAMPAIGN_ID:-pilot_pglib_14_57_118}
 ROUND_INDEX=${ROUND_INDEX:-0}
 CONFIG=${CONFIG:-configs/campaign_default.yaml}
@@ -167,6 +173,8 @@ INDEX_FILE="'$INDEX_FILE'"
 LOCK_DIR="'$LOCK_DIR'"
 DONE_DIR="'$DONE_DIR'"
 RESUMING="'$RESUMING'"
+PGDF_JULIA_SYSIMAGE="'$PGDF_JULIA_SYSIMAGE'"
+export PGDF_JULIA_SYSIMAGE
 TOTAL_SHARDS=$(wc -l < "$QUEUE_FILE")
 
 TASK_ID=${SLURM_PROCID:-0}
