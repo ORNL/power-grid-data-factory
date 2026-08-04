@@ -13,11 +13,15 @@
 
 For PF, DC-OPF, and AC-OPF:
 
-`data/runs/<task>/<case_id>/topologies/<topology_id>/operating_points/<operating_point_id>/solvers/<solver_id>/attempts/<attempt_id>/`
+`data/runs/<task>/<case_id>/<topology_id>/<operating_point_id>/<solver_id>/attempts/<attempt_id>/`
 
 For SCOPF:
 
-`data/runs/scopf/<case_id>/topologies/<topology_id>/operating_points/<operating_point_id>/contingency_sets/<contingency_set_id>/solvers/<solver_id>/attempts/<attempt_id>/`
+`data/runs/scopf/<case_id>/<topology_id>/<operating_point_id>/<contingency_set_id>/<solver_id>/attempts/<attempt_id>/`
+
+Layout note:
+
+- Run artifacts use the compact hierarchy by default.
 
 ## Attempt lifecycle
 
@@ -43,4 +47,5 @@ For SCOPF:
 - `solvers/base.py`: common solver protocol.
 - `solvers/powermodels_adapter.py`: Julia process wrapper for PowerModels tasks.
 - `solvers/exago_adapter.py`: ExaGO adapter scaffold.
-- `solvers/matpower_adapter.py`: optional MATPOWER adapter scaffold.
+
+MATPOWER in this codebase is treated as an input case format and reference dataset source, not a maintained solver execution backend.

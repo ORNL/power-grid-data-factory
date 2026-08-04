@@ -3,58 +3,24 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 try:
+    from grid_data_factory.parsers.matpower import parse_base_mva as _parse_base_mva
+    from grid_data_factory.parsers.matpower import parse_matrix as _parse_matrix
     from grid_data_factory.storage.naming import format_topology_id
 except ModuleNotFoundError:
     _repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(_repo_root / "src"))
+    from grid_data_factory.parsers.matpower import parse_base_mva as _parse_base_mva
+    from grid_data_factory.parsers.matpower import parse_matrix as _parse_matrix
     from grid_data_factory.storage.naming import format_topology_id
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _to_number(token: str) -> int | float:
-    val = float(token)
-    if val.is_integer():
-        return int(val)
-    return val
-
-
-def _parse_matrix(content: str, field: str) -> list[list[int | float]]:
-    pattern = re.compile(rf"mpc\.{re.escape(field)}\s*=\s*\[(.*?)\];", re.DOTALL)
-    match = pattern.search(content)
-    if not match:
-        return []
-
-    block = match.group(1)
-    cleaned_lines: list[str] = []
-    for raw_line in block.splitlines():
-        line = raw_line.split("%", 1)[0].strip()
-        if not line:
-            continue
-        cleaned_lines.append(line)
-
-    rows: list[list[int | float]] = []
-    for chunk in " ".join(cleaned_lines).split(";"):
-        line = chunk.strip()
-        if not line:
-            continue
-        rows.append([_to_number(tok) for tok in line.split()])
-    return rows
-
-
-def _parse_base_mva(content: str) -> float:
-    match = re.search(r"mpc\.baseMVA\s*=\s*([0-9.eE+\-]+)\s*;", content)
-    if not match:
-        raise ValueError("Could not parse mpc.baseMVA")
-    return float(match.group(1))
 
 
 def _parse_matpower_case(case_file: Path) -> dict:

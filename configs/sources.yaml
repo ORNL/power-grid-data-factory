@@ -137,6 +137,160 @@ sources:
           - activsg10k
         exact_tamu_topology: false
         acquisition_mode: automatic
+
+      - case_id: pglib_opf_case4661_sdet
+        grid_family: sdet
+        source_repository: pglib
+        source_origin: sdet
+        source_file: pglib_opf_case4661_sdet.m
+        source_case_name: SDET 4661
+        bus_count: 4661
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case6470_rte
+        grid_family: rte
+        source_repository: pglib
+        source_origin: rte
+        source_file: pglib_opf_case6470_rte.m
+        source_case_name: RTE 6470
+        bus_count: 6470
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case13659_pegase
+        grid_family: pegase
+        source_repository: pglib
+        source_origin: pegase
+        source_file: pglib_opf_case13659_pegase.m
+        source_case_name: PEGASE 13659
+        bus_count: 13659
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case14_ieee
+        grid_family: ieee
+        source_repository: pglib
+        source_origin: ieee
+        source_file: pglib_opf_case14_ieee.m
+        source_case_name: IEEE 14
+        bus_count: 14
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case24_ieee_rts
+        grid_family: ieee_rts
+        source_repository: pglib
+        source_origin: ieee
+        source_file: pglib_opf_case24_ieee_rts.m
+        source_case_name: IEEE RTS 24
+        bus_count: 24
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case30_ieee
+        grid_family: ieee
+        source_repository: pglib
+        source_origin: ieee
+        source_file: pglib_opf_case30_ieee.m
+        source_case_name: IEEE 30
+        bus_count: 30
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case57_ieee
+        grid_family: ieee
+        source_repository: pglib
+        source_origin: ieee
+        source_file: pglib_opf_case57_ieee.m
+        source_case_name: IEEE 57
+        bus_count: 57
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case73_ieee_rts
+        grid_family: ieee_rts
+        source_repository: pglib
+        source_origin: ieee
+        source_file: pglib_opf_case73_ieee_rts.m
+        source_case_name: IEEE RTS 73
+        bus_count: 73
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case118_ieee
+        grid_family: ieee
+        source_repository: pglib
+        source_origin: ieee
+        source_file: pglib_opf_case118_ieee.m
+        source_case_name: IEEE 118
+        bus_count: 118
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case162_ieee_dtc
+        grid_family: ieee_dtc
+        source_repository: pglib
+        source_origin: ieee
+        source_file: pglib_opf_case162_ieee_dtc.m
+        source_case_name: IEEE 162 DTC
+        bus_count: 162
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case300_ieee
+        grid_family: ieee
+        source_repository: pglib
+        source_origin: ieee
+        source_file: pglib_opf_case300_ieee.m
+        source_case_name: IEEE 300
+        bus_count: 300
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
   rts_gmlc:
     type: git
     url: https://github.com/GridMod/RTS-GMLC
@@ -276,6 +430,25 @@ sources:
         archive_url: null
         expected_sha256: null
         required: true
+      - case_id: epigrids_eastern
+        grid_family: epigrids
+        source_repository: tamu
+        source_origin: tamu
+        source_file: null
+        source_case_name: EPIGRIDS Eastern Interconnect 515GW
+        bus_count: null
+        exact_source_topology: true
+        exact_tamu_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases:
+          - epigrids_eastern_78484
+        acquisition_mode: manual
+        pglib_equivalent: epigrids_eastern_78484
+        case_page_url: null
+        archive_url: null
+        expected_sha256: null
+        required: false
       - case_id: epigrids_new_england_250
         grid_family: epigrids
         source_repository: tamu

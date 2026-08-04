@@ -16,7 +16,7 @@ def get_case_directory(runs_root: Path, task: str, case_id: str) -> Path:
 
 
 def get_topology_directory(runs_root: Path, task: str, case_id: str, topology_id: str) -> Path:
-    return get_case_directory(runs_root, task, case_id) / "topologies" / topology_id
+    return get_case_directory(runs_root, task, case_id) / topology_id
 
 
 def get_operating_point_directory(
@@ -26,7 +26,7 @@ def get_operating_point_directory(
     topology_id: str,
     operating_point_id: str,
 ) -> Path:
-    return get_topology_directory(runs_root, task, case_id, topology_id) / "operating_points" / operating_point_id
+    return get_topology_directory(runs_root, task, case_id, topology_id) / operating_point_id
 
 
 def get_contingency_set_directory(
@@ -36,11 +36,7 @@ def get_contingency_set_directory(
     operating_point_id: str,
     contingency_set_id: str,
 ) -> Path:
-    return (
-        get_operating_point_directory(runs_root, "scopf", case_id, topology_id, operating_point_id)
-        / "contingency_sets"
-        / contingency_set_id
-    )
+    return get_operating_point_directory(runs_root, "scopf", case_id, topology_id, operating_point_id) / contingency_set_id
 
 
 def get_solver_directory(
@@ -58,7 +54,7 @@ def get_solver_directory(
         base = get_contingency_set_directory(runs_root, case_id, topology_id, operating_point_id, contingency_set_id)
     else:
         base = get_operating_point_directory(runs_root, task, case_id, topology_id, operating_point_id)
-    return base / "solvers" / solver_id
+    return base / solver_id
 
 
 def create_attempt_directory(solver_directory: Path, attempt_id: str) -> Path:

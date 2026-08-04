@@ -7,7 +7,10 @@ import shlex
 import socket
 import subprocess
 import tempfile
+import time
 from pathlib import Path
+
+from grid_data_factory.runtime_metadata import collect_execution_context
 
 
 class PowerModelsAdapter:
@@ -148,9 +151,23 @@ class PowerModelsAdapter:
         }
 
     def _run_julia_script(self, script_name: str, case: dict, payload: dict) -> dict:
+        start_t = time.perf_counter()
         script = self.julia_scripts_dir / script_name
+        exec_ctx = collect_execution_context()
+
+        def _finalize(result: dict) -> dict:
+            out = dict(result)
+            runtime = {
+                "wallclock_seconds": round(time.perf_counter() - start_t, 6),
+                "execution_context": exec_ctx,
+            }
+            out["runtime_metadata"] = runtime
+            out.setdefault("runtime", runtime["wallclock_seconds"])
+            out.setdefault("solve_time", runtime["wallclock_seconds"])
+            return out
+
         if not script.exists():
-            return {"success": False, "termination_status": f"missing_script:{script_name}", "solver_name": "powermodels"}
+            return _finalize({"success": False, "termination_status": f"missing_script:{script_name}", "solver_name": "powermodels"})
 
         env = os.environ.copy()
         if self.depot_path:
@@ -169,7 +186,7 @@ class PowerModelsAdapter:
             # In unstable HPC environments preflight can timeout even when the solver
             # run itself succeeds; continue to the solve path in that specific case.
             if preflight_result.get("termination_status") != "preflight_timeout":
-                return preflight_result
+                return _finalize(preflight_result)
 
         case_path = None
         payload_path = None
@@ -200,30 +217,31 @@ class PowerModelsAdapter:
             try:
                 proc = subprocess.run(["bash", "-lc", shell_cmd], capture_output=True, text=True, env=env, timeout=timeout_s)
             except subprocess.TimeoutExpired as exc:
-                return {
+                return _finalize({
                     "success": False,
                     "termination_status": "timeout",
                     "solver_name": "powermodels",
                     "stdout": exc.stdout,
                     "stderr": exc.stderr,
-                }
+                })
             if proc.returncode != 0:
-                return {
+                return _finalize({
                     "success": False,
                     "termination_status": "process_error",
                     "solver_name": "powermodels",
                     "stdout": proc.stdout,
                     "stderr": proc.stderr,
-                }
+                })
 
             try:
-                return json.loads(Path(out_path).read_text(encoding="utf-8"))
+                parsed = json.loads(Path(out_path).read_text(encoding="utf-8"))
+                return _finalize(parsed)
             except Exception as exc:  # noqa: BLE001
-                return {
+                return _finalize({
                     "success": False,
                     "termination_status": f"invalid_output:{type(exc).__name__}",
                     "solver_name": "powermodels",
-                }
+                })
         finally:
             for p in (case_path, payload_path, out_path):
                 if p is None:

@@ -6,8 +6,17 @@ import json
 import os
 import re
 import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import Any
+
+try:
+    from grid_data_factory.runtime_metadata import collect_execution_context
+except ModuleNotFoundError:
+    _repo_root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(_repo_root / "src"))
+    from grid_data_factory.runtime_metadata import collect_execution_context
 
 
 def _resolve_opflow_bin(repo_root: Path, exago_root: Path, args: argparse.Namespace) -> Path:
@@ -29,6 +38,8 @@ def _resolve_opflow_bin(repo_root: Path, exago_root: Path, args: argparse.Namesp
 
 
 def _run_exago_opflow(exago_root: Path, opflow_bin: Path, case_path: str, solver: str, model: str) -> dict[str, Any]:
+    start_t = time.perf_counter()
+    exec_ctx = collect_execution_context()
     full_case = (exago_root / case_path).resolve()
     cmd = [
         str(opflow_bin),
@@ -46,6 +57,7 @@ def _run_exago_opflow(exago_root: Path, opflow_bin: Path, case_path: str, solver
         cmd.extend(["-hiop_compute_mode", "CPU"])
 
     proc = subprocess.run(cmd, capture_output=True, text=True, cwd=exago_root)
+    elapsed = round(time.perf_counter() - start_t, 6)
     combined = (proc.stdout or "") + "\n" + (proc.stderr or "")
 
     convergence = None
@@ -63,6 +75,11 @@ def _run_exago_opflow(exago_root: Path, opflow_bin: Path, case_path: str, solver
         "exit_code": proc.returncode,
         "convergence": convergence,
         "objective": objective,
+        "wallclock_seconds": elapsed,
+        "runtime_metadata": {
+            "wallclock_seconds": elapsed,
+            "execution_context": exec_ctx,
+        },
         "stderr_tail": "\n".join((proc.stderr or "").splitlines()[-5:]),
     }
 
@@ -71,13 +88,21 @@ def _run_pandapower_opf(exago_root: Path, case_path: str) -> dict[str, Any]:
     import pandapower as pp
     from pandapower.converter.matpower import from_mpc
 
+    start_t = time.perf_counter()
+    exec_ctx = collect_execution_context()
     full_case = exago_root / case_path
     net = from_mpc(str(full_case))
     pp.runopp(net, numba=False)
+    elapsed = round(time.perf_counter() - start_t, 6)
 
     return {
         "convergence": "CONVERGED" if bool(net.get("OPF_converged", False)) else "FAILED",
         "objective": float(net.res_cost),
+        "wallclock_seconds": elapsed,
+        "runtime_metadata": {
+            "wallclock_seconds": elapsed,
+            "execution_context": exec_ctx,
+        },
     }
 
 

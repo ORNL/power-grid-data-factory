@@ -6,7 +6,11 @@ This walkthrough demonstrates one full preservation-first attempt lifecycle in t
 
 Produce one immutable attempt record under:
 
-- `data/runs/ac_opf/<case_id>/topologies/<topology_id>/operating_points/<operating_point_id>/solvers/<solver_id>/attempts/<attempt_id>/`
+- `data/runs/ac_opf/<case_id>/<topology_id>/<operating_point_id>/<solver_id>/attempts/<attempt_id>/`
+
+Layout note:
+
+- Runs use the compact path above.
 
 and verify that preservation artifacts are generated.
 
