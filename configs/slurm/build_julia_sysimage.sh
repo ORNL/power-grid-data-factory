@@ -8,6 +8,10 @@
 # The build uses the same JULIA_DEPOT_PATH the campaign uses, so export it first
 # (e.g. export JULIA_DEPOT_PATH=$PWD/.julia_depot_andes_profile).
 #
+# Requires the PackageCompiler package (declared in julia/build/Project.toml).
+# Compute nodes usually lack network, so install it into the depot from a LOGIN
+# node first:  julia --project=julia/build -e 'using Pkg; Pkg.instantiate()'.
+#
 # Overridable: PLATFORM, PGDF_SYSIMAGE_PROJECT, PGDF_SYSIMAGE_OUTPUT, PGDF_BUILD_ENV.
 set -euo pipefail
 

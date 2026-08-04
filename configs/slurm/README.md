@@ -155,6 +155,23 @@ Each Julia solve otherwise pays first-run package + method compilation cost
 **once per platform** so the solver adapter launches Julia with `--sysimage`
 instead of `--compiled-modules=no`:
 
+**Prerequisite — PackageCompiler.** The build requires the `PackageCompiler`
+package, declared in `julia/build/Project.toml`. Compute nodes usually have no
+outbound network, so install it into the shared depot from a **login node**
+(where network is available) *before* running the build:
+
+```bash
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+export JULIA_DEPOT_PATH=$PWD/.julia_depot_andes_profile
+module load julia/1.8.2
+# fetch PackageCompiler (and instantiate the solve project) into the depot
+julia --project=julia/lockfiles/andes -e 'using Pkg; Pkg.instantiate()'
+julia --project=julia/build          -e 'using Pkg; Pkg.instantiate()'
+```
+
+The actual sysimage build (CPU-heavy, no network needed) then runs on a compute
+node:
+
 ```bash
 cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 # use the SAME depot the campaign uses
