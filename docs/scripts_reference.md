@@ -45,6 +45,12 @@ Implemented workflow command:
 - `scripts/run_pandapower_ac_opf.py`
   - Runs AC-OPF through pandapower for selected MATPOWER cases.
   - Creates full preservation-first attempt directories and appends run registry records with runtime metadata.
+- `scripts/run_campaign_ac_opf_round.py`
+  - Runs a campaign round of AC-OPF attempts across cases, topologies, operating points, and contingencies via `PowerModelsAdapter`.
+  - Applies operating-point and contingency transforms (including reference load snapshots) to each parsed case before solving.
+- `scripts/register_load_snapshots.py`
+  - Discovers per-scenario MATPOWER snapshot files for a case and registers them as reference load operating points.
+  - Writes `data/operating_point_registry/<case_id>/load_snapshots.json` with season, voltage regime, difficulty, and per-bus loads.
 - `scripts/shard_selected_candidates.py`
   - Deterministically shards selected-candidate JSONL files by `candidate_id` ordering.
   - Produces fixed shard files and a manifest for map-stage parallel execution.
