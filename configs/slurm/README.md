@@ -36,6 +36,7 @@ sbatch \
 - `TIMEOUT_S` (default: `1200`)
 - `RUNS_ROOT` (default: `data/runs`)
 - `RUN_BOOTSTRAP` (`1` to generate/select candidates in-job, `0` to reuse existing selected JSONL)
+- `BOOTSTRAP_WORKERS` (default: `16`, parallel workers for contingency enumeration during bootstrap)
 - `MAX_CANDIDATES` (default: `0`, meaning no cap)
 - `CONTINUE_ON_ERROR` (`1` to continue solving candidates after failures)
 

@@ -22,11 +22,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--topologies-per-case", type=int, default=6)
     p.add_argument("--max-switched-branches", type=int, default=3)
     p.add_argument("--max-k", type=int, default=10)
+    p.add_argument("--workers", type=int, default=1, help="Parallel workers for the enumeration stage (0=all cores).")
     return p.parse_args()
 
 
 def _run(cmd: list[str], cwd: Path, env: dict[str, str]) -> None:
-    proc = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
+    # Stream stdout/stderr live so stage progress is visible in the job log.
+    proc = subprocess.run(cmd, cwd=cwd, env=env)
     if proc.returncode != 0:
         raise RuntimeError(
             json.dumps(
@@ -34,8 +36,6 @@ def _run(cmd: list[str], cwd: Path, env: dict[str, str]) -> None:
                     "ok": False,
                     "cmd": cmd,
                     "returncode": proc.returncode,
-                    "stdout": proc.stdout,
-                    "stderr": proc.stderr,
                 },
                 indent=2,
             )
@@ -87,6 +87,8 @@ def main() -> None:
         str(args.max_k),
         "--seed",
         str(args.seed),
+        "--workers",
+        str(args.workers),
     ]
 
     screen_cmd = [

@@ -117,7 +117,8 @@ def main() -> None:
     accepted: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
 
-    for cand in candidates:
+    total = len(candidates)
+    for i, cand in enumerate(candidates):
         _augment_strata(cand)
 
         should_run, reasons = should_escalate_to_ac(cand, thresholds)
@@ -129,6 +130,9 @@ def main() -> None:
             accepted.append(cand)
         else:
             rejected.append(cand)
+
+        if (i + 1) % 200000 == 0:
+            print(f"[screen] {i + 1}/{total} candidates screened ({len(accepted)} accepted)", flush=True)
 
     audited = _audit_sample(rejected=rejected, audit_fraction=args.audit_fraction, seed=args.seed)
     audited_ids = {str(x.get("candidate_id")) for x in audited}

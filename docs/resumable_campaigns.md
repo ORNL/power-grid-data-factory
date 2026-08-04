@@ -245,9 +245,9 @@ It reports the coarse pipeline stage (bootstrap sub-stage → sharding → map �
 reduce), candidate counts, shards done/total, aggregated solved/failed/skipped
 counts, and whether the reduce marker is `ok`.
 
-Note: the bootstrap stage (candidate generation, contingency enumeration,
-screening, selection) currently runs single-process on the batch head node, so
-the other nodes are idle until the map stage begins.
+Note: the bootstrap stage runs on the batch head node. The contingency
+enumeration sub-stage is parallelized across cores (`BOOTSTRAP_WORKERS`, default
+16); operating-point generation, screening, and selection remain single-process.
 
 ## Typical end-to-end flow
 
