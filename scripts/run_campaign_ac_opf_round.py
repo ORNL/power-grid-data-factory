@@ -27,7 +27,7 @@ try:
     from grid_data_factory.topology.generation import apply_topology
     from grid_data_factory.scenarios.load_snapshots import get_snapshot_bus_loads
     from grid_data_factory.scenarios.operating_points import apply_operating_point
-    from grid_data_factory.storage.layout import create_next_attempt_directory, finalize_attempt_directory, get_solver_directory
+    from grid_data_factory.storage.layout import create_next_attempt_directory, finalize_attempt_directory, get_solver_directory, has_finalized_attempt
 except ModuleNotFoundError:
     _repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(_repo_root / "src"))
@@ -47,7 +47,7 @@ except ModuleNotFoundError:
     from grid_data_factory.topology.generation import apply_topology
     from grid_data_factory.scenarios.load_snapshots import get_snapshot_bus_loads
     from grid_data_factory.scenarios.operating_points import apply_operating_point
-    from grid_data_factory.storage.layout import create_next_attempt_directory, finalize_attempt_directory, get_solver_directory
+    from grid_data_factory.storage.layout import create_next_attempt_directory, finalize_attempt_directory, get_solver_directory, has_finalized_attempt
 
 
 def _require_yaml():
@@ -74,6 +74,11 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.0,
         help="Round is marked not-ok when solve failures exceed this fraction of candidates.",
+    )
+    p.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip candidates whose deterministic output directory already has a finalized attempt.",
     )
     return p.parse_args()
 
@@ -219,6 +224,31 @@ def _read_existing_diversity(campaign_root: Path) -> list[dict[str, Any]]:
     return []
 
 
+def _candidate_identity(candidate: dict[str, Any]) -> tuple[str, str, str, str]:
+    case_id = str(candidate.get("case_id"))
+    regime = _normalize(str(candidate.get("operating_regime", "baseline")))
+    cid = str(candidate.get("candidate_id", "c0"))
+    m = re.search(r"::op::(\d+)", cid)
+    op_index = int(m.group(1)) if m else 0
+    operating_point_id = f"op_{op_index:06d}_{regime}"
+    topology_id = str(candidate.get("topology_id") or "topology_000000_baseline")
+    contingency_id = contingency_slug(candidate.get("contingency"))
+    return case_id, topology_id, operating_point_id, contingency_id
+
+
+def _candidate_solver_dir(runs_root: Path, candidate: dict[str, Any], solver_id: str) -> Path:
+    case_id, topology_id, operating_point_id, contingency_id = _candidate_identity(candidate)
+    return get_solver_directory(
+        runs_root=runs_root,
+        task="ac_opf",
+        case_id=case_id,
+        topology_id=topology_id,
+        operating_point_id=operating_point_id,
+        solver_id=solver_id,
+        contingency_set_id=contingency_id,
+    )
+
+
 def _write_attempt(
     repo_root: Path,
     runs_root: Path,
@@ -227,15 +257,7 @@ def _write_attempt(
     result: dict[str, Any],
     solver_id: str,
 ) -> tuple[Path, str]:
-    case_id = str(candidate.get("case_id"))
-    regime = _normalize(str(candidate.get("operating_regime", "baseline")))
-
-    cid = str(candidate.get("candidate_id", "c0"))
-    m = re.search(r"::op::(\d+)", cid)
-    op_index = int(m.group(1)) if m else 0
-    operating_point_id = f"op_{op_index:06d}_{regime}"
-    topology_id = str(candidate.get("topology_id") or "topology_000000_baseline")
-    contingency_id = contingency_slug(candidate.get("contingency"))
+    case_id, topology_id, operating_point_id, contingency_id = _candidate_identity(candidate)
 
     solver_dir = get_solver_directory(
         runs_root=runs_root,
@@ -338,6 +360,7 @@ def main() -> None:
     diversity_rows: list[dict[str, Any]] = []
     boundary_rows: list[dict[str, Any]] = []
     failed_rows: list[dict[str, Any]] = []
+    skipped_rows: list[dict[str, Any]] = []
 
     for cand in candidates:
         case_id = str(cand.get("case_id"))
@@ -346,6 +369,15 @@ def main() -> None:
         cand.setdefault("grid_family", case_family)
         cand.setdefault("dataset", case_dataset)
         try:
+            if args.resume and has_finalized_attempt(_candidate_solver_dir(runs_root, cand, args.solver_id)):
+                skipped_rows.append(
+                    {
+                        "candidate_id": cand.get("candidate_id"),
+                        "grid_family": case_family,
+                        "dataset": case_dataset,
+                    }
+                )
+                continue
             case_file = _resolve_case_file(repo_root, case_id)
             case_data = parse_matpower_case(case_file, case_id)
             case_data = apply_topology(case_data, cand.get("switched_off_branches"))
@@ -443,7 +475,8 @@ def main() -> None:
     append_parquet_rows(campaign_root / "contingency_portfolio.parquet", candidates)
 
     total_candidates = len(candidates)
-    failure_fraction = (len(failed_rows) / total_candidates) if total_candidates else 0.0
+    solvable_candidates = total_candidates - len(skipped_rows)
+    failure_fraction = (len(failed_rows) / solvable_candidates) if solvable_candidates else 0.0
     round_ok = failure_fraction <= args.max_failure_fraction
 
     out_report = {
@@ -453,6 +486,8 @@ def main() -> None:
         "input_candidate_count": len(candidates),
         "solved_count": len(solved_rows),
         "failed_count": len(failed_rows),
+        "skipped_count": len(skipped_rows),
+        "resume": bool(args.resume),
         "failure_fraction": round(failure_fraction, 6),
         "max_failure_fraction": args.max_failure_fraction,
         "solved": solved_rows,
@@ -469,7 +504,7 @@ def main() -> None:
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(out_report, indent=2), encoding="utf-8")
 
-    print(json.dumps({"ok": out_report["ok"], "report": str(report_path)}, indent=2))
+    print(json.dumps({"ok": out_report["ok"], "report": str(report_path), "skipped_count": len(skipped_rows)}, indent=2))
     if not out_report["ok"]:
         raise SystemExit(2)
 
