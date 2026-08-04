@@ -30,7 +30,8 @@ if str(_REPO_ROOT / "src") not in sys.path:
 
 # Single source of truth for the ledger / attempt / descriptor contract.
 import run_campaign_ac_opf_round as base  # noqa: E402
-from run_exago_ac_opf import _run_exago_case  # noqa: E402
+
+from grid_data_factory.solvers.exago_adapter import resolve_opflow_bin, run_exago_case  # noqa: E402
 
 from grid_data_factory.boundaries.security_margin import (  # noqa: E402
     classify_security_margin_band,
@@ -91,20 +92,6 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def _resolve_opflow_bin(repo_root: Path, exago_root: Path, args: argparse.Namespace) -> Path:
-    if args.opflow_bin:
-        p = Path(args.opflow_bin)
-        return p if p.is_absolute() else (repo_root / p).resolve()
-    if args.exago_install:
-        prefix = Path(args.exago_install)
-        prefix = prefix if prefix.is_absolute() else (repo_root / prefix).resolve()
-        return prefix / "bin" / "opflow"
-    profile = (args.build_profile or "").strip()
-    if profile:
-        return (exago_root / "builds" / profile / "install" / "bin" / "opflow").resolve()
-    return (exago_root / "install" / "bin" / "opflow").resolve()
-
-
 def _solve_candidate_exago(
     exago_root: Path,
     opflow_bin: Path,
@@ -127,7 +114,7 @@ def _solve_candidate_exago(
     result: dict[str, Any] | None = None
 
     if solver_mode in ("gpu_then_ipopt", "gpu_only"):
-        gpu = _run_exago_case(
+        gpu = run_exago_case(
             exago_root, opflow_bin, str(tmp_m), GPU_SOLVER, GPU_MODEL, timeout_s,
             export_base=tmp_dir / f"{tag}_gpu",
         )
@@ -145,7 +132,7 @@ def _solve_candidate_exago(
             result = gpu
 
     if result is None:
-        cpu = _run_exago_case(
+        cpu = run_exago_case(
             exago_root, opflow_bin, str(tmp_m), CPU_SOLVER, CPU_MODEL, timeout_s,
             export_base=tmp_dir / f"{tag}_ipopt",
         )
@@ -176,7 +163,13 @@ def main() -> None:
     runs_root = (repo_root / args.runs_root).resolve()
 
     exago_root = (repo_root / args.exago_root).resolve()
-    opflow_bin = _resolve_opflow_bin(repo_root, exago_root, args)
+    opflow_bin = resolve_opflow_bin(
+        repo_root,
+        exago_root,
+        opflow_bin=args.opflow_bin,
+        exago_install=args.exago_install,
+        build_profile=args.build_profile,
+    )
     if not opflow_bin.exists():
         raise SystemExit(json.dumps({"ok": False, "error": "opflow_bin_missing", "opflow_bin": str(opflow_bin)}, indent=2))
     if not os.access(opflow_bin, os.X_OK):
