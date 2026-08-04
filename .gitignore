@@ -36,3 +36,7 @@ install/
 # Julia local state
 julia/.julia/
 .julia_depot_*/
+
+# Julia sysimages (large, machine-specific PackageCompiler output)
+julia/sysimages/
+julia/build/Manifest.toml
