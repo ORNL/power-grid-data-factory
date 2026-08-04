@@ -3,19 +3,16 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections import defaultdict
 from pathlib import Path
 import sys
 from typing import Any
 
 try:
-    from grid_data_factory.acquisition.audit_sampler import stratified_random_order
-    from grid_data_factory.screening.escalation import should_escalate_to_ac
+    from grid_data_factory.screening.selection import screen_candidates
 except ModuleNotFoundError:
     _repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(_repo_root / "src"))
-    from grid_data_factory.acquisition.audit_sampler import stratified_random_order
-    from grid_data_factory.screening.escalation import should_escalate_to_ac
+    from grid_data_factory.screening.selection import screen_candidates
 
 
 def _require_yaml():
@@ -63,43 +60,6 @@ def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
             fh.write(json.dumps(row, ensure_ascii=True) + "\n")
 
 
-def _band(x: float) -> str:
-    if x < 0.25:
-        return "low"
-    if x < 0.6:
-        return "medium"
-    return "high"
-
-
-def _augment_strata(cand: dict[str, Any]) -> None:
-    cand.setdefault("grid_family", "unknown")
-    cand.setdefault("operating_regime", "unknown")
-    cand.setdefault("contingency_order", 0)
-    cand.setdefault("dc_severity_band", _band(float(cand.get("dc_severity_score", 0.0))))
-    cand.setdefault("voltage_risk_band", _band(float(cand.get("voltage_risk_score", 0.0))))
-    cand.setdefault("reactive_risk_band", _band(float(cand.get("reactive_risk_score", 0.0))))
-
-
-def _audit_sample(rejected: list[dict[str, Any]], audit_fraction: float, seed: int) -> list[dict[str, Any]]:
-    if not rejected:
-        return []
-
-    target = max(1, int(round(len(rejected) * max(0.0, min(1.0, audit_fraction)))))
-    ordered = stratified_random_order(
-        candidates=rejected,
-        strata_keys=(
-            "grid_family",
-            "operating_regime",
-            "contingency_order",
-            "dc_severity_band",
-            "voltage_risk_band",
-            "reactive_risk_band",
-        ),
-        seed=seed,
-    )
-    return ordered[:target]
-
-
 def main() -> None:
     args = parse_args()
     repo_root = Path(__file__).resolve().parents[1]
@@ -114,46 +74,18 @@ def main() -> None:
 
     candidates = _read_jsonl(in_path)
 
-    accepted: list[dict[str, Any]] = []
-    rejected: list[dict[str, Any]] = []
+    def _report(done: int, total: int, accepted: int) -> None:
+        print(f"[screen] {done}/{total} candidates screened ({accepted} accepted)", flush=True)
 
-    total = len(candidates)
-    for i, cand in enumerate(candidates):
-        _augment_strata(cand)
-
-        should_run, reasons = should_escalate_to_ac(cand, thresholds)
-        cand["screening_decision"] = "accepted" if should_run else "rejected"
-        cand["screening_reasons"] = reasons
-        cand["required_audit_sample"] = False
-
-        if should_run:
-            accepted.append(cand)
-        else:
-            rejected.append(cand)
-
-        if (i + 1) % 200000 == 0:
-            print(f"[screen] {i + 1}/{total} candidates screened ({len(accepted)} accepted)", flush=True)
-
-    audited = _audit_sample(rejected=rejected, audit_fraction=args.audit_fraction, seed=args.seed)
-    audited_ids = {str(x.get("candidate_id")) for x in audited}
-
-    selected_for_ac: list[dict[str, Any]] = []
-    for cand in accepted + rejected:
-        cid = str(cand.get("candidate_id"))
-        if cid in audited_ids:
-            cand["required_audit_sample"] = True
-            if "audit_rejected_region" not in cand["screening_reasons"]:
-                cand["screening_reasons"].append("audit_rejected_region")
-            selected_for_ac.append(cand)
-            continue
-
-        if cand["screening_decision"] == "accepted":
-            selected_for_ac.append(cand)
-
-    counts_by_reason: dict[str, int] = defaultdict(int)
-    for cand in selected_for_ac:
-        for reason in cand.get("screening_reasons", []):
-            counts_by_reason[str(reason)] += 1
+    result = screen_candidates(
+        candidates,
+        thresholds,
+        audit_fraction=args.audit_fraction,
+        seed=args.seed,
+        on_progress=_report,
+    )
+    audited = result["audited"]
+    selected_for_ac = result["selected_for_ac"]
 
     _write_jsonl(out_path, selected_for_ac)
 
@@ -169,11 +101,11 @@ def main() -> None:
                 "input": str(in_path),
                 "out": str(out_path),
                 "input_count": len(candidates),
-                "escalated_count": len(accepted),
-                "rejected_count": len(rejected),
+                "escalated_count": len(result["accepted"]),
+                "rejected_count": len(result["rejected"]),
                 "audit_count": len(audited),
                 "selected_for_ac_count": len(selected_for_ac),
-                "selection_reason_counts": dict(counts_by_reason),
+                "selection_reason_counts": result["selection_reason_counts"],
             },
             indent=2,
         )
