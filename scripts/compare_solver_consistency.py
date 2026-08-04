@@ -13,28 +13,12 @@ from typing import Any
 
 try:
     from grid_data_factory.runtime_metadata import collect_execution_context
+    from grid_data_factory.solvers.exago_adapter import resolve_opflow_bin
 except ModuleNotFoundError:
     _repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(_repo_root / "src"))
     from grid_data_factory.runtime_metadata import collect_execution_context
-
-
-def _resolve_opflow_bin(repo_root: Path, exago_root: Path, args: argparse.Namespace) -> Path:
-    # Precedence: explicit binary path, explicit install prefix, profile path, legacy default.
-    if args.opflow_bin:
-        p = Path(args.opflow_bin)
-        return p if p.is_absolute() else (repo_root / p).resolve()
-
-    if args.exago_install:
-        install_prefix = Path(args.exago_install)
-        install_prefix = install_prefix if install_prefix.is_absolute() else (repo_root / install_prefix).resolve()
-        return install_prefix / "bin" / "opflow"
-
-    profile = args.build_profile.strip()
-    if profile:
-        return (exago_root / "builds" / profile / "install" / "bin" / "opflow").resolve()
-
-    return (exago_root / "install" / "bin" / "opflow").resolve()
+    from grid_data_factory.solvers.exago_adapter import resolve_opflow_bin
 
 
 def _run_exago_opflow(exago_root: Path, opflow_bin: Path, case_path: str, solver: str, model: str) -> dict[str, Any]:
@@ -163,7 +147,13 @@ def main() -> None:
 
     repo_root = Path(__file__).resolve().parents[1]
     exago_root = (repo_root / args.exago_root).resolve()
-    opflow_bin = _resolve_opflow_bin(repo_root, exago_root, args)
+    opflow_bin = resolve_opflow_bin(
+        repo_root,
+        exago_root,
+        opflow_bin=args.opflow_bin,
+        exago_install=args.exago_install,
+        build_profile=args.build_profile,
+    )
     if not opflow_bin.exists():
         raise SystemExit(
             json.dumps(
