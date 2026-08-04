@@ -4,7 +4,14 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 from pathlib import Path
+
+try:
+    from grid_data_factory.campaigns.planning import plan_round_budgets
+except ModuleNotFoundError:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    from grid_data_factory.campaigns.planning import plan_round_budgets
 
 
 def parse_args() -> argparse.Namespace:
@@ -21,6 +28,14 @@ def parse_args() -> argparse.Namespace:
 
     p.add_argument("--budget", type=int, default=50000)
     p.add_argument("--budget-step", type=int, default=0)
+    p.add_argument(
+        "--total-budget",
+        type=int,
+        default=0,
+        help="When > 0, split this campaign-wide budget across rounds via --budget-schedule (overrides --budget/--budget-step).",
+    )
+    p.add_argument("--budget-schedule", choices=["constant", "linear", "geometric"], default="constant")
+    p.add_argument("--budget-ratio", type=float, default=1.0)
     p.add_argument("--per-case", type=int, default=5000)
     p.add_argument("--sampler", default="sobol")
 
@@ -155,10 +170,20 @@ def main() -> None:
     plan: list[dict[str, object]] = []
     dependency_jobid = ""
 
+    if args.total_budget > 0:
+        round_budgets = plan_round_budgets(
+            total_budget=args.total_budget,
+            rounds=args.rounds,
+            schedule=args.budget_schedule,
+            ratio=args.budget_ratio,
+        )
+    else:
+        round_budgets = [args.budget + i * args.budget_step for i in range(args.rounds)]
+
     for i in range(args.rounds):
         round_index = args.start_round + i
         seed = args.seed_start + i
-        budget = args.budget + i * args.budget_step
+        budget = round_budgets[i]
         if budget <= 0:
             raise SystemExit(f"Round {round_index}: computed budget must be > 0")
 
@@ -212,6 +237,9 @@ def main() -> None:
         "config": args.config,
         "rounds": args.rounds,
         "start_round": args.start_round,
+        "total_budget": args.total_budget,
+        "budget_schedule": args.budget_schedule if args.total_budget > 0 else "",
+        "round_budgets": round_budgets,
         "cases_count": len(cases),
         "cases": cases,
         "plan": plan,
