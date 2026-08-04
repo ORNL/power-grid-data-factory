@@ -125,6 +125,22 @@ def scan_max_attempt_index(solver_directory: Path) -> int:
     return max_idx
 
 
+def has_finalized_attempt(solver_directory: Path) -> bool:
+    """Return True if a finalized (non in-progress) attempt directory exists.
+
+    Used for resumable campaigns: a finalized attempt means the solve completed
+    and its artifacts were checksummed, so the configuration can be skipped.
+    """
+    attempts = solver_directory / "attempts"
+    if not attempts.exists():
+        return False
+    for p in attempts.iterdir():
+        name = p.name
+        if name.startswith("attempt_") and name[len("attempt_") :].isdigit():
+            return True
+    return False
+
+
 def create_next_attempt_directory(solver_directory: Path, max_attempts: int = 100000) -> tuple[Path, str]:
     """Atomically claim the next free attempt directory, retrying on races.
 

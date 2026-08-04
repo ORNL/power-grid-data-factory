@@ -11,6 +11,7 @@ from _bootstrap import REPO_ROOT  # noqa: F401  (ensures src on path)
 from grid_data_factory.storage.layout import (
     create_next_attempt_directory,
     finalize_attempt_directory,
+    has_finalized_attempt,
     scan_max_attempt_index,
 )
 
@@ -52,6 +53,25 @@ class AttemptAllocationTests(unittest.TestCase):
             (solver_dir / "attempts" / "attempt_000002").mkdir(parents=True)
             _, attempt_id = create_next_attempt_directory(solver_dir)
             self.assertEqual(attempt_id, "attempt_000003")
+
+
+class HasFinalizedAttemptTests(unittest.TestCase):
+    def test_false_when_no_attempts_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertFalse(has_finalized_attempt(Path(tmp) / "solver"))
+
+    def test_false_when_only_in_progress(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            solver_dir = Path(tmp) / "solver"
+            create_next_attempt_directory(solver_dir)  # leaves an .in_progress marker
+            self.assertFalse(has_finalized_attempt(solver_dir))
+
+    def test_true_after_finalize(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            solver_dir = Path(tmp) / "solver"
+            in_progress, _ = create_next_attempt_directory(solver_dir)
+            finalize_attempt_directory(in_progress)
+            self.assertTrue(has_finalized_attempt(solver_dir))
 
 
 if __name__ == "__main__":

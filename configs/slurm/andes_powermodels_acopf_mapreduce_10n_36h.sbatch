@@ -44,6 +44,7 @@ MAX_FAILURE_FRACTION=${MAX_FAILURE_FRACTION:-0.5}
 TOPOLOGIES_PER_CASE=${TOPOLOGIES_PER_CASE:-6}
 MAX_SWITCHED_BRANCHES=${MAX_SWITCHED_BRANCHES:-3}
 MAX_K=${MAX_K:-10}
+RESUME=${RESUME:-0}
 
 printf -v ROUND_PAD "%03d" "$ROUND_INDEX"
 CAMPAIGN_ROOT="$ROOT/data/campaigns/$CAMPAIGN_ID"
@@ -57,6 +58,7 @@ QUEUE_DIR="$SHARD_DIR/queue"
 QUEUE_FILE="$QUEUE_DIR/shards.txt"
 INDEX_FILE="$QUEUE_DIR/next_index.txt"
 LOCK_DIR="$QUEUE_DIR/lock"
+DONE_DIR="$QUEUE_DIR/done"
 
 mkdir -p "$ROOT/data/analysis"
 
@@ -65,7 +67,13 @@ echo "[$(date -u +%FT%TZ)] config=$CONFIG budget=$BUDGET per_case=$PER_CASE seed
 echo "[$(date -u +%FT%TZ)] solver_id=$SOLVER_ID timeout_s=$TIMEOUT_S shard_count=$SHARD_COUNT"
 echo "[$(date -u +%FT%TZ)] coverage_keys=$COVERAGE_KEYS min_per_bucket=$MIN_PER_BUCKET enforce=$ENFORCE_COVERAGE backfill=$BACKFILL_FROM_POOL"
 
-if [[ "$RUN_BOOTSTRAP" == "1" ]]; then
+RESUMING=0
+if [[ "$RESUME" == "1" ]] && compgen -G "$SHARD_DIR/${SHARD_PREFIX}_*.jsonl" > /dev/null; then
+  RESUMING=1
+  echo "[$(date -u +%FT%TZ)] RESUME enabled: reusing existing shards under $SHARD_DIR; completed shards and finalized runs are skipped"
+fi
+
+if [[ "$RESUMING" == "0" && "$RUN_BOOTSTRAP" == "1" ]]; then
   read -r -a CASE_ARRAY <<< "$CASES"
   echo "[$(date -u +%FT%TZ)] Bootstrapping campaign candidates and round selection"
   PYTHONPATH="$ROOT/src" python3.11 "$BOOTSTRAP_SCRIPT" \
@@ -81,7 +89,7 @@ if [[ "$RUN_BOOTSTRAP" == "1" ]]; then
     --round-index "$ROUND_INDEX" \
     --seed "$SEED"
 else
-  echo "[$(date -u +%FT%TZ)] Skipping bootstrap (RUN_BOOTSTRAP=$RUN_BOOTSTRAP)"
+  echo "[$(date -u +%FT%TZ)] Skipping bootstrap (RESUMING=$RESUMING RUN_BOOTSTRAP=$RUN_BOOTSTRAP)"
 fi
 
 if [[ ! -s "$SELECTED_JSONL" ]]; then
@@ -110,10 +118,14 @@ if [[ -s "$POOL_JSONL" ]]; then
   SHARD_ARGS+=(--pool-jsonl "$POOL_JSONL")
 fi
 
-PYTHONPATH="$ROOT/src" python3.11 "$SHARD_SCRIPT" "${SHARD_ARGS[@]}"
+if [[ "$RESUMING" == "0" ]]; then
+  PYTHONPATH="$ROOT/src" python3.11 "$SHARD_SCRIPT" "${SHARD_ARGS[@]}"
+else
+  echo "[$(date -u +%FT%TZ)] Skipping re-sharding (resume): reusing existing shard files"
+fi
 
 : > "$SHARD_IDS_FILE"
-mkdir -p "$QUEUE_DIR"
+mkdir -p "$QUEUE_DIR" "$DONE_DIR"
 : > "$QUEUE_FILE"
 for ((i=0; i<SHARD_COUNT; i++)); do
   shard_file="$SHARD_DIR/${SHARD_PREFIX}_$(printf "%05d" "$i").jsonl"
@@ -151,6 +163,8 @@ MAX_FAILURE_FRACTION="'$MAX_FAILURE_FRACTION'"
 QUEUE_FILE="'$QUEUE_FILE'"
 INDEX_FILE="'$INDEX_FILE'"
 LOCK_DIR="'$LOCK_DIR'"
+DONE_DIR="'$DONE_DIR'"
+RESUMING="'$RESUMING'"
 TOTAL_SHARDS=$(wc -l < "$QUEUE_FILE")
 
 TASK_ID=${SLURM_PROCID:-0}
@@ -180,6 +194,11 @@ while true; do
     continue
   fi
 
+  if [[ "$RESUMING" == "1" && -f "$DONE_DIR/$shard_number" ]]; then
+    echo "[$(date -u +%FT%TZ)] task=$TASK_ID shard_number=$shard_number already complete (resume) skipping"
+    continue
+  fi
+
   SHARD_CAMPAIGN_ID="${CAMPAIGN_ID}__r${ROUND_PAD}__s${shard_number}"
   SHARD_RUNS_ROOT="${RUNS_ROOT}/mapreduce_round_${ROUND_PAD}/shard_${shard_number}"
 
@@ -200,9 +219,13 @@ while true; do
   if [[ "$CONTINUE_ON_ERROR" == "1" ]]; then
     ARGS+=(--continue-on-error)
   fi
+  if [[ "$RESUMING" == "1" ]]; then
+    ARGS+=(--resume)
+  fi
 
   echo "[$(date -u +%FT%TZ)] task=$TASK_ID shard_number=$shard_number shard_campaign_id=$SHARD_CAMPAIGN_ID"
   PYTHONPATH="$ROOT/src" python3.11 "$MAP_SCRIPT" "${ARGS[@]}"
+  touch "$DONE_DIR/$shard_number"
 done
 '
 
