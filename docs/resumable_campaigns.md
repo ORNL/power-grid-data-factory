@@ -228,6 +228,27 @@ campaign=ultrascale_60m rounds=10 completed=[0, 1] furthest_incomplete=2
 [dry-run] sbatch ... overrides={'CAMPAIGN_ID': 'ultrascale_60m', 'ROUND_INDEX': '2', 'RESUME': '1', 'BUDGET': '6000000'}
 ```
 
+## Monitoring progress
+
+[scripts/monitor_campaign.py](../scripts/monitor_campaign.py) prints a read-only
+progress dashboard for a round without walking the (potentially millions of)
+attempt directories — it reads the bootstrap intermediate files, the per-shard
+execution reports, and the `queue/done` markers.
+
+```bash
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+PYTHONPATH=src python3.11 scripts/monitor_campaign.py \
+  --campaign-id ultrascale_60m_v1 --round-index 0 --watch 30
+```
+
+It reports the coarse pipeline stage (bootstrap sub-stage → sharding → map →
+reduce), candidate counts, shards done/total, aggregated solved/failed/skipped
+counts, and whether the reduce marker is `ok`.
+
+Note: the bootstrap stage (candidate generation, contingency enumeration,
+screening, selection) currently runs single-process on the batch head node, so
+the other nodes are idle until the map stage begins.
+
 ## Typical end-to-end flow
 
 1. Launch the campaign (bootstrap the first round on the cluster, or plan rounds

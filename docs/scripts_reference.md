@@ -77,7 +77,10 @@ Implemented workflow command:
 - `scripts/drive_campaign.py`
   - Auto-detects the furthest incomplete round (lowest round whose reduce marker is missing or not `ok`) and resubmits it with `RESUME=1` so the job resumes interrupted work.
   - `--chain` queues all subsequent rounds, each chained via `afterok`, for unattended multi-round completion.
-  - Splits budgets across rounds (`--total-budget` with `--budget-schedule`) and passes through extra env with repeatable `--set KEY=VALUE`; `--dry-run` prints the plan without submitting. See [Resumable Campaigns](resumable_campaigns.md#4-top-level-driver).
+  - Splits budgets across rounds (`--total-budget` with `--budget-schedule`) and passes through extra env with repeatable `--set KEY=VALUE`; `--nodes/--ntasks-per-node/--cpus-per-task/--time` override the sbatch header; `--dry-run` prints the plan without submitting. See [Resumable Campaigns](resumable_campaigns.md#4-top-level-driver).
+- `scripts/monitor_campaign.py`
+  - Read-only progress dashboard for a map/reduce campaign round: bootstrap sub-stage, candidate counts, shards done/total, aggregated solved/failed/skipped, and reduce status.
+  - Reads only cheap signals (intermediate files, the per-shard reports, and `queue/done` markers), so it stays fast even with millions of attempt directories. `--watch N` refreshes every N seconds. See [Resumable Campaigns](resumable_campaigns.md#monitoring-progress).
 
 ## Source onboarding helpers
 
