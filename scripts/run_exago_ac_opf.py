@@ -30,6 +30,8 @@ except ModuleNotFoundError:
     from grid_data_factory.storage.layout import create_next_attempt_directory, finalize_attempt_directory, get_solver_directory
     _append_registry_record = None
 
+from grid_data_factory.storage import paths  # noqa: E402
+
 
 def _append_registry_record_fallback(runs_root: Path, record: dict[str, Any]) -> None:
     jsonl = runs_root / "run_registry.jsonl"
@@ -231,11 +233,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--build-profile", default=os.environ.get("PGDF_EXAGO_BUILD_PROFILE", ""))
     p.add_argument("--opflow-bin", default=os.environ.get("PGDF_EXAGO_OPFLOW_BIN", ""))
     p.add_argument("--case-path", action="append", default=[], help="Case path relative to --exago-root.")
-    p.add_argument("--runs-root", default="data/runs")
+    p.add_argument("--runs-root", default="data/outputs/runs")
     p.add_argument("--solver-id", default="exago_ac_opf_ipopt")
     p.add_argument("--topology-id", default="topology_000000_baseline")
     p.add_argument("--operating-point-id", default="op_000000_baseline")
-    p.add_argument("--opflow-solver", default="IPOPT", choices=["IPOPT", "HIOPSPARSE", "HIOP"])
+    p.add_argument("--opflow-solver", default="IPOPT", choices=["IPOPT", "HIOPSPARSE", "HIOP", "HIOPSPARSEGPU"])
     p.add_argument("--opflow-model", default="POWER_BALANCE_POLAR")
     p.add_argument("--timeout-s", type=float, default=1800.0)
     p.add_argument("--continue-on-error", action="store_true")
@@ -394,7 +396,7 @@ def _run_one_case(repo_root: Path, args: argparse.Namespace, case_path: str, opf
     case_data = parse_matpower_case(case_file, case_id)
     (in_progress / "inputs" / "resolved_case.json").write_text(json.dumps(case_data, indent=2), encoding="utf-8")
 
-    tmp_export_dir = (repo_root / "data" / "tmp_exago_exports").resolve()
+    tmp_export_dir = (paths.tmp_dir(repo_root) / "exago_exports").resolve()
     tmp_export_dir.mkdir(parents=True, exist_ok=True)
     short_tag = f"{case_id}_{attempt_id}".replace("-", "_")
     export_base = tmp_export_dir / short_tag
