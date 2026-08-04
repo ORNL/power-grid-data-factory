@@ -18,6 +18,8 @@ This repository is initialized from the planning document:
 - `docs/first_reproducible_run.md`
 - `docs/first_real_case_run.md`
 
+GO Challenge duplicate-audit documentation is available at `docs/go_challenge_duplicate_audit.md`.
+
 ## Core principles
 
 - Keep task outputs separated under `data/runs/pf`, `data/runs/dc_opf`, `data/runs/ac_opf`, and `data/runs/scopf`.
@@ -25,6 +27,17 @@ This repository is initialized from the planning document:
 - Never overwrite attempts; append immutable `attempt_<six-digit-index>` directories.
 - Keep DC outputs explicitly marked as approximations (`physical_fidelity: dc_approximation`).
 - Do not use pandapower in production paths.
+
+## Default data-generation strategy
+
+The default strategy is an adaptive, coverage-constrained, multi-fidelity campaign.
+
+- Candidate selection uses independent acquisition queues with explicit quota budgets.
+- DC calculations are treated as screening features, not unilateral accept/reject gates.
+- Screening rejects are audited with stratified AC samples.
+- Post-solve diversity, active-constraint, and security-boundary ledgers are first-class artifacts.
+
+See `docs/adaptive_campaign_strategy.md` and `configs/campaign_default.yaml`.
 
 ## Current scaffold scope
 
@@ -38,8 +51,9 @@ This initial codebase provides:
 - Solver interface with adapters:
   - `PowerModelsAdapter` (implemented as process wrapper stub)
   - `ExaGOAdapter` (stub)
-  - `MatpowerAdapter` (optional stub)
 - Julia project skeleton for PowerModels runners.
+
+MATPOWER is used in this project as a case-data format and external reference source, not as an active solver backend.
 
 ## Quick start
 
@@ -92,3 +106,10 @@ Exactly one marker file must exist per finalized attempt:
 - ExaGO cloned under `external/ExaGO`
 - Remote: `https://github.com/ORNL/ExaGO`
 - Current commit: `545a8deb6fa35552f0ee402ca83672fe1255f61a`
+
+## GO Challenge source provenance
+
+- GO Challenge Challenge 1 zip archives under `external/go_challenge1/raw/` are preserved original downloads from the official DOE Data Catalog entry:
+  - https://catalog.data.gov/dataset/arpa-e-grid-optimization-go-competition-challenge-1?utm_source=chatgpt.com
+- These archives are converted into MATPOWER `.m` files via `scripts/convert_go_challenge_to_matpower.py`.
+- Conversion diagnostics and summary counts are written to `data/analysis/go_challenge1_conversion_report.json`.

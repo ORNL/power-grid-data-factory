@@ -17,11 +17,12 @@ This page lists external solver and data repositories needed to reproduce simula
 - Workspace clone commit: `545a8deb6fa35552f0ee402ca83672fe1255f61a`
 - Use for: OPFLOW/SCOPFLOW workflows, large-scale HPC workloads.
 
-## MATPOWER (optional)
+## MATPOWER (format and reference only)
 
 - Repository: https://github.com/MATPOWER/matpower
 - Runtime: GNU Octave or MATLAB.
-- Use for: independent cross-solver reference checks.
+- Use for: case-file format definition and optional external validation.
+- Scope in this repository: MATPOWER is not a supported in-repo solver backend.
 
 ## Grid data repositories
 
@@ -84,9 +85,15 @@ Store manually downloaded archives under `external/tamu/<case_id>/raw/` and do n
 
 ## ARPA-E GO Competition Challenge 1
 
-- OEDI page: https://data.openei.org/submissions/6153
+- Official DOE Data Catalog entry: https://catalog.data.gov/dataset/arpa-e-grid-optimization-go-competition-challenge-1?utm_source=chatgpt.com
+- Mirror/hosting page: https://data.openei.org/submissions/6153
 - Typical local path root: `external/go_challenge1`
 - Use for: parser validation and SCOPF-relevant contingency-oriented scenarios.
+
+Current workflow note:
+
+- The zip archives stored under `external/go_challenge1/raw/` are preserved copies of the original GO Challenge downloads from the official DOE catalog entry above.
+- These archives are converted into MATPOWER `.m` cases using `scripts/convert_go_challenge_to_matpower.py`, with conversion diagnostics written to `data/analysis/go_challenge1_conversion_report.json`.
 
 ## Expected local organization
 
