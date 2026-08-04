@@ -38,6 +38,13 @@ Implemented workflow command:
   - Runs AC-OPF through `PowerModelsAdapter` for selected MATPOWER cases.
   - Creates full preservation-first attempt directories under `data/runs/ac_opf/...`.
   - Writes normalized outputs, validation placeholders, manifests/checksums, terminal marker, and appends run registry records.
+- `scripts/run_exago_ac_opf.py`
+  - Runs AC-OPF through ExaGO OPFLOW for selected MATPOWER cases.
+  - Parses OPFLOW text output into structured `raw_result.solution` fields (`bus`, `branch`, `gen`) for downstream HydraGNN-style OPF training conversion.
+  - Creates full preservation-first attempt directories and appends run registry records with runtime metadata.
+- `scripts/run_pandapower_ac_opf.py`
+  - Runs AC-OPF through pandapower for selected MATPOWER cases.
+  - Creates full preservation-first attempt directories and appends run registry records with runtime metadata.
 
 ## Source onboarding helpers
 
@@ -69,6 +76,11 @@ Implemented workflow command:
   - Exports a git-tracked reproducibility bundle from manual TAMU case ingestion state.
   - Copies per-case manifests, checksums, and inventories into `data/imported/manual_sources/cases/`.
   - Writes `data/imported/manual_sources/repro_bundle.json` with archive checksums and metadata.
+- `scripts/convert_go_challenge_to_matpower.py`
+  - Converts GO Challenge PSS/E scenario bundles (`.raw` with optional `.rop`) into MATPOWER `.m` files.
+  - Input archives are expected to be preserved original downloads from the official DOE catalog entry: https://catalog.data.gov/dataset/arpa-e-grid-optimization-go-competition-challenge-1?utm_source=chatgpt.com
+  - Supports batch conversion directly from `external/go_challenge1/raw/Challenge_1*.zip` archives.
+  - Writes conversion summary/report JSON (default: `data/analysis/go_challenge1_conversion_report.json`).
 
 ## Topology creation helper
 

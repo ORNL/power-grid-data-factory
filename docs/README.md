@@ -17,6 +17,7 @@ This documentation describes the purpose, architecture, setup, and reproducibili
 11. [Production Readiness Checklist](production_readiness_checklist.md)
 12. [Adaptive Campaign Strategy (Default)](adaptive_campaign_strategy.md)
 13. [ExaGO Andes CPU Build and Run](exago_andes_cpu_build.md)
+14. [GO Challenge MATPOWER Duplicate Audit](go_challenge_duplicate_audit.md)
 
 ## Intended audience
 
