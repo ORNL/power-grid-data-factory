@@ -101,5 +101,19 @@ class EnvTests(unittest.TestCase):
         self.assertEqual(_DRV.parse_extra_env(["A=1", "B=x=y"]), {"A": "1", "B": "x=y"})
 
 
+class ResourceFlagTests(unittest.TestCase):
+    def test_empty_when_defaults(self):
+        self.assertEqual(_DRV.build_resource_flags(0, 0, 0, ""), [])
+
+    def test_full_override(self):
+        self.assertEqual(
+            _DRV.build_resource_flags(64, 16, 1, "36:00:00"),
+            ["--nodes", "64", "--ntasks-per-node", "16", "--cpus-per-task", "1", "--time", "36:00:00"],
+        )
+
+    def test_partial_override(self):
+        self.assertEqual(_DRV.build_resource_flags(64, 0, 0, "36:00:00"), ["--nodes", "64", "--time", "36:00:00"])
+
+
 if __name__ == "__main__":
     unittest.main()
