@@ -101,21 +101,16 @@ def _unique_components(components: list[dict[str, str]]) -> list[dict[str, str]]
 
 
 def _build_kplus_components(pool: dict[str, list[str]], k: int, rng: Random) -> list[dict[str, str]]:
-    # Start from one branch outage, then extend with interacting components.
-    comps: list[dict[str, str]] = [{"type": "branch", "id": rng.choice(pool["branch"])}]
-    while len(comps) < k:
-        if len(comps) % 2 == 1:
-            comps.append({"type": "generator", "id": rng.choice(pool["generator"])})
-        else:
-            comps.append({"type": "branch", "id": rng.choice(pool["branch"])})
-        comps = _unique_components(comps)
-        # In tiny systems duplicates can stall growth; force branch fallback.
-        if len(comps) < k and len(comps) % 2 == 0:
-            extra = [x for x in pool["branch"] if x not in {c["id"] for c in comps if c["type"] == "branch"}]
-            if extra:
-                comps.append({"type": "branch", "id": rng.choice(extra)})
-                comps = _unique_components(comps)
-    return comps[:k]
+    # Branch-led interacting set of k distinct components; terminates even when the
+    # generator pool is small by drawing without replacement from the combined pool.
+    combined: list[dict[str, str]] = [{"type": "branch", "id": b} for b in pool["branch"]]
+    combined += [{"type": "generator", "id": g} for g in pool["generator"]]
+    if k >= len(combined):
+        return _unique_components(combined)
+    chosen = rng.sample(combined, k)
+    if pool["branch"] and not any(c["type"] == "branch" for c in chosen):
+        chosen[0] = {"type": "branch", "id": rng.choice(pool["branch"])}
+    return _unique_components(chosen)
 
 
 def _expand_one(base: dict[str, Any], rng: Random, args: argparse.Namespace, repo_root: Path | None = None) -> list[dict[str, Any]]:
