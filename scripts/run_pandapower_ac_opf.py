@@ -3,9 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
-import time
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +15,7 @@ except ModuleNotFoundError:
 try:
     from grid_data_factory.preservation.artifacts import build_artifacts_manifest
     from grid_data_factory.preservation.checksums import verify_checksums, write_checksums
-    from grid_data_factory.runtime_metadata import collect_execution_context
+    from grid_data_factory.solvers.pandapower_adapter import run_pandapower_case
     from grid_data_factory.storage.attempt_io import append_registry_record_safe, utc_now_iso, write_common_attempt_files
     from grid_data_factory.storage.layout import create_next_attempt_directory, finalize_attempt_directory, get_solver_directory
 except ModuleNotFoundError:
@@ -25,7 +23,7 @@ except ModuleNotFoundError:
     sys.path.insert(0, str(_repo_root / "src"))
     from grid_data_factory.preservation.artifacts import build_artifacts_manifest
     from grid_data_factory.preservation.checksums import verify_checksums, write_checksums
-    from grid_data_factory.runtime_metadata import collect_execution_context
+    from grid_data_factory.solvers.pandapower_adapter import run_pandapower_case
     from grid_data_factory.storage.attempt_io import append_registry_record_safe, utc_now_iso, write_common_attempt_files
     from grid_data_factory.storage.layout import create_next_attempt_directory, finalize_attempt_directory, get_solver_directory
 
@@ -135,69 +133,6 @@ def _write_common_attempt_files(in_progress: Path, run_meta: dict[str, Any], cmd
     write_common_attempt_files(in_progress, run_meta, cmd_args, "run_pandapower_ac_opf.py")
 
 
-def _parse_pp_exception(exc: Exception) -> str:
-    msg = str(exc).strip()
-    if "did not converge" in msg.lower():
-        return "nonconverged"
-    return f"process_error:{type(exc).__name__}"
-
-
-def _run_pandapower_case(case_file: Path) -> dict[str, Any]:
-    start_t = time.perf_counter()
-    exec_ctx = collect_execution_context()
-    try:
-        import pandapower as pp
-        from pandapower.converter.matpower import from_mpc
-    except ModuleNotFoundError as exc:
-        elapsed = round(time.perf_counter() - start_t, 6)
-        return {
-            "success": False,
-            "termination_status": "missing_deps",
-            "solver_name": "pandapower",
-            "error": f"{type(exc).__name__}: {exc}",
-            "runtime": elapsed,
-            "solve_time": elapsed,
-            "runtime_metadata": {
-                "wallclock_seconds": elapsed,
-                "execution_context": exec_ctx,
-            },
-        }
-
-    try:
-        net = from_mpc(str(case_file))
-        pp.runopp(net, numba=False)
-        converged = bool(net.get("OPF_converged", False))
-        objective = float(net.res_cost)
-        status = "converged" if converged else "nonconverged"
-        elapsed = round(time.perf_counter() - start_t, 6)
-        return {
-            "success": converged,
-            "termination_status": status,
-            "solver_name": "pandapower",
-            "objective": objective,
-            "runtime": elapsed,
-            "solve_time": elapsed,
-            "runtime_metadata": {
-                "wallclock_seconds": elapsed,
-                "execution_context": exec_ctx,
-            },
-        }
-    except Exception as exc:  # noqa: BLE001
-        elapsed = round(time.perf_counter() - start_t, 6)
-        return {
-            "success": False,
-            "termination_status": _parse_pp_exception(exc),
-            "solver_name": "pandapower",
-            "error": f"{type(exc).__name__}: {exc}",
-            "runtime": elapsed,
-            "solve_time": elapsed,
-            "runtime_metadata": {
-                "wallclock_seconds": elapsed,
-                "execution_context": exec_ctx,
-            },
-        }
-
-
 def _run_one_case(repo_root: Path, args: argparse.Namespace, case_id: str, case_file: Path) -> dict[str, Any]:
     runs_root = (repo_root / args.runs_root).resolve()
     solver_dir = get_solver_directory(
@@ -232,7 +167,7 @@ def _run_one_case(repo_root: Path, args: argparse.Namespace, case_id: str, case_
         encoding="utf-8",
     )
 
-    result = _run_pandapower_case(case_file)
+    result = run_pandapower_case(case_file)
     success = bool(result.get("success", False))
     status = str(result.get("termination_status", "unknown"))
     objective = result.get("objective")
