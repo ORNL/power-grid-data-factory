@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 TASKS = {"pf", "dc_opf", "ac_opf", "scopf"}
@@ -63,7 +64,6 @@ def create_attempt_directory(solver_directory: Path, attempt_id: str) -> Path:
     if in_progress.exists():
         raise FileExistsError(f"Attempt already in progress: {in_progress}")
     in_progress.mkdir(parents=True, exist_ok=False)
-
     for rel in [
         "environment",
         "inputs",
@@ -103,3 +103,58 @@ def finalize_attempt_directory(in_progress_dir: Path) -> Path:
     final_dir = in_progress_dir.parent / final_name
     in_progress_dir.rename(final_dir)
     return final_dir
+
+
+def scan_max_attempt_index(solver_directory: Path) -> int:
+    attempts = solver_directory / "attempts"
+    if not attempts.exists():
+        return 0
+    max_idx = 0
+    for p in attempts.iterdir():
+        name = p.name
+        if name.startswith(".attempt_") and name.endswith(".in_progress"):
+            core = name[len(".attempt_") : -len(".in_progress")]
+        elif name.startswith("attempt_"):
+            core = name[len("attempt_") :]
+        else:
+            continue
+        if core.isdigit():
+            max_idx = max(max_idx, int(core))
+    return max_idx
+
+
+def create_next_attempt_directory(solver_directory: Path, max_attempts: int = 100000) -> tuple[Path, str]:
+    """Atomically claim the next free attempt directory, retrying on races.
+
+    Safe when multiple processes share a runs-root: the atomic ``mkdir`` of the
+    in-progress marker breaks ties, and a lost race simply advances to the next index.
+    Returns the in-progress directory and its attempt id.
+    """
+    from .naming import format_attempt_id
+
+    attempts = solver_directory / "attempts"
+    index = scan_max_attempt_index(solver_directory) + 1
+    last_exc: Exception | None = None
+    for _ in range(max_attempts):
+        attempt_id = format_attempt_id(index)
+        final_dir = attempts / attempt_id
+        if final_dir.exists() or (attempts / f".{attempt_id}.in_progress").exists():
+            index += 1
+            continue
+        try:
+            in_progress = create_attempt_directory(solver_directory, attempt_id)
+        except FileExistsError as exc:
+            last_exc = exc
+            index += 1
+            continue
+        # Close the finalize-name race: another process may have finalized this
+        # index in the window between our existence check and claiming the marker.
+        # Only the marker holder can create the finalized dir, so once we hold the
+        # marker and observe no finalized dir, the index is exclusively ours.
+        if final_dir.exists():
+            shutil.rmtree(in_progress, ignore_errors=True)
+            index += 1
+            continue
+        return in_progress, attempt_id
+    raise RuntimeError(f"Could not allocate an attempt directory under {attempts} after {max_attempts} tries") from last_exc
+

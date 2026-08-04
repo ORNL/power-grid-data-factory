@@ -18,8 +18,7 @@ try:
     from grid_data_factory.preservation.artifacts import build_artifacts_manifest
     from grid_data_factory.preservation.checksums import verify_checksums, write_checksums
     from grid_data_factory.runtime_metadata import collect_execution_context
-    from grid_data_factory.storage.layout import create_attempt_directory, finalize_attempt_directory, get_solver_directory
-    from grid_data_factory.storage.naming import format_attempt_id
+    from grid_data_factory.storage.layout import create_next_attempt_directory, finalize_attempt_directory, get_solver_directory
     from grid_data_factory.storage.registry import append_registry_record as _append_registry_record
 except ModuleNotFoundError:
     _repo_root = Path(__file__).resolve().parents[1]
@@ -28,8 +27,7 @@ except ModuleNotFoundError:
     from grid_data_factory.preservation.artifacts import build_artifacts_manifest
     from grid_data_factory.preservation.checksums import verify_checksums, write_checksums
     from grid_data_factory.runtime_metadata import collect_execution_context
-    from grid_data_factory.storage.layout import create_attempt_directory, finalize_attempt_directory, get_solver_directory
-    from grid_data_factory.storage.naming import format_attempt_id
+    from grid_data_factory.storage.layout import create_next_attempt_directory, finalize_attempt_directory, get_solver_directory
     _append_registry_record = None
 
 
@@ -52,24 +50,6 @@ def append_registry_record_safe(runs_root: Path, record: dict[str, Any]) -> None
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _next_attempt_index(solver_dir: Path) -> int:
-    attempts_dir = solver_dir / "attempts"
-    if not attempts_dir.exists():
-        return 1
-    max_idx = 0
-    for p in attempts_dir.iterdir():
-        name = p.name
-        if name.startswith(".attempt_") and name.endswith(".in_progress"):
-            core = name[len(".attempt_") : -len(".in_progress")]
-        elif name.startswith("attempt_"):
-            core = name[len("attempt_") :]
-        else:
-            continue
-        if core.isdigit():
-            max_idx = max(max_idx, int(core))
-    return max_idx + 1
 
 
 def _resolve_opflow_bin(repo_root: Path, exago_root: Path, args: argparse.Namespace) -> Path:
@@ -393,8 +373,7 @@ def _run_one_case(repo_root: Path, args: argparse.Namespace, case_path: str, opf
         solver_id=args.solver_id,
     )
 
-    attempt_id = format_attempt_id(_next_attempt_index(solver_dir))
-    in_progress = create_attempt_directory(solver_dir, attempt_id)
+    in_progress, attempt_id = create_next_attempt_directory(solver_dir)
 
     run_id = f"{case_id}-{args.topology_id}-{args.operating_point_id}-{args.solver_id}-{attempt_id}"
     run_meta = {
