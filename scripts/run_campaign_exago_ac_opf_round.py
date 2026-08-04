@@ -29,7 +29,7 @@ if str(_REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 # Single source of truth for the ledger / attempt / descriptor contract.
-import run_campaign_ac_opf_round as base  # noqa: E402
+from grid_data_factory.campaigns import round_runner as base  # noqa: E402
 
 from grid_data_factory.solvers.exago_adapter import resolve_opflow_bin, run_exago_case  # noqa: E402
 

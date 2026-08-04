@@ -1,7 +1,6 @@
-"""Tests for resumable-campaign helpers in run_campaign_ac_opf_round.py."""
+"""Tests for resumable-campaign helpers in grid_data_factory.campaigns.round_runner."""
 from __future__ import annotations
 
-import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,16 +9,7 @@ from _bootstrap import REPO_ROOT  # noqa: F401  (ensures src on path)
 
 from grid_data_factory.storage.layout import create_next_attempt_directory, finalize_attempt_directory, has_finalized_attempt
 
-
-def _load_map_module():
-    path = REPO_ROOT / "scripts" / "run_campaign_ac_opf_round.py"
-    spec = importlib.util.spec_from_file_location("run_campaign_ac_opf_round", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-_MAP = _load_map_module()
+from grid_data_factory.campaigns import round_runner as _MAP
 
 _CANDIDATE = {
     "case_id": "pglib_opf_case14_ieee",
