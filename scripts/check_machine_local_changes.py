@@ -12,10 +12,9 @@ from typing import Iterable
 
 
 DEFAULT_RISK_PATTERNS = {
-    "generated_campaign_data": r"^data/campaigns/",
-    "generated_run_data": r"^data/runs/",
-    "generated_canonical_data": r"^data/canonical/",
-    "generated_analysis_data": r"^data/analysis/",
+    "generated_output_data": r"^data/outputs/",
+    "generated_derived_data": r"^data/derived/",
+    "generated_scratch_data": r"^data/scratch/",
     "external_dependency_tree": r"^external/",
     "local_build_dir": r"^build(?:/|$)|^build-[^/]+/",
     "local_install_dir": r"^install(?:/|$)",

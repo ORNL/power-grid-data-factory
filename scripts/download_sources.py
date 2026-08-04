@@ -127,7 +127,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--create-manual-dirs", action="store_true")
     p.add_argument("--download-files", action="store_true")
     p.add_argument("--extract-archives", action="store_true")
-    p.add_argument("--out", default="data/imported/source_provenance.json")
+    p.add_argument("--out", default="data/inputs/source_provenance.json")
     p.add_argument("--require-case", action="append", default=[])
     return p.parse_args()
 

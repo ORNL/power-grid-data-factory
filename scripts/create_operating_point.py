@@ -21,6 +21,8 @@ except ModuleNotFoundError:
     from grid_data_factory.topology.generation import generate_topology_variants, read_network_skeleton
     from grid_data_factory.scenarios.load_snapshots import load_snapshot_registry
 
+from grid_data_factory.storage import paths  # noqa: E402
+
 
 def _require_yaml():
     try:
@@ -416,7 +418,7 @@ def _prepare_topologies(repo_root: Path, case_id: str, n_variants: int, seed: in
     except Exception:  # noqa: BLE001 - fall back to baseline-only topology on any parse failure
         return [dict(_BASELINE_TOPOLOGY)]
 
-    registry_dir = repo_root / "data" / "topology_registry" / case_id
+    registry_dir = paths.topology_registry_dir(repo_root) / case_id
     registry_dir.mkdir(parents=True, exist_ok=True)
     with (registry_dir / "topology_variants.jsonl").open("w", encoding="utf-8") as fh:
         for v in variants:

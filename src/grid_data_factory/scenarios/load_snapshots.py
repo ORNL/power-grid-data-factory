@@ -15,6 +15,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from grid_data_factory.storage import paths
+
 
 def _to_number(token: str) -> float:
     return float(token)
@@ -140,7 +142,7 @@ def build_snapshot_registry(
 
 
 def snapshot_registry_path(repo_root: Path, case_id: str) -> Path:
-    return repo_root / "data" / "operating_point_registry" / case_id / "load_snapshots.json"
+    return paths.operating_point_registry_dir(repo_root) / case_id / "load_snapshots.json"
 
 
 def write_snapshot_registry(repo_root: Path, case_id: str, registry: dict[str, Any]) -> Path:

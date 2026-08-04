@@ -44,7 +44,7 @@ def parse_args() -> argparse.Namespace:
 
     p.add_argument("--solver-id", default="powermodels_ac_opf_ipopt_campaign")
     p.add_argument("--timeout-s", type=int, default=1800)
-    p.add_argument("--runs-root", default="data/runs")
+    p.add_argument("--runs-root", default="data/outputs/runs")
 
     p.add_argument("--shard-count", type=int, default=0, help="0 means use Slurm ntasks.")
     p.add_argument("--max-candidates", type=int, default=0)

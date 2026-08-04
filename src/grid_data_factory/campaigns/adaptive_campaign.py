@@ -6,6 +6,7 @@ from typing import Any
 import yaml
 
 from grid_data_factory.acquisition.portfolio_constraints import PortfolioConstraints
+from grid_data_factory.storage import paths
 
 from .campaign_round import run_campaign_round
 from .ledgers import create_campaign_layout
@@ -18,7 +19,7 @@ class AdaptiveCampaign:
         self.campaign_id = campaign_id
 
         self.config = self._load_yaml(self.config_path)
-        self.campaign_root = self.repo_root / "data" / "campaigns" / self.campaign_id
+        self.campaign_root = paths.campaign_root(self.repo_root, self.campaign_id)
 
     @staticmethod
     def _load_yaml(path: Path) -> dict[str, Any]:

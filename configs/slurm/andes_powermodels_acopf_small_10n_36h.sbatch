@@ -6,8 +6,8 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
 #SBATCH -t 36:00:00
-#SBATCH -o /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/analysis/slurm-%x-%j.out
-#SBATCH -e /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/analysis/slurm-%x-%j.err
+#SBATCH -o /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.out
+#SBATCH -e /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
 
 set -euo pipefail
 
@@ -28,7 +28,7 @@ BUDGET=${BUDGET:-600}
 SEED=${SEED:-7}
 SOLVER_ID=${SOLVER_ID:-powermodels_ac_opf_ipopt_campaign}
 TIMEOUT_S=${TIMEOUT_S:-1200}
-RUNS_ROOT=${RUNS_ROOT:-data/runs}
+RUNS_ROOT=${RUNS_ROOT:-data/outputs/runs}
 MAX_CANDIDATES=${MAX_CANDIDATES:-0}
 RUN_BOOTSTRAP=${RUN_BOOTSTRAP:-1}
 CONTINUE_ON_ERROR=${CONTINUE_ON_ERROR:-1}
@@ -37,11 +37,11 @@ TOPOLOGIES_PER_CASE=${TOPOLOGIES_PER_CASE:-6}
 MAX_SWITCHED_BRANCHES=${MAX_SWITCHED_BRANCHES:-3}
 
 printf -v ROUND_PAD "%03d" "$ROUND_INDEX"
-CAMPAIGN_ROOT="$ROOT/data/campaigns/$CAMPAIGN_ID"
+CAMPAIGN_ROOT="$ROOT/data/outputs/campaigns/$CAMPAIGN_ID"
 SELECTED_JSONL="$CAMPAIGN_ROOT/round_summaries/round_${ROUND_PAD}_selected_candidates.jsonl"
 REPORT_JSON="$CAMPAIGN_ROOT/round_summaries/round_${ROUND_PAD}_ac_execution_report.json"
 
-mkdir -p "$ROOT/data/analysis"
+mkdir -p "$ROOT/data/scratch/logs"
 
 echo "[$(date -u +%FT%TZ)] JOB=$SLURM_JOB_ID campaign_id=$CAMPAIGN_ID round_index=$ROUND_INDEX"
 echo "[$(date -u +%FT%TZ)] config=$CONFIG budget=$BUDGET per_case=$PER_CASE seed=$SEED"

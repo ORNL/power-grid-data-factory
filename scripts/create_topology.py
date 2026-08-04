@@ -148,7 +148,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--case-file", default=None)
     p.add_argument("--description", default="baseline")
     p.add_argument("--topology-index", type=int, default=None)
-    p.add_argument("--registry-root", default="data/topology_registry")
+    p.add_argument("--registry-root", default="data/derived/registries/topology")
     p.add_argument("--out", default=None, help="Optional explicit output path for topology JSON")
     return p.parse_args()
 
