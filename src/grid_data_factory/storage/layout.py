@@ -55,6 +55,8 @@ def get_solver_directory(
         base = get_contingency_set_directory(runs_root, case_id, topology_id, operating_point_id, contingency_set_id)
     else:
         base = get_operating_point_directory(runs_root, task, case_id, topology_id, operating_point_id)
+        if contingency_set_id:
+            base = base / contingency_set_id
     return base / solver_id
 
 

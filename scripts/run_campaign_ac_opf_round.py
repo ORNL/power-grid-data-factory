@@ -15,7 +15,7 @@ try:
     from grid_data_factory.campaigns.ledgers import append_parquet_rows
     from grid_data_factory.constraints.active_sets import build_active_constraint_signature
     from grid_data_factory.constraints.coverage_ledger import update_active_constraint_ledger
-    from grid_data_factory.contingencies.apply import apply_contingency
+    from grid_data_factory.contingencies.apply import apply_contingency, contingency_slug
     from grid_data_factory.diversity.clustering import adaptive_bin_id
     from grid_data_factory.diversity.descriptors import SolvedStateDescriptor
     from grid_data_factory.diversity.duplicate_detection import classify_duplicate_status
@@ -35,7 +35,7 @@ except ModuleNotFoundError:
     from grid_data_factory.campaigns.ledgers import append_parquet_rows
     from grid_data_factory.constraints.active_sets import build_active_constraint_signature
     from grid_data_factory.constraints.coverage_ledger import update_active_constraint_ledger
-    from grid_data_factory.contingencies.apply import apply_contingency
+    from grid_data_factory.contingencies.apply import apply_contingency, contingency_slug
     from grid_data_factory.diversity.clustering import adaptive_bin_id
     from grid_data_factory.diversity.descriptors import SolvedStateDescriptor
     from grid_data_factory.diversity.duplicate_detection import classify_duplicate_status
@@ -235,6 +235,7 @@ def _write_attempt(
     op_index = int(m.group(1)) if m else 0
     operating_point_id = f"op_{op_index:06d}_{regime}"
     topology_id = str(candidate.get("topology_id") or "topology_000000_baseline")
+    contingency_id = contingency_slug(candidate.get("contingency"))
 
     solver_dir = get_solver_directory(
         runs_root=runs_root,
@@ -243,17 +244,18 @@ def _write_attempt(
         topology_id=topology_id,
         operating_point_id=operating_point_id,
         solver_id=solver_id,
+        contingency_set_id=contingency_id,
     )
     in_progress, attempt_id = create_next_attempt_directory(solver_dir)
 
-    run_id = f"{case_id}-{topology_id}-{operating_point_id}-{solver_id}-{attempt_id}"
+    run_id = f"{case_id}-{topology_id}-{operating_point_id}-{contingency_id}-{solver_id}-{attempt_id}"
     run_yaml = {
         "run_id": run_id,
         "task": "ac_opf",
         "case_id": case_id,
         "topology_id": topology_id,
         "operating_point_id": operating_point_id,
-        "contingency_set_id": None,
+        "contingency_set_id": contingency_id,
         "solver_id": solver_id,
         "attempt_id": attempt_id,
         "numerical_status": str(result.get("termination_status", "unknown")),
