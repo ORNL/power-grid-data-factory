@@ -1,0 +1,18 @@
+source: tamu
+source_type: manual_catalog
+case_id: epigrids_new_england_250
+registered_at: '2026-08-04T17:12:52.339974+00:00'
+catalog_url: https://electricgrids.engr.tamu.edu/electric-grid-test-cases/
+case_page_url: null
+archive:
+  original_filename: New England-20260804T171015Z-1-001.zip
+  relative_path: raw/New England-20260804T171015Z-1-001.zip
+  size_bytes: 4867873
+  sha256: c972d7a6345705913a9012c5115c190268953ecf8ba9d9b4bca79be78ae249c5
+  expected_sha256: null
+  sha256_match: null
+  archive_type: zip
+extraction:
+  requested: true
+  status: ok
+  destination: /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/tamu/epigrids_new_england_250/extracted
