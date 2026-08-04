@@ -45,6 +45,16 @@ Implemented workflow command:
 - `scripts/run_pandapower_ac_opf.py`
   - Runs AC-OPF through pandapower for selected MATPOWER cases.
   - Creates full preservation-first attempt directories and appends run registry records with runtime metadata.
+- `scripts/shard_selected_candidates.py`
+  - Deterministically shards selected-candidate JSONL files by `candidate_id` ordering.
+  - Produces fixed shard files and a manifest for map-stage parallel execution.
+  - Supports coverage gates (for example by dataset/topology) and deterministic pool-based backfill before sharding.
+- `scripts/reduce_campaign_shards.py`
+  - Deterministically merges shard campaign ledgers and shard AC execution reports back into the target campaign.
+  - Aggregates active-constraint ledger rows by `(constraint_family, component_id)` and writes a reduce report marker per round.
+- `scripts/launch_ultrascale_campaign.py`
+  - Plans or submits chained map/reduce Slurm rounds with full parameter exports (budget, sharding, coverage gate, backfill, solver runtime settings).
+  - Supports dependency-chained submission (`afterok`) for continuous multi-round campaigns.
 
 ## Source onboarding helpers
 

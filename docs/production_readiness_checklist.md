@@ -21,7 +21,7 @@ module load julia/1.8.2
 export JULIA_DEPOT_PATH=$PWD/.julia_depot_andes_profile
 julia --project=julia/lockfiles/andes -e 'using Pkg; Pkg.instantiate()'
 
-PYTHONPATH=src python3.11 scripts/configure_exago_build.py --exago-root external/ExaGO --profile frontier --dry-run
+PYTHONPATH=src python3.11 scripts/configure_exago_build.py --exago-root external/ExaGO --preset frontier-gpu --dry-run
 ```
 
 ## 2) Run layout and preservation baseline

@@ -19,8 +19,3 @@ solvers:
     task: ac_opf
     formulation: AC_OPF
     optimizer: Ipopt
-  - solver_id: matpower_runopf_mips
-    framework: MATPOWER
-    task: ac_opf
-    formulation: runopf
-    optimizer: MIPS

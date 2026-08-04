@@ -1,4 +1,5 @@
 portfolio:
+  # Cases immediately available from the PGLib clone in configs/sources.yaml.
   automatic_available_now:
     - activsg200
     - epigrids_florida_5658
@@ -6,6 +7,21 @@ portfolio:
     - epigrids_midwest_10192
     - epigrids_western_20758
     - epigrids_eastern_78484
+    - pglib_opf_case500_goc
+    - pglib_opf_case2000_goc
+    - pglib_opf_case10000_goc
+    - pglib_opf_case4661_sdet
+    - pglib_opf_case6470_rte
+    - pglib_opf_case13659_pegase
+    - pglib_opf_case14_ieee
+    - pglib_opf_case24_ieee_rts
+    - pglib_opf_case30_ieee
+    - pglib_opf_case57_ieee
+    - pglib_opf_case73_ieee_rts
+    - pglib_opf_case118_ieee
+    - pglib_opf_case162_ieee_dtc
+    - pglib_opf_case300_ieee
+  # Cases that require manual TAMU data acquisition before use.
   add_after_manual_tamu_acquisition:
     - activsg500
     - activsg2000
