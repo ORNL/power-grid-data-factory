@@ -20,6 +20,7 @@ This documentation describes the purpose, architecture, setup, and reproducibili
 14. [GO Challenge MATPOWER Duplicate Audit](go_challenge_duplicate_audit.md)
 15. [Schema Contracts](schema_contracts.md)
 16. [Evolution Log](evolution_log.md)
+17. [Configuration Reference](configuration_reference.md)
 
 ## Intended audience
 

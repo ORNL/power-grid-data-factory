@@ -2,7 +2,7 @@
 
 ## Repository structure
 
-- `configs/`: campaign and solver configuration files.
+- `configs/`: campaign and solver configuration files (see [Configuration Reference](configuration_reference.md)).
 - `external/`: cloned or downloaded external repositories and datasets.
 - `data/`: canonicalized inputs, registries, run artifacts, and derived outputs.
 - `src/grid_data_factory/`: Python package implementing layout, adapters, screening, and preservation logic.
