@@ -1,0 +1,18 @@
+source: tamu
+source_type: manual_catalog
+case_id: epigrids_wisconsin_1664
+registered_at: '2026-08-04T17:07:36.781027+00:00'
+catalog_url: https://electricgrids.engr.tamu.edu/electric-grid-test-cases/
+case_page_url: null
+archive:
+  original_filename: Wisconsin_1664.zip
+  relative_path: raw/Wisconsin_1664.zip
+  size_bytes: 968638
+  sha256: 4556f788d5349b71228e79cd4448ef844c2f247a0d57aef7d09e855e572934e9
+  expected_sha256: null
+  sha256_match: null
+  archive_type: zip
+extraction:
+  requested: true
+  status: ok
+  destination: /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/tamu/epigrids_wisconsin_1664/extracted

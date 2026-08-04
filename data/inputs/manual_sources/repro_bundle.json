@@ -1,6 +1,6 @@
 {
   "generated_from": "external/tamu",
-  "generated_at": "2026-08-04T04:02:18.499443+00:00",
+  "generated_at": "2026-08-04T22:28:31.347126+00:00",
   "policy_note": "Manual source archives remain under external/tamu (gitignored). This bundle stores reproducibility metadata, manifests, checksums, and inventories.",
   "cases": [
     {
@@ -20,9 +20,9 @@
         ]
       },
       "copied_files": {
-        "source_manifest.yaml": "data/imported/manual_sources/cases/activsg500/source_manifest.yaml",
-        "checksums.sha256": "data/imported/manual_sources/cases/activsg500/checksums.sha256",
-        "inventory.txt": "data/imported/manual_sources/cases/activsg500/inventory.txt"
+        "source_manifest.yaml": "data/inputs/manual_sources/cases/activsg500/source_manifest.yaml",
+        "checksums.sha256": "data/inputs/manual_sources/cases/activsg500/checksums.sha256",
+        "inventory.txt": "data/inputs/manual_sources/cases/activsg500/inventory.txt"
       },
       "archives": [
         {
@@ -53,9 +53,9 @@
         ]
       },
       "copied_files": {
-        "source_manifest.yaml": "data/imported/manual_sources/cases/activsg2000/source_manifest.yaml",
-        "checksums.sha256": "data/imported/manual_sources/cases/activsg2000/checksums.sha256",
-        "inventory.txt": "data/imported/manual_sources/cases/activsg2000/inventory.txt"
+        "source_manifest.yaml": "data/inputs/manual_sources/cases/activsg2000/source_manifest.yaml",
+        "checksums.sha256": "data/inputs/manual_sources/cases/activsg2000/checksums.sha256",
+        "inventory.txt": "data/inputs/manual_sources/cases/activsg2000/inventory.txt"
       },
       "archives": [
         {
@@ -86,9 +86,9 @@
         ]
       },
       "copied_files": {
-        "source_manifest.yaml": "data/imported/manual_sources/cases/activsg10k/source_manifest.yaml",
-        "checksums.sha256": "data/imported/manual_sources/cases/activsg10k/checksums.sha256",
-        "inventory.txt": "data/imported/manual_sources/cases/activsg10k/inventory.txt"
+        "source_manifest.yaml": "data/inputs/manual_sources/cases/activsg10k/source_manifest.yaml",
+        "checksums.sha256": "data/inputs/manual_sources/cases/activsg10k/checksums.sha256",
+        "inventory.txt": "data/inputs/manual_sources/cases/activsg10k/inventory.txt"
       },
       "archives": [
         {
@@ -117,9 +117,9 @@
         "non_equivalent_similar_size_cases": []
       },
       "copied_files": {
-        "source_manifest.yaml": "data/imported/manual_sources/cases/activsg25k/source_manifest.yaml",
-        "checksums.sha256": "data/imported/manual_sources/cases/activsg25k/checksums.sha256",
-        "inventory.txt": "data/imported/manual_sources/cases/activsg25k/inventory.txt"
+        "source_manifest.yaml": "data/inputs/manual_sources/cases/activsg25k/source_manifest.yaml",
+        "checksums.sha256": "data/inputs/manual_sources/cases/activsg25k/checksums.sha256",
+        "inventory.txt": "data/inputs/manual_sources/cases/activsg25k/inventory.txt"
       },
       "archives": [
         {
@@ -148,9 +148,9 @@
         "non_equivalent_similar_size_cases": []
       },
       "copied_files": {
-        "source_manifest.yaml": "data/imported/manual_sources/cases/activsg70k/source_manifest.yaml",
-        "checksums.sha256": "data/imported/manual_sources/cases/activsg70k/checksums.sha256",
-        "inventory.txt": "data/imported/manual_sources/cases/activsg70k/inventory.txt"
+        "source_manifest.yaml": "data/inputs/manual_sources/cases/activsg70k/source_manifest.yaml",
+        "checksums.sha256": "data/inputs/manual_sources/cases/activsg70k/checksums.sha256",
+        "inventory.txt": "data/inputs/manual_sources/cases/activsg70k/inventory.txt"
       },
       "archives": [
         {
@@ -179,9 +179,9 @@
         "non_equivalent_similar_size_cases": []
       },
       "copied_files": {
-        "source_manifest.yaml": "data/imported/manual_sources/cases/activsg82k/source_manifest.yaml",
-        "checksums.sha256": "data/imported/manual_sources/cases/activsg82k/checksums.sha256",
-        "inventory.txt": "data/imported/manual_sources/cases/activsg82k/inventory.txt"
+        "source_manifest.yaml": "data/inputs/manual_sources/cases/activsg82k/source_manifest.yaml",
+        "checksums.sha256": "data/inputs/manual_sources/cases/activsg82k/checksums.sha256",
+        "inventory.txt": "data/inputs/manual_sources/cases/activsg82k/inventory.txt"
       },
       "archives": [
         {
@@ -210,9 +210,9 @@
         "non_equivalent_similar_size_cases": []
       },
       "copied_files": {
-        "source_manifest.yaml": "data/imported/manual_sources/cases/memphis2026/source_manifest.yaml",
-        "checksums.sha256": "data/imported/manual_sources/cases/memphis2026/checksums.sha256",
-        "inventory.txt": "data/imported/manual_sources/cases/memphis2026/inventory.txt"
+        "source_manifest.yaml": "data/inputs/manual_sources/cases/memphis2026/source_manifest.yaml",
+        "checksums.sha256": "data/inputs/manual_sources/cases/memphis2026/checksums.sha256",
+        "inventory.txt": "data/inputs/manual_sources/cases/memphis2026/inventory.txt"
       },
       "archives": [
         {
@@ -243,9 +243,9 @@
         ]
       },
       "copied_files": {
-        "source_manifest.yaml": "data/imported/manual_sources/cases/epigrids_eastern/source_manifest.yaml",
-        "checksums.sha256": "data/imported/manual_sources/cases/epigrids_eastern/checksums.sha256",
-        "inventory.txt": "data/imported/manual_sources/cases/epigrids_eastern/inventory.txt"
+        "source_manifest.yaml": "data/inputs/manual_sources/cases/epigrids_eastern/source_manifest.yaml",
+        "checksums.sha256": "data/inputs/manual_sources/cases/epigrids_eastern/checksums.sha256",
+        "inventory.txt": "data/inputs/manual_sources/cases/epigrids_eastern/inventory.txt"
       },
       "archives": [
         {
@@ -285,10 +285,21 @@
         "exact_tamu_topology": true,
         "non_equivalent_similar_size_cases": []
       },
-      "copied_files": {},
-      "archives": [],
-      "archive_count": 0,
-      "extracted_file_count": 0,
+      "copied_files": {
+        "source_manifest.yaml": "data/inputs/manual_sources/cases/epigrids_new_england_250/source_manifest.yaml",
+        "checksums.sha256": "data/inputs/manual_sources/cases/epigrids_new_england_250/checksums.sha256",
+        "inventory.txt": "data/inputs/manual_sources/cases/epigrids_new_england_250/inventory.txt"
+      },
+      "archives": [
+        {
+          "filename": "New England-20260804T171015Z-1-001.zip",
+          "size_bytes": 4867873,
+          "sha256": "c972d7a6345705913a9012c5115c190268953ecf8ba9d9b4bca79be78ae249c5",
+          "relative_external_path": "external/tamu/epigrids_new_england_250/raw/New England-20260804T171015Z-1-001.zip"
+        }
+      ],
+      "archive_count": 1,
+      "extracted_file_count": 55,
       "present": true
     },
     {
@@ -305,10 +316,21 @@
         "exact_tamu_topology": true,
         "non_equivalent_similar_size_cases": []
       },
-      "copied_files": {},
-      "archives": [],
-      "archive_count": 0,
-      "extracted_file_count": 0,
+      "copied_files": {
+        "source_manifest.yaml": "data/inputs/manual_sources/cases/epigrids_wisconsin_1664/source_manifest.yaml",
+        "checksums.sha256": "data/inputs/manual_sources/cases/epigrids_wisconsin_1664/checksums.sha256",
+        "inventory.txt": "data/inputs/manual_sources/cases/epigrids_wisconsin_1664/inventory.txt"
+      },
+      "archives": [
+        {
+          "filename": "Wisconsin_1664.zip",
+          "size_bytes": 968638,
+          "sha256": "4556f788d5349b71228e79cd4448ef844c2f247a0d57aef7d09e855e572934e9",
+          "relative_external_path": "external/tamu/epigrids_wisconsin_1664/raw/Wisconsin_1664.zip"
+        }
+      ],
+      "archive_count": 1,
+      "extracted_file_count": 4,
       "present": true
     }
   ]
