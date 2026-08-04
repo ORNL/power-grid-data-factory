@@ -39,4 +39,9 @@ julia/.julia/
 
 # Julia sysimages (large, machine-specific PackageCompiler output)
 julia/sysimages/
+
+# Track julia/build/Project.toml (records the PackageCompiler build dep) even
+# though the generic build/ rule above would otherwise ignore it; skip only its
+# resolved Manifest.
+!julia/build/
 julia/build/Manifest.toml
