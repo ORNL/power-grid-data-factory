@@ -71,6 +71,15 @@ Copy this block for each update:
 - Related files: configs/campaign_ultrascale.yaml, configs/slurm/ultrascale_cases.txt, scripts/launch_ultrascale_campaign.py, configs/slurm/README.md, docs/scripts_reference.md
 - Related run/campaign ids: ultra-scale round chains launched via `scripts/launch_ultrascale_campaign.py`
 
+## 2026-08-04 - Resumable campaigns, contingency-in-path naming, and top-level driver
+
+- Change: Made attempt-directory allocation collision-safe under many concurrent workers (`create_next_attempt_directory` with an atomic in-progress marker and a finalize-name recheck); encoded the applied contingency into non-SCOPF run paths via a deterministic `contingency_slug`; added run-level resume (`--resume` skips candidates with a finalized attempt) and shard-level resume (`RESUME=1` reuses shards, skips `queue/done` shards, and marks shards done); and added `scripts/drive_campaign.py`, which resubmits the furthest incomplete round with `RESUME=1` and optionally chains remaining rounds via `afterok`.
+- Why: Allow very large campaigns (tens of millions of solves) to run safely across many workers and to resume across multiple Slurm jobs without redoing finished work, while making each output directory self-describing.
+- Expected data impact: Non-SCOPF run paths gain a `<contingency_slug>` level (base case is `ctg_base`, backward compatible); round reports gain `skipped_count` and compute `failure_fraction` over solvable candidates; resumed rounds produce identical merged ledgers and round markers.
+- Rollback note: Revert to `create_attempt_directory` with local next-index helpers, omit the contingency path level and `contingency_set_id`, and submit rounds without `RESUME`/`drive_campaign.py`.
+- Related files: src/grid_data_factory/storage/layout.py, src/grid_data_factory/contingencies/apply.py, scripts/run_campaign_ac_opf_round.py, scripts/run_ac_opf.py, scripts/run_exago_ac_opf.py, scripts/run_pandapower_ac_opf.py, scripts/drive_campaign.py, configs/slurm/andes_powermodels_acopf_mapreduce_10n_36h.sbatch, docs/resumable_campaigns.md, docs/architecture.md, docs/scripts_reference.md, configs/slurm/README.md
+- Related run/campaign ids: ultra-scale 60M AC-OPF campaigns resumed via `scripts/drive_campaign.py`
+
 ## 2026-08-03 - K>2 contingency generation enabled
 
 - Change: Extended contingency enumeration to support simultaneous order K>=3 via configurable max order and per-order counts.

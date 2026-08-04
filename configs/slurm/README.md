@@ -73,10 +73,54 @@ Additional map/reduce overrides:
 - `POOL_JSONL` (default: `data/campaigns/<campaign_id>/round<idx>_screened_candidates.jsonl`)
 - `MAX_BACKFILL_ADDITIONS` (default: `0`, unlimited)
 - `SCORE_KEY` (default: `novelty_score`)
+- `RESUME` (default: `0`; set `1` to resume an interrupted round)
 
 Reducer output report:
 
 - `data/campaigns/<campaign_id>/round_summaries/round_<idx>_mapreduce_reduce_report.json`
+
+### Resuming an Interrupted Round
+
+Set `RESUME=1` to resume a round whose shards already exist (for example after a
+job hit its wall clock). When resuming, the job:
+
+1. Skips bootstrap and re-sharding and reuses the existing shard files.
+2. Skips any shard with a `queue/done/<shard>` completion marker.
+3. Passes `--resume` to the map script, so partially-completed shards skip
+   configurations that already have a finalized attempt directory.
+4. Marks each shard done only after its map call succeeds.
+
+The reduce stage stays deterministic, so a resumed round produces the same
+merged ledgers and round marker.
+
+```bash
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+sbatch \
+	--export=ALL,CAMPAIGN_ID=ultrascale_60m,ROUND_INDEX=2,RESUME=1,BUDGET=6000000 \
+	configs/slurm/andes_powermodels_acopf_mapreduce_10n_36h.sbatch
+```
+
+Prefer the top-level driver (below), which detects the correct round and sets
+`RESUME=1` automatically.
+
+### Top-Level Driver (Auto-Resume and Chaining)
+
+`scripts/drive_campaign.py` finds the furthest incomplete round (lowest round
+whose reduce marker is missing or not `ok`) and resubmits it with `RESUME=1`.
+With `--chain` it also queues every remaining round with `afterok` dependencies
+for unattended completion. See
+[docs/resumable_campaigns.md](../../docs/resumable_campaigns.md).
+
+```bash
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+# resume just the current round
+PYTHONPATH=src python3.11 scripts/drive_campaign.py \
+	--campaign-id ultrascale_60m --rounds 10 --total-budget 60000000 --set MAX_K=10
+
+# resume and chain all remaining rounds
+PYTHONPATH=src python3.11 scripts/drive_campaign.py \
+	--campaign-id ultrascale_60m --rounds 10 --total-budget 60000000 --set MAX_K=10 --chain
+```
 
 ## Ultra-Scale Setup (Hundreds of Millions)
 
