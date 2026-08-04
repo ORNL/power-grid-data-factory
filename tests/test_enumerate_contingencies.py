@@ -1,7 +1,6 @@
 """Regression tests for high-order contingency enumeration (K>=3)."""
 from __future__ import annotations
 
-import importlib.util
 import json
 import subprocess
 import sys
@@ -12,16 +11,7 @@ from random import Random
 
 from _bootstrap import REPO_ROOT  # noqa: F401  (ensures src on path)
 
-
-def _load_enumerate_module():
-    path = REPO_ROOT / "scripts" / "enumerate_contingencies.py"
-    spec = importlib.util.spec_from_file_location("enumerate_contingencies", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-_ENUM = _load_enumerate_module()
+from grid_data_factory.contingencies import enumeration as _ENUM
 
 
 class BuildKPlusComponentsTests(unittest.TestCase):
@@ -33,7 +23,7 @@ class BuildKPlusComponentsTests(unittest.TestCase):
             "bus": [f"bus_{i:06d}" for i in range(1, 15)],
         }
         for k in range(3, 11):
-            comps = _ENUM._build_kplus_components(pool, k, Random(k))
+            comps = _ENUM.build_kplus_components(pool, k, Random(k))
             self.assertEqual(len(comps), k)
             keys = {(c["type"], c["id"]) for c in comps}
             self.assertEqual(len(keys), k)
@@ -41,7 +31,7 @@ class BuildKPlusComponentsTests(unittest.TestCase):
 
     def test_k_exceeding_pool_returns_all_distinct(self):
         pool = {"branch": ["branch_000001", "branch_000002"], "generator": ["gen_000001"], "bus": ["bus_000001"]}
-        comps = _ENUM._build_kplus_components(pool, 10, Random(1))
+        comps = _ENUM.build_kplus_components(pool, 10, Random(1))
         self.assertEqual(len(comps), 3)
         keys = {(c["type"], c["id"]) for c in comps}
         self.assertEqual(len(keys), 3)
@@ -56,7 +46,7 @@ class BuildKPlusComponentsTests(unittest.TestCase):
             nk_per_operating_point = 1
 
         base = {"case_id": "pglib_opf_case14_ieee", "candidate_id": "op1", "physical_credibility_score": 0.9}
-        rows = _ENUM._expand_one(base, Random(1), _Args())
+        rows = _ENUM.expand_one(base, Random(1), _Args())
         orders = {r["contingency"]["order"] for r in rows}
         self.assertEqual(max(orders), 10)
         self.assertTrue({1, 2}.issubset(orders))
