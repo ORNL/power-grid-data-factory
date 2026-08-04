@@ -64,6 +64,29 @@ sbatch \
 	configs/slurm/andes_powermodels_acopf_mapreduce_10n_36h.sbatch
 ```
 
+### Tiny Smoke Test (Single Node)
+
+Before a large multi-node run, validate the full solver path
+(bootstrap → shard → map → reduce) with a one-node job via the wrapper
+`configs/slurm/submit_andes_smoke.sh`. It submits the map/reduce sbatch above
+with tiny resources and parameters; every value is overridable via the
+environment.
+
+```bash
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+# defaults: 1 case, per_case=5, 4 shards, 30-minute wall clock
+configs/slurm/submit_andes_smoke.sh
+
+# override any knob (resources or campaign params)
+PER_CASE=10 SHARD_COUNT=8 NTASKS_PER_NODE=8 WALLTIME=00:45:00 \
+	configs/slurm/submit_andes_smoke.sh
+```
+
+Smoke-specific overrides (with defaults): `CAMPAIGN_ID=readiness_smoke`,
+`CASES=pglib_opf_case14_ieee`, `PER_CASE=5`, `TOPOLOGIES_PER_CASE=1`, `MAX_K=2`,
+`BUDGET=10`, `SHARD_COUNT=4`, `MAX_CANDIDATES=8`, and resource knobs `NODES=1`,
+`NTASKS_PER_NODE=4`, `WALLTIME=00:30:00`, `JOB_NAME=pgdf_smoke`.
+
 Additional map/reduce overrides:
 
 - `SHARD_COUNT` (default: `SLURM_NTASKS`)
