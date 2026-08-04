@@ -21,6 +21,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--topologies-per-case", type=int, default=6)
     p.add_argument("--max-switched-branches", type=int, default=3)
+    p.add_argument("--max-k", type=int, default=10)
     return p.parse_args()
 
 
@@ -82,6 +83,8 @@ def main() -> None:
         str(op_jsonl),
         "--out",
         str(ctg_jsonl),
+        "--max-k",
+        str(args.max_k),
         "--seed",
         str(args.seed),
     ]

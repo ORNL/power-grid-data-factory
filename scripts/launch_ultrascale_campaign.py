@@ -26,7 +26,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--start-round", type=int, default=0)
     p.add_argument("--seed-start", type=int, default=7)
 
-    p.add_argument("--budget", type=int, default=50000)
+    p.add_argument("--budget", type=int, default=6000000)
     p.add_argument("--budget-step", type=int, default=0)
     p.add_argument(
         "--total-budget",
@@ -36,7 +36,7 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--budget-schedule", choices=["constant", "linear", "geometric"], default="constant")
     p.add_argument("--budget-ratio", type=float, default=1.0)
-    p.add_argument("--per-case", type=int, default=5000)
+    p.add_argument("--per-case", type=int, default=30000)
     p.add_argument("--sampler", default="sobol")
 
     p.add_argument("--cases", nargs="+", default=[])
@@ -59,6 +59,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-failure-fraction", type=float, default=0.5)
     p.add_argument("--topologies-per-case", type=int, default=6)
     p.add_argument("--max-switched-branches", type=int, default=3)
+    p.add_argument("--max-k", type=int, default=10, help="Maximum simultaneous contingency order K (N-1 through N-K).")
 
     p.add_argument("--nodes", type=int, default=10)
     p.add_argument("--ntasks-per-node", type=int, default=16)
@@ -116,6 +117,7 @@ def _build_export_payload(args: argparse.Namespace, round_index: int, seed: int,
         "MAX_FAILURE_FRACTION": str(args.max_failure_fraction),
         "TOPOLOGIES_PER_CASE": str(args.topologies_per_case),
         "MAX_SWITCHED_BRANCHES": str(args.max_switched_branches),
+        "MAX_K": str(args.max_k),
     }
     if args.shard_count > 0:
         exports["SHARD_COUNT"] = str(args.shard_count)

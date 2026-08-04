@@ -43,6 +43,7 @@ SCORE_KEY=${SCORE_KEY:-novelty_score}
 MAX_FAILURE_FRACTION=${MAX_FAILURE_FRACTION:-0.5}
 TOPOLOGIES_PER_CASE=${TOPOLOGIES_PER_CASE:-6}
 MAX_SWITCHED_BRANCHES=${MAX_SWITCHED_BRANCHES:-3}
+MAX_K=${MAX_K:-10}
 
 printf -v ROUND_PAD "%03d" "$ROUND_INDEX"
 CAMPAIGN_ROOT="$ROOT/data/campaigns/$CAMPAIGN_ID"
@@ -75,6 +76,7 @@ if [[ "$RUN_BOOTSTRAP" == "1" ]]; then
     --sampler "$SAMPLER" \
     --topologies-per-case "$TOPOLOGIES_PER_CASE" \
     --max-switched-branches "$MAX_SWITCHED_BRANCHES" \
+    --max-k "$MAX_K" \
     --budget "$BUDGET" \
     --round-index "$ROUND_INDEX" \
     --seed "$SEED"
