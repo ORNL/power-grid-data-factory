@@ -8,12 +8,14 @@ from typing import Any
 
 try:
     from grid_data_factory.campaigns.ledgers import append_parquet_rows, create_campaign_layout
+    from grid_data_factory.storage import paths
 except ModuleNotFoundError:
     import sys
 
     _repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(_repo_root / "src"))
     from grid_data_factory.campaigns.ledgers import append_parquet_rows, create_campaign_layout
+    from grid_data_factory.storage import paths
 
 
 def _require_yaml():
@@ -135,7 +137,7 @@ def _load_config(repo_root: Path, config_rel: str) -> dict[str, Any]:
 def main() -> None:
     args = parse_args()
     repo_root = Path(__file__).resolve().parents[1]
-    campaign_root = repo_root / "data" / "campaigns" / args.campaign_id
+    campaign_root = paths.campaign_root(repo_root, args.campaign_id)
     round_pad = f"{args.round_index:03d}"
 
     marker_path = campaign_root / "round_summaries" / f"round_{round_pad}_mapreduce_reduce_report.json"
@@ -158,7 +160,7 @@ def main() -> None:
     missing_reports: list[str] = []
 
     for shard_id in shard_ids:
-        shard_root = repo_root / "data" / "campaigns" / shard_id
+        shard_root = paths.campaigns_root(repo_root) / shard_id
         all_diversity.extend(_read_ledger_rows(shard_root, "diversity_ledger.parquet"))
         all_active.extend(_read_ledger_rows(shard_root, "active_constraint_ledger.parquet"))
         all_boundary.extend(_read_ledger_rows(shard_root, "security_boundary_ledger.parquet"))

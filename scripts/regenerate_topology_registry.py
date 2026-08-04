@@ -17,10 +17,10 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--cases-tsv",
-        default="data/analysis/topology_candidates_campaign.tsv",
+        default="data/reports/topology_candidates_campaign.tsv",
         help="TSV with columns: source, case_id, topology_id, case_file.",
     )
-    p.add_argument("--registry-root", default="data/topology_registry")
+    p.add_argument("--registry-root", default="data/derived/registries/topology")
     p.add_argument("--description", default="baseline")
     p.add_argument(
         "--topology-index",
@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--continue-on-error", action="store_true")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--limit", type=int, default=0, help="Optional max number of cases to process (0 means all).")
-    p.add_argument("--out", default="data/analysis/topology_regeneration_report.json")
+    p.add_argument("--out", default="data/reports/topology_regeneration_report.json")
     return p.parse_args()
 
 

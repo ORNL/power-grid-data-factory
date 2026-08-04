@@ -8,6 +8,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+try:
+    from grid_data_factory.storage import paths
+except ModuleNotFoundError:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    from grid_data_factory.storage import paths
+
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Bootstrap one adaptive campaign round from generated operating and contingency candidates.")
@@ -49,7 +55,7 @@ def main() -> None:
     src_path = str(repo_root / "src")
     env["PYTHONPATH"] = src_path + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
 
-    campaign_root = repo_root / "data" / "campaigns" / args.campaign_id
+    campaign_root = paths.campaign_root(repo_root, args.campaign_id)
     op_jsonl = campaign_root / "seed_operating_candidates.jsonl"
     ctg_jsonl = campaign_root / "seed_contingency_candidates.jsonl"
     screened_jsonl = campaign_root / "round0_screened_candidates.jsonl"

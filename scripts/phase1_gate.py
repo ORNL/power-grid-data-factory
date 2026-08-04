@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--exago-install", default="")
     p.add_argument("--build-profile", default="")
     p.add_argument("--opflow-bin", default="")
-    p.add_argument("--runs-root", default="data/runs")
+    p.add_argument("--runs-root", default="data/outputs/runs")
     return p.parse_args()
 
 
@@ -33,7 +33,7 @@ def main() -> None:
     phase1 = cfg["phase1"]
 
     cases = phase1.get("cases", [])
-    report_path = phase1.get("report_path", "data/analysis/solver_consistency_report.json")
+    report_path = phase1.get("report_path", "data/reports/solver_consistency_report.json")
     report_abs = (repo_root / report_path).resolve()
 
     compare_cmd = [

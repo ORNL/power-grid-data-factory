@@ -11,6 +11,7 @@ from grid_data_factory.solvers.powermodels_adapter import PowerModelsAdapter
 from grid_data_factory.storage.layout import create_attempt_directory, finalize_attempt_directory, get_solver_directory
 from grid_data_factory.storage.naming import format_attempt_id
 from grid_data_factory.storage.registry import append_registry_record
+from grid_data_factory.storage import paths
 
 
 def _next_attempt_index(solver_dir: Path) -> int:
@@ -33,7 +34,7 @@ def _next_attempt_index(solver_dir: Path) -> int:
 
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[1]
-    runs_root = repo_root / "data" / "runs"
+    runs_root = paths.runs_root(repo_root)
 
     task = "ac_opf"
     case_id = "pglib_opf_case14_ieee_demo"
@@ -55,7 +56,7 @@ def main() -> None:
         "branches": [{"branch_id": "1", "from": "1", "to": "2", "r": 0.01, "x": 0.05, "rate_a": 150.0}],
     }
 
-    canonical_case = repo_root / "data" / "canonical" / "pglib_opf_case14_ieee_demo.json"
+    canonical_case = paths.canonical_dir(repo_root) / "pglib_opf_case14_ieee_demo.json"
     canonical_case.parent.mkdir(parents=True, exist_ok=True)
     canonical_case.write_text(json.dumps(tiny_case, indent=2), encoding="utf-8")
 

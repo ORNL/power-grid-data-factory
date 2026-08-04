@@ -13,10 +13,17 @@ __pycache__/
 core
 *.core
 
-# Generated data and logs
-data/runs/
-data/canonical/
-data/analysis/
+# Generated data lifecycle tiers (see src/grid_data_factory/storage/paths.py).
+# Keep the tier roots tracked (via .gitkeep) but ignore their generated contents.
+data/outputs/*
+!data/outputs/.gitkeep
+data/scratch/*
+!data/scratch/.gitkeep
+!data/scratch/logs/
+data/scratch/logs/*
+!data/scratch/logs/.gitkeep
+data/derived/*
+!data/derived/.gitkeep
 
 # External dependencies and large builds
 external/

@@ -49,6 +49,8 @@ except ModuleNotFoundError:
     from grid_data_factory.scenarios.operating_points import apply_operating_point
     from grid_data_factory.storage.layout import create_next_attempt_directory, finalize_attempt_directory, get_solver_directory, has_finalized_attempt
 
+from grid_data_factory.storage import paths  # noqa: E402
+
 
 def _require_yaml():
     try:
@@ -64,7 +66,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--round-index", type=int, required=True)
     p.add_argument("--selected-candidates-jsonl", required=True)
     p.add_argument("--config", default="configs/campaign_default.yaml")
-    p.add_argument("--runs-root", default="data/runs")
+    p.add_argument("--runs-root", default="data/outputs/runs")
     p.add_argument("--solver-id", default="powermodels_ac_opf_ipopt_campaign")
     p.add_argument("--timeout-s", type=float, default=1200.0)
     p.add_argument("--max-candidates", type=int, default=0)
@@ -341,7 +343,7 @@ def _load_bands(repo_root: Path, config_path: str) -> dict[str, dict[str, float]
 def main() -> None:
     args = parse_args()
     repo_root = Path(__file__).resolve().parents[1]
-    campaign_root = repo_root / "data" / "campaigns" / args.campaign_id
+    campaign_root = paths.campaign_root(repo_root, args.campaign_id)
     runs_root = (repo_root / args.runs_root).resolve()
 
     selected_path = Path(args.selected_candidates_jsonl)

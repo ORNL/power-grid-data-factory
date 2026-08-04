@@ -499,7 +499,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--overwrite", action="store_true")
     p.add_argument("--skip-rop", action="store_true", help="Ignore .rop companion files and use default linear costs")
     p.add_argument("--no-rop-limits", action="store_true", help="Do not override RAW generator Pmin/Pmax with ROP dispatch bounds")
-    p.add_argument("--report", default="data/analysis/go_challenge1_conversion_report.json")
+    p.add_argument("--report", default="data/reports/go_challenge1_conversion_report.json")
     return p.parse_args()
 
 

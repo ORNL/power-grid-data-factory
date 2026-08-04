@@ -25,10 +25,12 @@ from pathlib import Path
 
 try:
     from grid_data_factory.campaigns.planning import plan_round_budgets
+    from grid_data_factory.storage import paths
 except ModuleNotFoundError:
     _repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(_repo_root / "src"))
     from grid_data_factory.campaigns.planning import plan_round_budgets
+    from grid_data_factory.storage import paths
 
 
 def parse_args() -> argparse.Namespace:
@@ -63,7 +65,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def reduce_marker_path(repo_root: Path, campaign_id: str, round_index: int) -> Path:
-    return repo_root / "data" / "campaigns" / campaign_id / "round_summaries" / f"round_{round_index:03d}_mapreduce_reduce_report.json"
+    return paths.campaign_root(repo_root, campaign_id) / "round_summaries" / f"round_{round_index:03d}_mapreduce_reduce_report.json"
 
 
 def round_complete(repo_root: Path, campaign_id: str, round_index: int) -> bool:

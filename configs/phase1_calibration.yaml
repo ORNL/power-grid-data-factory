@@ -12,4 +12,4 @@ phase1:
     - ALMOST_OPTIMAL
   max_pandapower_vs_exago_ipopt_relative_diff: 0.005
   min_audited_attempts: 1
-  report_path: data/analysis/solver_consistency_report.json
+  report_path: data/reports/solver_consistency_report.json

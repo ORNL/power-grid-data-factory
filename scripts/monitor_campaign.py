@@ -14,6 +14,14 @@ import subprocess
 import time
 from pathlib import Path
 
+try:
+    from grid_data_factory.storage import paths
+except ModuleNotFoundError:
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    from grid_data_factory.storage import paths
+
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -55,7 +63,7 @@ def _read_json(path: Path) -> dict:
 
 def collect(repo_root: Path, campaign_id: str, round_index: int) -> dict:
     pad = f"{round_index:03d}"
-    croot = repo_root / "data" / "campaigns" / campaign_id
+    croot = paths.campaign_root(repo_root, campaign_id)
     summaries = croot / "round_summaries"
     shard_dir = summaries / f"round_{pad}_shards"
     done_dir = shard_dir / "queue" / "done"
@@ -70,7 +78,7 @@ def collect(repo_root: Path, campaign_id: str, round_index: int) -> dict:
     done_markers = glob.glob(str(done_dir / "*"))
 
     solved = failed = skipped = 0
-    reports = glob.glob(str(repo_root / "data" / "campaigns" / f"{campaign_id}__r{pad}__s*" / "round_summaries" / f"round_{pad}_ac_execution_report.json"))
+    reports = glob.glob(str(paths.campaigns_root(repo_root) / f"{campaign_id}__r{pad}__s*" / "round_summaries" / f"round_{pad}_ac_execution_report.json"))
     for r in reports:
         d = _read_json(Path(r))
         solved += int(d.get("solved_count", 0))

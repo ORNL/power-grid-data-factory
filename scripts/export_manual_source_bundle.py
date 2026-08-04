@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Export tracked reproducibility bundle for manual source cases.")
     p.add_argument("--config", default="configs/sources.yaml")
     p.add_argument("--manual-root", default="external/tamu")
-    p.add_argument("--out-root", default="data/imported/manual_sources")
+    p.add_argument("--out-root", default="data/inputs/manual_sources")
     return p.parse_args()
 
 

@@ -102,7 +102,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--case-id", action="append", default=[])
     p.add_argument("--case-file", action="append", default=[], help="Optional explicit case file path(s).")
     p.add_argument("--all-config-cases", action="store_true", help="Run all configured cases for the selected source.")
-    p.add_argument("--runs-root", default="data/runs")
+    p.add_argument("--runs-root", default="data/outputs/runs")
     p.add_argument("--solver-id", default="powermodels_ac_opf_ipopt")
     p.add_argument("--topology-id", default="topology_000000_baseline")
     p.add_argument("--operating-point-id", default="op_000000_baseline")
