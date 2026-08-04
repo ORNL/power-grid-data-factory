@@ -115,11 +115,13 @@ for unattended completion. See
 cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 # resume just the current round
 PYTHONPATH=src python3.11 scripts/drive_campaign.py \
-	--campaign-id ultrascale_60m --rounds 10 --total-budget 60000000 --set MAX_K=10
+	--campaign-id ultrascale_60m --rounds 10 --total-budget 60000000 --set MAX_K=10 \
+	--nodes 64 --ntasks-per-node 16 --cpus-per-task 1 --time 36:00:00
 
 # resume and chain all remaining rounds
 PYTHONPATH=src python3.11 scripts/drive_campaign.py \
-	--campaign-id ultrascale_60m --rounds 10 --total-budget 60000000 --set MAX_K=10 --chain
+	--campaign-id ultrascale_60m --rounds 10 --total-budget 60000000 --set MAX_K=10 \
+	--nodes 64 --ntasks-per-node 16 --cpus-per-task 1 --time 36:00:00 --chain
 ```
 
 ## Ultra-Scale Setup (Hundreds of Millions)

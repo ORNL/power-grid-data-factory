@@ -176,6 +176,10 @@ single invocation transparently resumes an interrupted campaign.
 | `--budget-schedule` | `constant`, `linear`, or `geometric`. |
 | `--budget-ratio` | Ratio for `linear`/`geometric` schedules. |
 | `--chain` | Also queue all subsequent rounds, chained via `afterok`. |
+| `--nodes` | Override sbatch node count (0 keeps the template header value). |
+| `--ntasks-per-node` | Override sbatch tasks per node (0 keeps the header value). |
+| `--cpus-per-task` | Override sbatch cpus per task (0 keeps the header value). |
+| `--time` | Override sbatch walltime, e.g. `36:00:00` (empty keeps the header value). |
 | `--dry-run` | Print the submission plan without calling `sbatch`. |
 | `--set KEY=VALUE` | Extra environment override passed through to the job (repeatable). |
 
@@ -191,7 +195,8 @@ PYTHONPATH=src python3.11 scripts/drive_campaign.py \
   --campaign-id ultrascale_60m \
   --rounds 10 \
   --total-budget 60000000 \
-  --set MAX_K=10
+  --set MAX_K=10 \
+  --nodes 64 --ntasks-per-node 16 --cpus-per-task 1 --time 36:00:00
 ```
 
 ### Chain all remaining rounds (unattended completion)
@@ -203,6 +208,7 @@ PYTHONPATH=src python3.11 scripts/drive_campaign.py \
   --rounds 10 \
   --total-budget 60000000 \
   --set MAX_K=10 \
+  --nodes 64 --ntasks-per-node 16 --cpus-per-task 1 --time 36:00:00 \
   --chain
 ```
 

@@ -8,6 +8,10 @@ index that is not complete; because rounds run in sequence, that is the round
 currently in progress. It is resubmitted with ``RESUME=1`` so the SLURM job
 skips finished shards and finalized runs. With ``--chain`` the remaining rounds
 are also queued, each depending on the previous via ``afterok``.
+
+Resource flags (``--nodes``, ``--ntasks-per-node``, ``--cpus-per-task``,
+``--time``) override the sbatch header when set, so continuation matches the
+original batch (e.g. Andes allows 36h only at <=64 nodes).
 """
 from __future__ import annotations
 
@@ -43,6 +47,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--budget-ratio", type=float, default=1.0)
     p.add_argument("--chain", action="store_true", help="Also queue all subsequent rounds, chained via afterok.")
     p.add_argument("--dry-run", action="store_true", help="Print the submission plan without calling sbatch.")
+    p.add_argument("--nodes", type=int, default=0, help="Override sbatch node count (0 keeps the template header value).")
+    p.add_argument("--ntasks-per-node", type=int, default=0, help="Override sbatch tasks per node (0 keeps the header value).")
+    p.add_argument("--cpus-per-task", type=int, default=0, help="Override sbatch cpus per task (0 keeps the header value).")
+    p.add_argument("--time", default="", help="Override sbatch walltime, e.g. 36:00:00 (empty keeps the header value).")
     p.add_argument(
         "--set",
         dest="extra_env",
@@ -105,15 +113,30 @@ def build_submit_env(base_env: dict[str, str], campaign_id: str, round_index: in
     return env
 
 
-def submit_round(repo_root: Path, sbatch_path: Path, env: dict[str, str], dependency: str | None, dry_run: bool) -> str:
-    cmd = ["sbatch", "--parsable"]
+def build_resource_flags(nodes: int, ntasks_per_node: int, cpus_per_task: int, time: str) -> list[str]:
+    flags: list[str] = []
+    if nodes > 0:
+        flags += ["--nodes", str(nodes)]
+    if ntasks_per_node > 0:
+        flags += ["--ntasks-per-node", str(ntasks_per_node)]
+    if cpus_per_task > 0:
+        flags += ["--cpus-per-task", str(cpus_per_task)]
+    if time:
+        flags += ["--time", time]
+    return flags
+
+
+def submit_round(repo_root: Path, sbatch_path: Path, env: dict[str, str], dependency: str | None, dry_run: bool, resource_flags: list[str] | None = None) -> str:
+    resource_flags = resource_flags or []
+    cmd = ["sbatch", "--parsable", *resource_flags]
     if dependency:
         cmd.append(f"--dependency=afterok:{dependency}")
     cmd.append(str(sbatch_path))
     overrides = {k: env[k] for k in ("CAMPAIGN_ID", "ROUND_INDEX", "RESUME", "BUDGET") if k in env}
     if dry_run:
         dep = f" (afterok:{dependency})" if dependency else ""
-        print(f"[dry-run] sbatch{dep} {sbatch_path}  overrides={overrides}")
+        res = f" {resource_flags}" if resource_flags else ""
+        print(f"[dry-run] sbatch{dep}{res} {sbatch_path}  overrides={overrides}")
         return f"DRYRUN_R{env['ROUND_INDEX']}"
     proc = subprocess.run(cmd, env=env, cwd=str(repo_root), capture_output=True, text=True, check=False)
     if proc.returncode != 0:
@@ -141,6 +164,7 @@ def main() -> None:
 
     extra_env = parse_extra_env(args.extra_env)
     budgets = compute_round_budgets(args.total_budget, args.budget, args.rounds, args.budget_schedule, args.budget_ratio)
+    resource_flags = build_resource_flags(args.nodes, args.ntasks_per_node, args.cpus_per_task, args.time)
 
     start = first_incomplete_round(repo_root, args.campaign_id, args.rounds)
     if start is None:
@@ -155,7 +179,7 @@ def main() -> None:
     submitted: list[dict[str, object]] = []
     for r in targets:
         env = build_submit_env(dict(os.environ), args.campaign_id, r, budgets[r], resume=True, extra_env=extra_env)
-        job_id = submit_round(repo_root, sbatch_path, env, dependency=prev_job, dry_run=args.dry_run)
+        job_id = submit_round(repo_root, sbatch_path, env, dependency=prev_job, dry_run=args.dry_run, resource_flags=resource_flags)
         submitted.append({"round_index": r, "budget": budgets[r], "job_id": job_id, "dependency": prev_job})
         prev_job = job_id
 
