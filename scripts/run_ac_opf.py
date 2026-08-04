@@ -5,7 +5,6 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -16,8 +15,8 @@ try:
     from grid_data_factory.preservation.artifacts import build_artifacts_manifest
     from grid_data_factory.preservation.checksums import verify_checksums, write_checksums
     from grid_data_factory.solvers.powermodels_adapter import PowerModelsAdapter
+    from grid_data_factory.storage.attempt_io import append_registry_record_safe, utc_now_iso, write_common_attempt_files
     from grid_data_factory.storage.layout import create_next_attempt_directory, finalize_attempt_directory, get_solver_directory
-    from grid_data_factory.storage.registry import append_registry_record as _append_registry_record
 except ModuleNotFoundError:
     _repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(_repo_root / "src"))
@@ -25,29 +24,11 @@ except ModuleNotFoundError:
     from grid_data_factory.preservation.artifacts import build_artifacts_manifest
     from grid_data_factory.preservation.checksums import verify_checksums, write_checksums
     from grid_data_factory.solvers.powermodels_adapter import PowerModelsAdapter
+    from grid_data_factory.storage.attempt_io import append_registry_record_safe, utc_now_iso, write_common_attempt_files
     from grid_data_factory.storage.layout import create_next_attempt_directory, finalize_attempt_directory, get_solver_directory
-    _append_registry_record = None
 
 
-def _append_registry_record_fallback(runs_root: Path, record: dict[str, Any]) -> None:
-    jsonl = runs_root / "run_registry.jsonl"
-    jsonl.parent.mkdir(parents=True, exist_ok=True)
-    with jsonl.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(record, ensure_ascii=True) + "\n")
-
-
-def append_registry_record_safe(runs_root: Path, record: dict[str, Any]) -> None:
-    if _append_registry_record is not None:
-        try:
-            _append_registry_record(runs_root, record)
-            return
-        except ModuleNotFoundError:
-            pass
-    _append_registry_record_fallback(runs_root, record)
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+_now = utc_now_iso
 
 
 def _resolve_case_ids_from_config(repo_root: Path, source: str) -> list[str]:
@@ -148,17 +129,7 @@ def _build_case_plan(repo_root: Path, args: argparse.Namespace) -> list[tuple[st
 
 
 def _write_common_attempt_files(in_progress: Path, run_meta: dict[str, Any], cmd_args: list[str]) -> None:
-    run_yaml = "\n".join([f"{k}: {v}" for k, v in run_meta.items()]) + "\n"
-    (in_progress / "run.yaml").write_text(run_yaml, encoding="utf-8")
-    (in_progress / "command.txt").write_text("python scripts/run_ac_opf.py " + " ".join(cmd_args), encoding="utf-8")
-    (in_progress / "command.json").write_text(
-        json.dumps({"executable": "python3.11", "args": ["scripts/run_ac_opf.py", *cmd_args]}, indent=2),
-        encoding="utf-8",
-    )
-    (in_progress / "environment" / "environment.json").write_text(
-        json.dumps({"created_at": _now(), "python": "3.11", "script": "run_ac_opf.py"}, indent=2),
-        encoding="utf-8",
-    )
+    write_common_attempt_files(in_progress, run_meta, cmd_args, "run_ac_opf.py")
 
 
 def _run_one_case(repo_root: Path, args: argparse.Namespace, case_id: str, case_file: Path, adapter: PowerModelsAdapter) -> dict[str, Any]:
