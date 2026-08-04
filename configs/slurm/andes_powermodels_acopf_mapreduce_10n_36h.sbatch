@@ -45,6 +45,7 @@ TOPOLOGIES_PER_CASE=${TOPOLOGIES_PER_CASE:-6}
 MAX_SWITCHED_BRANCHES=${MAX_SWITCHED_BRANCHES:-3}
 MAX_K=${MAX_K:-10}
 RESUME=${RESUME:-0}
+BOOTSTRAP_WORKERS=${BOOTSTRAP_WORKERS:-16}
 
 printf -v ROUND_PAD "%03d" "$ROUND_INDEX"
 CAMPAIGN_ROOT="$ROOT/data/campaigns/$CAMPAIGN_ID"
@@ -87,7 +88,8 @@ if [[ "$RESUMING" == "0" && "$RUN_BOOTSTRAP" == "1" ]]; then
     --max-k "$MAX_K" \
     --budget "$BUDGET" \
     --round-index "$ROUND_INDEX" \
-    --seed "$SEED"
+    --seed "$SEED" \
+    --workers "$BOOTSTRAP_WORKERS"
 else
   echo "[$(date -u +%FT%TZ)] Skipping bootstrap (RESUMING=$RESUMING RUN_BOOTSTRAP=$RUN_BOOTSTRAP)"
 fi

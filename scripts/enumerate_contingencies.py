@@ -3,9 +3,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import shutil
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from random import Random
 import sys
+from types import SimpleNamespace
 from typing import Any
 
 try:
@@ -29,6 +33,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--n1n1-per-operating-point", type=int, default=1)
     p.add_argument("--max-k", type=int, default=2, help="Maximum simultaneous contingency order K to generate (K>=2).")
     p.add_argument("--nk-per-operating-point", type=int, default=1, help="Number of simultaneous events to generate per order for K>=3.")
+    p.add_argument("--workers", type=int, default=1, help="Parallel worker processes (>1 enables per-row deterministic seeding; 0=all cores).")
     return p.parse_args()
 
 
@@ -223,6 +228,33 @@ def _expand_one(base: dict[str, Any], rng: Random, args: argparse.Namespace, rep
     return out
 
 
+def _split(rows: list[Any], n: int) -> list[list[Any]]:
+    # Contiguous chunks preserving input order.
+    k, m = divmod(len(rows), n)
+    chunks: list[list[Any]] = []
+    start = 0
+    for i in range(n):
+        size = k + (1 if i < m else 0)
+        chunks.append(rows[start:start + size])
+        start += size
+    return [c for c in chunks if c]
+
+
+def _expand_chunk(chunk_index: int, rows: list[dict[str, Any]], sampling: dict[str, Any], repo_root_str: str, shard_path_str: str) -> tuple[int, int]:
+    # Per-row deterministic seeding makes output independent of worker count and chunk boundaries.
+    repo_root = Path(repo_root_str)
+    args = SimpleNamespace(**sampling)
+    seed = sampling["seed"]
+    count = 0
+    with open(shard_path_str, "w", encoding="utf-8") as fh:
+        for row in rows:
+            rng = Random(f"{seed}::{row.get('candidate_id')}")
+            for out in _expand_one(row, rng, args, repo_root):
+                fh.write(json.dumps(out, ensure_ascii=True) + "\n")
+                count += 1
+    return chunk_index, count
+
+
 def main() -> None:
     args = parse_args()
     repo_root = Path(__file__).resolve().parents[1]
@@ -233,16 +265,50 @@ def main() -> None:
     out_path = out_path if out_path.is_absolute() else (repo_root / out_path).resolve()
 
     rows = _read_jsonl(in_path)
-    rng = Random(args.seed)
-
-    expanded: list[dict[str, Any]] = []
-    for row in rows:
-        expanded.extend(_expand_one(row, rng, args, repo_root))
-
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("w", encoding="utf-8") as fh:
-        for row in expanded:
-            fh.write(json.dumps(row, ensure_ascii=True) + "\n")
+
+    workers = args.workers if args.workers > 0 else (os.cpu_count() or 1)
+    workers = max(1, min(workers, len(rows) or 1))
+
+    if workers == 1:
+        rng = Random(args.seed)
+        expanded_count = 0
+        with out_path.open("w", encoding="utf-8") as fh:
+            for i, row in enumerate(rows):
+                for out in _expand_one(row, rng, args, repo_root):
+                    fh.write(json.dumps(out, ensure_ascii=True) + "\n")
+                    expanded_count += 1
+                if (i + 1) % 50000 == 0:
+                    print(f"[enumerate] {i + 1}/{len(rows)} operating rows expanded ({expanded_count} candidates)", flush=True)
+    else:
+        sampling = {
+            "seed": args.seed,
+            "n1_per_operating_point": args.n1_per_operating_point,
+            "n2_random_per_operating_point": args.n2_random_per_operating_point,
+            "n2_interacting_per_operating_point": args.n2_interacting_per_operating_point,
+            "n1n1_per_operating_point": args.n1n1_per_operating_point,
+            "max_k": args.max_k,
+            "nk_per_operating_point": args.nk_per_operating_point,
+        }
+        chunks = _split(rows, workers)
+        shard_paths = [out_path.parent / f".{out_path.name}.part{idx:04d}" for idx in range(len(chunks))]
+        counts: dict[int, int] = {}
+        done = 0
+        print(f"[enumerate] parallel expansion of {len(rows)} operating rows across {len(chunks)} workers", flush=True)
+        with ProcessPoolExecutor(max_workers=workers) as ex:
+            futures = {ex.submit(_expand_chunk, idx, chunk, sampling, str(repo_root), str(shard_paths[idx])): idx for idx, chunk in enumerate(chunks)}
+            for fut in as_completed(futures):
+                idx, count = fut.result()
+                counts[idx] = count
+                done += 1
+                print(f"[enumerate] chunk {done}/{len(chunks)} done ({count} candidates)", flush=True)
+        expanded_count = 0
+        with out_path.open("wb") as out_fh:
+            for idx in range(len(chunks)):
+                with open(shard_paths[idx], "rb") as sfh:
+                    shutil.copyfileobj(sfh, out_fh)
+                expanded_count += counts[idx]
+                shard_paths[idx].unlink()
 
     print(
         json.dumps(
@@ -251,7 +317,8 @@ def main() -> None:
                 "input": str(in_path),
                 "out": str(out_path),
                 "base_candidates": len(rows),
-                "expanded_candidates": len(expanded),
+                "expanded_candidates": expanded_count,
+                "workers": workers,
             },
             indent=2,
         )
