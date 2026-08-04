@@ -1,0 +1,26 @@
+source: tamu
+source_type: manual_catalog
+case_id: epigrids_eastern
+registered_at: '2026-08-04T03:59:43.295343+00:00'
+catalog_url: https://electricgrids.engr.tamu.edu/electric-grid-test-cases/
+case_page_url: null
+archive:
+  files:
+  - filename: Base_Eastern_Interconnect_515GW.m
+    relative_path: raw/Base_Eastern_Interconnect_515GW.m
+    size_bytes: 23677468
+    sha256: 5becfa3af0d4e295b7ab259ab62abb0167b7c9e75a02c56798965a169d70abb7
+  - filename: Base_Eastern_Interconnect_515GW.pwb
+    relative_path: raw/Base_Eastern_Interconnect_515GW.pwb
+    size_bytes: 79581778
+    sha256: ede8d4341ff51effab01371e09a4dd6b0a01cafa64ad92a2a7ccca3deda1be86
+  - filename: Base_Eastern_Interconnect_515GW-sup.csv
+    relative_path: raw/Base_Eastern_Interconnect_515GW-sup.csv
+    size_bytes: 484675
+    sha256: cb453869060088b8256bcbf3bfba0240aaec47539982d81432aa1f72ffc1fb65
+extraction:
+  requested: false
+  status: manual_copy_matpower_ready
+  destination: /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/external/tamu/epigrids_eastern/extracted
+notes: Ingested from manually_downloaded_cases one level above repository; MATPOWER
+  .m copied to extracted for direct topology/solver use.

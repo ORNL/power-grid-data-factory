@@ -1,6 +1,6 @@
 {
   "generated_from": "external/tamu",
-  "generated_at": "2026-08-03T17:02:45.562724+00:00",
+  "generated_at": "2026-08-04T04:02:18.499443+00:00",
   "policy_note": "Manual source archives remain under external/tamu (gitignored). This bundle stores reproducibility metadata, manifests, checksums, and inventories.",
   "cases": [
     {
@@ -224,6 +224,51 @@
       ],
       "archive_count": 1,
       "extracted_file_count": 10,
+      "present": true
+    },
+    {
+      "case_id": "epigrids_eastern",
+      "required": false,
+      "acquisition_mode": "manual",
+      "grid_family": "epigrids",
+      "metadata": {
+        "source_repository": "tamu",
+        "source_origin": "tamu",
+        "source_case_name": "EPIGRIDS Eastern Interconnect 515GW",
+        "bus_count": null,
+        "exact_source_topology": true,
+        "exact_tamu_topology": true,
+        "non_equivalent_similar_size_cases": [
+          "epigrids_eastern_78484"
+        ]
+      },
+      "copied_files": {
+        "source_manifest.yaml": "data/imported/manual_sources/cases/epigrids_eastern/source_manifest.yaml",
+        "checksums.sha256": "data/imported/manual_sources/cases/epigrids_eastern/checksums.sha256",
+        "inventory.txt": "data/imported/manual_sources/cases/epigrids_eastern/inventory.txt"
+      },
+      "archives": [
+        {
+          "filename": "Base_Eastern_Interconnect_515GW-sup.csv",
+          "size_bytes": 484675,
+          "sha256": "cb453869060088b8256bcbf3bfba0240aaec47539982d81432aa1f72ffc1fb65",
+          "relative_external_path": "external/tamu/epigrids_eastern/raw/Base_Eastern_Interconnect_515GW-sup.csv"
+        },
+        {
+          "filename": "Base_Eastern_Interconnect_515GW.m",
+          "size_bytes": 23677468,
+          "sha256": "5becfa3af0d4e295b7ab259ab62abb0167b7c9e75a02c56798965a169d70abb7",
+          "relative_external_path": "external/tamu/epigrids_eastern/raw/Base_Eastern_Interconnect_515GW.m"
+        },
+        {
+          "filename": "Base_Eastern_Interconnect_515GW.pwb",
+          "size_bytes": 79581778,
+          "sha256": "ede8d4341ff51effab01371e09a4dd6b0a01cafa64ad92a2a7ccca3deda1be86",
+          "relative_external_path": "external/tamu/epigrids_eastern/raw/Base_Eastern_Interconnect_515GW.pwb"
+        }
+      ],
+      "archive_count": 3,
+      "extracted_file_count": 1,
       "present": true
     },
     {

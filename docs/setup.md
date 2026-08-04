@@ -150,6 +150,29 @@ PYTHONPATH=src python3.11 scripts/configure_exago_build.py \
 	--build --install --parallel 12
 ```
 
+## Frontier ExaGO campaign runtime environment
+
+The map/reduce campaign driver and workers require a Python environment with
+`pandas` + `pyarrow` so every campaign writes uniform Parquet ledgers. If no
+parquet engine is importable the ledgers degrade to a `.parquet.jsonl` fallback,
+which fragments the corpus across campaigns; the Frontier sbatch prints a warning
+in that case rather than failing.
+
+Build the canonical virtualenv once from a login node:
+
+```bash
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+bash scripts/setup_frontier_venv.sh
+```
+
+This sources the Frontier module environment (so the venv matches the runtime
+interpreter), creates `.venv`, and installs `requirements.txt` (`pandas>=2.0`,
+`pyarrow>=14.0`). The campaign sbatch
+`configs/slurm/frontier_exago_acopf_mapreduce_8n_2h.sbatch` defaults
+`PGDF_VENV=$ROOT/.venv` and activates it automatically after loading the
+ROCm/spack modules. Override with `PGDF_VENV=/path/to/venv`, or set `PGDF_VENV=`
+(empty) to force the module Python.
+
 ## Recommended first checks
 
 1. Confirm config files parse and contain expected solver IDs.

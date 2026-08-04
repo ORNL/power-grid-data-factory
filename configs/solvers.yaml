@@ -14,6 +14,22 @@ solvers:
     task: scopf
     formulation: SCOPFLOW
     optimizer: Ipopt
+  - solver_id: exago_ac_opf_hiopsparsegpu_campaign
+    framework: ExaGO
+    task: ac_opf
+    formulation: PBPOLRAJAHIOPSPARSE
+    optimizer: HiOp
+    accelerator: amd_gpu
+    gpu_solver: HIOPSPARSEGPU
+    fallback_solver_id: exago_ac_opf_ipopt_campaign
+    notes: GPU sparse AC-OPF (Frontier MI250X); falls back to IPOPT on non-convergence.
+  - solver_id: exago_ac_opf_ipopt_campaign
+    framework: ExaGO
+    task: ac_opf
+    formulation: POWER_BALANCE_POLAR
+    optimizer: Ipopt
+    accelerator: cpu
+    notes: CPU interior-point AC-OPF fallback for the ExaGO GPU campaign.
   - solver_id: pandapower_ac_opf_ipopt
     framework: pandapower
     task: ac_opf

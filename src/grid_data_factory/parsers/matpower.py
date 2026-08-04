@@ -86,6 +86,104 @@ def gencost_to_quad_triplet(row: list[int | float]) -> list[float]:
     return [0.0, 1.0, 0.0]
 
 
+def _fmt_number(x: Any) -> str:
+    val = float(x)
+    if val.is_integer():
+        return str(int(val))
+    return repr(val)
+
+
+def _sanitize_function_name(name: str) -> str:
+    token = re.sub(r"[^A-Za-z0-9_]", "_", str(name))
+    if not token or not (token[0].isalpha() or token[0] == "_"):
+        token = "case_" + token
+    return token
+
+
+def write_matpower_case(case_data: dict[str, Any], out_path: Path, case_name: str | None = None) -> Path:
+    """Serialize a canonical case dict back to a MATPOWER ``.m`` file.
+
+    Emits the same reduced model the parser reads (no shunts, no branch
+    charging, no transformer taps) so a downstream solver such as ExaGO OPFLOW
+    sees a network identical to the one PowerModels solves from the same dict.
+    """
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    base_mva = float(case_data.get("base_mva", 100.0))
+    name = _sanitize_function_name(case_name or case_data.get("case_id") or out_path.stem)
+
+    load_by_bus: dict[str, list[float]] = {}
+    for ld in case_data.get("loads", []):
+        bid = str(ld.get("bus_id"))
+        acc = load_by_bus.setdefault(bid, [0.0, 0.0])
+        acc[0] += float(ld.get("pd", 0.0))
+        acc[1] += float(ld.get("qd", 0.0))
+
+    lines: list[str] = [
+        f"function mpc = {name}",
+        "mpc.version = '2';",
+        f"mpc.baseMVA = {_fmt_number(base_mva)};",
+        "",
+        "%% bus_i type Pd Qd Gs Bs area Vm Va baseKV zone Vmax Vmin",
+        "mpc.bus = [",
+    ]
+    for bus in case_data.get("buses", []):
+        bid = str(bus.get("bus_id"))
+        pd, qd = load_by_bus.get(bid, [0.0, 0.0])
+        base_kv = float(bus.get("base_kv", 100.0) or 100.0)
+        cols = [
+            int(float(bid)), int(bus.get("type", 1)), pd, qd, 0.0, 0.0, 1,
+            float(bus.get("vm", 1.0)), float(bus.get("va", 0.0)), base_kv, 1,
+            float(bus.get("vmax", 1.1)), float(bus.get("vmin", 0.9)),
+        ]
+        lines.append("\t" + "\t".join(_fmt_number(c) for c in cols) + ";")
+    lines += [
+        "];",
+        "",
+        "%% bus Pg Qg Qmax Qmin Vg mBase status Pmax Pmin Pc1 Pc2 Qc1min Qc1max Qc2min Qc2max ramp_agc ramp_10 ramp_30 ramp_q apf",
+        "mpc.gen = [",
+    ]
+    for g in case_data.get("generators", []):
+        cols = [
+            int(float(str(g.get("bus_id")))), 0.0, 0.0,
+            float(g.get("qmax", 0.0)), float(g.get("qmin", 0.0)), 1.0, base_mva, 1,
+            float(g.get("pmax", 0.0)), float(g.get("pmin", 0.0)),
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ]
+        lines.append("\t" + "\t".join(_fmt_number(c) for c in cols) + ";")
+    lines += [
+        "];",
+        "",
+        "%% fbus tbus r x b rateA rateB rateC ratio angle status angmin angmax",
+        "mpc.branch = [",
+    ]
+    for br in case_data.get("branches", []):
+        rate_a = float(br.get("rate_a", 0.0))
+        if rate_a >= 1.0e6:
+            rate_a = 0.0  # MATPOWER: 0 means unlimited thermal rating
+        cols = [
+            int(float(str(br.get("from")))), int(float(str(br.get("to")))),
+            float(br.get("r", 0.0)), float(br.get("x", 0.0)), 0.0,
+            rate_a, rate_a, rate_a, 0.0, 0.0, 1, -360.0, 360.0,
+        ]
+        lines.append("\t" + "\t".join(_fmt_number(c) for c in cols) + ";")
+    lines += [
+        "];",
+        "",
+        "%% model startup shutdown ncost c2 c1 c0",
+        "mpc.gencost = [",
+    ]
+    for g in case_data.get("generators", []):
+        cost = list(g.get("cost") or [0.0, 1.0, 0.0])
+        c2, c1, c0 = (cost + [0.0, 0.0, 0.0])[:3]
+        cols = [2, 0, 0, 3, float(c2), float(c1), float(c0)]
+        lines.append("\t" + "\t".join(_fmt_number(c) for c in cols) + ";")
+    lines += ["];", ""]
+
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return out_path
+
+
 def parse_matpower_case(case_file: Path, case_id: str) -> dict[str, Any]:
     text = Path(case_file).read_text(encoding="utf-8", errors="ignore")
     base_mva = parse_base_mva(text)

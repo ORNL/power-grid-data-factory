@@ -4,10 +4,25 @@ import json
 from pathlib import Path
 from typing import Any
 
+def _has_parquet_engine() -> bool:
+    for engine in ("pyarrow", "fastparquet"):
+        try:
+            __import__(engine)
+            return True
+        except ModuleNotFoundError:
+            continue
+    return False
+
+
 def _require_pandas():
     try:
         import pandas as pd  # type: ignore
     except ModuleNotFoundError:
+        return None
+    # Pandas can be present without a parquet engine (e.g. Cray Python without
+    # pyarrow). In that case fall back to the JSONL ledger path instead of
+    # crashing on ``to_parquet``/``read_parquet``.
+    if not _has_parquet_engine():
         return None
     return pd
 
@@ -74,6 +89,7 @@ def append_parquet_rows(path: Path, rows: list[dict[str, Any]]) -> None:
         return
 
     new_df = pd.DataFrame(rows)
+    path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         old_df = pd.read_parquet(path)
         out_df = pd.concat([old_df, new_df], ignore_index=True)

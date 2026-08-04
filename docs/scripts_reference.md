@@ -61,6 +61,11 @@ Implemented workflow command:
   - Applies operating-point and contingency transforms (including reference load snapshots) to each parsed case before solving.
   - Encodes the applied contingency into the output path via a deterministic `contingency_slug` level.
   - `--resume` skips any candidate whose deterministic output directory already has a finalized attempt; the round report then adds `skipped_count` and computes `failure_fraction` over solvable (non-skipped) candidates. See [Resumable Campaigns](resumable_campaigns.md).
+- `scripts/run_campaign_exago_ac_opf_round.py`
+  - ExaGO GPU variant of the campaign map worker: same transforms, ledgers, resume, and reporting as `run_campaign_ac_opf_round.py`, but solves each candidate with ExaGO `opflow`.
+  - Serializes each transformed case back to a MATPOWER `.m` netfile (`write_matpower_case`) so ExaGO solves the identical reduced network PowerModels sees.
+  - `--solver-mode` selects `gpu_then_ipopt` (default), `gpu_only`, or `ipopt_only`; GPU uses `HIOPSPARSEGPU`/`PBPOLRAJAHIOPSPARSE` with IPOPT fallback.
+  - Requires a Python env with `pyarrow` for Parquet ledgers (see [Setup](setup.md#frontier-exago-campaign-runtime-environment)); driven by `configs/slurm/frontier_exago_acopf_mapreduce_8n_2h.sbatch`.
 - `scripts/register_load_snapshots.py`
   - Discovers per-scenario MATPOWER snapshot files for a case and registers them as reference load operating points.
   - Writes `data/operating_point_registry/<case_id>/load_snapshots.json` with season, voltage regime, difficulty, and per-bus loads.
@@ -134,6 +139,9 @@ Implemented workflow command:
   - Loads the known-good Andes module stack and runs isolated ExaGO `opflow`.
   - Defaults to case9 IPOPT smoke test when no CLI arguments are provided.
   - Accepts custom `opflow` arguments for alternate netfiles and solver options.
+- `scripts/setup_frontier_venv.sh`
+  - Builds the canonical campaign virtualenv (`.venv`) with `pandas`+`pyarrow` from `requirements.txt`, matching the Frontier runtime interpreter.
+  - Consumed by the Frontier ExaGO campaign sbatch via `PGDF_VENV`. See [Setup](setup.md#frontier-exago-campaign-runtime-environment).
 
 ## CLI module entrypoints
 

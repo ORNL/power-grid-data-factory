@@ -180,6 +180,498 @@ sources:
         exact_tamu_topology: false
         acquisition_mode: automatic
 
+      - case_id: pglib_opf_case1354_pegase
+        grid_family: pegase
+        source_repository: pglib
+        source_origin: pegase
+        source_file: pglib_opf_case1354_pegase.m
+        source_case_name: PEGASE 1354
+        bus_count: 1354
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case1803_snem
+        grid_family: snem
+        source_repository: pglib
+        source_origin: snem
+        source_file: pglib_opf_case1803_snem.m
+        source_case_name: SNEM 1803
+        bus_count: 1803
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case1888_rte
+        grid_family: rte
+        source_repository: pglib
+        source_origin: rte
+        source_file: pglib_opf_case1888_rte.m
+        source_case_name: RTE 1888
+        bus_count: 1888
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case1951_rte
+        grid_family: rte
+        source_repository: pglib
+        source_origin: rte
+        source_file: pglib_opf_case1951_rte.m
+        source_case_name: RTE 1951
+        bus_count: 1951
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case2312_goc
+        grid_family: goc
+        source_repository: pglib
+        source_origin: arpa_e_go_challenge_1
+        source_file: pglib_opf_case2312_goc.m
+        source_case_name: GO Competition 2312
+        bus_count: 2312
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case2383wp_k
+        grid_family: polish
+        source_repository: pglib
+        source_origin: matpower
+        source_file: pglib_opf_case2383wp_k.m
+        source_case_name: Polish 2383 winter peak
+        bus_count: 2383
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case2736sp_k
+        grid_family: polish
+        source_repository: pglib
+        source_origin: matpower
+        source_file: pglib_opf_case2736sp_k.m
+        source_case_name: Polish 2736 summer peak
+        bus_count: 2736
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case2737sop_k
+        grid_family: polish
+        source_repository: pglib
+        source_origin: matpower
+        source_file: pglib_opf_case2737sop_k.m
+        source_case_name: Polish 2737 summer off-peak
+        bus_count: 2737
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case2742_goc
+        grid_family: goc
+        source_repository: pglib
+        source_origin: arpa_e_go_challenge_1
+        source_file: pglib_opf_case2742_goc.m
+        source_case_name: GO Competition 2742
+        bus_count: 2742
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case2746wop_k
+        grid_family: polish
+        source_repository: pglib
+        source_origin: matpower
+        source_file: pglib_opf_case2746wop_k.m
+        source_case_name: Polish 2746 winter off-peak
+        bus_count: 2746
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases:
+          - pglib_opf_case2746wp_k
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case2746wp_k
+        grid_family: polish
+        source_repository: pglib
+        source_origin: matpower
+        source_file: pglib_opf_case2746wp_k.m
+        source_case_name: Polish 2746 winter peak
+        bus_count: 2746
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases:
+          - pglib_opf_case2746wop_k
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case2848_rte
+        grid_family: rte
+        source_repository: pglib
+        source_origin: rte
+        source_file: pglib_opf_case2848_rte.m
+        source_case_name: RTE 2848
+        bus_count: 2848
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case2853_sdet
+        grid_family: sdet
+        source_repository: pglib
+        source_origin: sdet
+        source_file: pglib_opf_case2853_sdet.m
+        source_case_name: SDET 2853
+        bus_count: 2853
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case2868_rte
+        grid_family: rte
+        source_repository: pglib
+        source_origin: rte
+        source_file: pglib_opf_case2868_rte.m
+        source_case_name: RTE 2868
+        bus_count: 2868
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case2869_pegase
+        grid_family: pegase
+        source_repository: pglib
+        source_origin: pegase
+        source_file: pglib_opf_case2869_pegase.m
+        source_case_name: PEGASE 2869
+        bus_count: 2869
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case3012wp_k
+        grid_family: polish
+        source_repository: pglib
+        source_origin: matpower
+        source_file: pglib_opf_case3012wp_k.m
+        source_case_name: Polish 3012 winter peak
+        bus_count: 3012
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case3022_goc
+        grid_family: goc
+        source_repository: pglib
+        source_origin: arpa_e_go_challenge_1
+        source_file: pglib_opf_case3022_goc.m
+        source_case_name: GO Competition 3022
+        bus_count: 3022
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case3120sp_k
+        grid_family: polish
+        source_repository: pglib
+        source_origin: matpower
+        source_file: pglib_opf_case3120sp_k.m
+        source_case_name: Polish 3120 summer peak
+        bus_count: 3120
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case3375wp_k
+        grid_family: polish
+        source_repository: pglib
+        source_origin: matpower
+        source_file: pglib_opf_case3375wp_k.m
+        source_case_name: Polish 3375 winter peak
+        bus_count: 3375
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case3970_goc
+        grid_family: goc
+        source_repository: pglib
+        source_origin: arpa_e_go_challenge_1
+        source_file: pglib_opf_case3970_goc.m
+        source_case_name: GO Competition 3970
+        bus_count: 3970
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case4020_goc
+        grid_family: goc
+        source_repository: pglib
+        source_origin: arpa_e_go_challenge_1
+        source_file: pglib_opf_case4020_goc.m
+        source_case_name: GO Competition 4020
+        bus_count: 4020
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case4601_goc
+        grid_family: goc
+        source_repository: pglib
+        source_origin: arpa_e_go_challenge_1
+        source_file: pglib_opf_case4601_goc.m
+        source_case_name: GO Competition 4601
+        bus_count: 4601
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case4619_goc
+        grid_family: goc
+        source_repository: pglib
+        source_origin: arpa_e_go_challenge_1
+        source_file: pglib_opf_case4619_goc.m
+        source_case_name: GO Competition 4619
+        bus_count: 4619
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case4837_goc
+        grid_family: goc
+        source_repository: pglib
+        source_origin: arpa_e_go_challenge_1
+        source_file: pglib_opf_case4837_goc.m
+        source_case_name: GO Competition 4837
+        bus_count: 4837
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case4917_goc
+        grid_family: goc
+        source_repository: pglib
+        source_origin: arpa_e_go_challenge_1
+        source_file: pglib_opf_case4917_goc.m
+        source_case_name: GO Competition 4917
+        bus_count: 4917
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case6468_rte
+        grid_family: rte
+        source_repository: pglib
+        source_origin: rte
+        source_file: pglib_opf_case6468_rte.m
+        source_case_name: RTE 6468
+        bus_count: 6468
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case6495_rte
+        grid_family: rte
+        source_repository: pglib
+        source_origin: rte
+        source_file: pglib_opf_case6495_rte.m
+        source_case_name: RTE 6495
+        bus_count: 6495
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case6515_rte
+        grid_family: rte
+        source_repository: pglib
+        source_origin: rte
+        source_file: pglib_opf_case6515_rte.m
+        source_case_name: RTE 6515
+        bus_count: 6515
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case8387_pegase
+        grid_family: pegase
+        source_repository: pglib
+        source_origin: pegase
+        source_file: pglib_opf_case8387_pegase.m
+        source_case_name: PEGASE 8387
+        bus_count: 8387
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case9241_pegase
+        grid_family: pegase
+        source_repository: pglib
+        source_origin: pegase
+        source_file: pglib_opf_case9241_pegase.m
+        source_case_name: PEGASE 9241
+        bus_count: 9241
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case9591_goc
+        grid_family: goc
+        source_repository: pglib
+        source_origin: arpa_e_go_challenge_1
+        source_file: pglib_opf_case9591_goc.m
+        source_case_name: GO Competition 9591
+        bus_count: 9591
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case10480_goc
+        grid_family: goc
+        source_repository: pglib
+        source_origin: arpa_e_go_challenge_1
+        source_file: pglib_opf_case10480_goc.m
+        source_case_name: GO Competition 10480
+        bus_count: 10480
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case19402_goc
+        grid_family: goc
+        source_repository: pglib
+        source_origin: arpa_e_go_challenge_1
+        source_file: pglib_opf_case19402_goc.m
+        source_case_name: GO Competition 19402
+        bus_count: 19402
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case24464_goc
+        grid_family: goc
+        source_repository: pglib
+        source_origin: arpa_e_go_challenge_1
+        source_file: pglib_opf_case24464_goc.m
+        source_case_name: GO Competition 24464
+        bus_count: 24464
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
+      - case_id: pglib_opf_case30000_goc
+        grid_family: goc
+        source_repository: pglib
+        source_origin: arpa_e_go_challenge_1
+        source_file: pglib_opf_case30000_goc.m
+        source_case_name: GO Competition 30000
+        bus_count: 30000
+        exact_source_topology: true
+        related_case_ids: []
+        equivalent_case_ids: []
+        non_equivalent_similar_size_cases: []
+        exact_tamu_topology: false
+        acquisition_mode: automatic
+
       - case_id: pglib_opf_case14_ieee
         grid_family: ieee
         source_repository: pglib
