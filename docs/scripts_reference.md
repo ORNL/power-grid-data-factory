@@ -23,14 +23,25 @@ The following are scaffolded placeholders and should be implemented for producti
 
 - `scripts/canonicalize_cases.py`
 - `scripts/register_case.py`
-- `scripts/create_operating_point.py`
-- `scripts/enumerate_contingencies.py`
-- `scripts/screen_contingencies.py`
 - `scripts/run_pf.py`
 - `scripts/run_dc_opf.py`
 - `scripts/run_scopf.py`
+
+## Campaign input generation
+
+- `scripts/create_operating_point.py`
+  - Generates structured operating-point candidates for adaptive campaigns (parametric perturbations plus reference load snapshots when a snapshot registry exists).
+- `scripts/enumerate_contingencies.py`
+  - Enumerates physically credible contingency candidates (N-1 and sequential N-1-1) for a case.
+- `scripts/screen_contingencies.py`
+  - Applies multi-trigger screening and audit tagging to enumerated contingency candidates.
+
+## Consistency and gating
+
 - `scripts/compare_solver_consistency.py`
+  - Compares ExaGO and pandapower AC-OPF outputs on MATPOWER cases and writes a consistency report.
 - `scripts/phase1_gate.py`
+  - Phase-1 gate combining solver-consistency and preservation-audit checks.
 
 Implemented workflow command:
 

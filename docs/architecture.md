@@ -5,7 +5,7 @@
 - `configs/`: campaign and solver configuration files.
 - `external/`: cloned or downloaded external repositories and datasets.
 - `data/`: canonicalized inputs, registries, run artifacts, and derived outputs.
-- `src/grid_data_factory/`: Python package implementing layout, adapters, validation, and preservation logic.
+- `src/grid_data_factory/`: Python package implementing layout, adapters, screening, and preservation logic.
 - `julia/`: Julia environment and runner scripts for PowerModels workflows.
 - `scripts/`: executable workflow commands and preservation utilities.
 
