@@ -124,11 +124,11 @@ def main() -> None:
 
     counts: list[int] = []
     files: list[str] = []
-    for i, shard_rows in enumerate(shards):
+    for i, shard in enumerate(shards):
         shard_path = out_dir / f"{args.prefix}_{i:05d}.jsonl"
-        _write_jsonl(shard_path, shard_rows)
+        _write_jsonl(shard_path, shard)
         files.append(str(shard_path))
-        counts.append(len(shard_rows))
+        counts.append(len(shard))
 
     manifest = {
         "ok": True,
