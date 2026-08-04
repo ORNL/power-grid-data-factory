@@ -37,6 +37,10 @@ Layout note:
 
 ## Core modules
 
+- `parsers/matpower.py`: single source of truth for parsing MATPOWER `.m` cases into the canonical case dict (handles both semicolon-terminated and newline-delimited/PowerWorld exports).
+- `scenarios/operating_points.py`: operating-point transforms (regional/global load scaling, generator availability, reserve margins, branch/cost scaling) applied at solve time.
+- `scenarios/load_snapshots.py`: reference load-snapshot registry and per-bus load lookup used to build seasonal operating points.
+- `contingencies/apply.py`: applies enumerated contingencies (branch/generator outages) for simultaneous and sequential N-1-1 events.
 - `storage/layout.py`: deterministic paths and attempt directory creation/finalization.
 - `storage/naming.py`: stable naming conventions for topology, operating-point, and attempt IDs.
 - `storage/registry.py`: append run records to JSONL and Parquet registries.
