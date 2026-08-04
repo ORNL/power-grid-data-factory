@@ -27,8 +27,7 @@ try:
     from grid_data_factory.topology.generation import apply_topology
     from grid_data_factory.scenarios.load_snapshots import get_snapshot_bus_loads
     from grid_data_factory.scenarios.operating_points import apply_operating_point
-    from grid_data_factory.storage.layout import create_attempt_directory, finalize_attempt_directory, get_solver_directory
-    from grid_data_factory.storage.naming import format_attempt_id
+    from grid_data_factory.storage.layout import create_next_attempt_directory, finalize_attempt_directory, get_solver_directory
 except ModuleNotFoundError:
     _repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(_repo_root / "src"))
@@ -48,8 +47,7 @@ except ModuleNotFoundError:
     from grid_data_factory.topology.generation import apply_topology
     from grid_data_factory.scenarios.load_snapshots import get_snapshot_bus_loads
     from grid_data_factory.scenarios.operating_points import apply_operating_point
-    from grid_data_factory.storage.layout import create_attempt_directory, finalize_attempt_directory, get_solver_directory
-    from grid_data_factory.storage.naming import format_attempt_id
+    from grid_data_factory.storage.layout import create_next_attempt_directory, finalize_attempt_directory, get_solver_directory
 
 
 def _require_yaml():
@@ -96,24 +94,6 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 def _normalize(text: str) -> str:
     t = text.strip().lower().replace(" ", "_")
     return re.sub(r"[^a-z0-9_\-]", "", t)
-
-
-def _next_attempt_index(solver_dir: Path) -> int:
-    attempts_dir = solver_dir / "attempts"
-    if not attempts_dir.exists():
-        return 1
-    max_idx = 0
-    for p in attempts_dir.iterdir():
-        name = p.name
-        if name.startswith(".attempt_") and name.endswith(".in_progress"):
-            core = name[len(".attempt_") : -len(".in_progress")]
-        elif name.startswith("attempt_"):
-            core = name[len("attempt_") :]
-        else:
-            continue
-        if core.isdigit():
-            max_idx = max(max_idx, int(core))
-    return max_idx + 1
 
 
 def _resolve_case_file(repo_root: Path, case_id: str) -> Path:
@@ -264,8 +244,7 @@ def _write_attempt(
         operating_point_id=operating_point_id,
         solver_id=solver_id,
     )
-    attempt_id = format_attempt_id(_next_attempt_index(solver_dir))
-    in_progress = create_attempt_directory(solver_dir, attempt_id)
+    in_progress, attempt_id = create_next_attempt_directory(solver_dir)
 
     run_id = f"{case_id}-{topology_id}-{operating_point_id}-{solver_id}-{attempt_id}"
     run_yaml = {
