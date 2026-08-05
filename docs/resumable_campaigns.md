@@ -304,6 +304,23 @@ the candidate count keep the full multi-queue strategy unchanged. To hit the
 fast path, keep the per-round budget at or above the enumerated candidate count
 (`PER_CASE × cases × contingencies_per_op`).
 
+### Streaming shard split
+
+[scripts/shard_selected_candidates.py](../scripts/shard_selected_candidates.py)
+divides the selected-candidate JSONL into thousands of shards for the map stage.
+Its default path loaded the **entire** selected file into memory as dicts, and
+with `--backfill-from-pool` it also loaded the pool file — at 15M candidates that
+was ~180 GB **each** (~360 GB, an OOM on a 230 GB node), and it re-read the whole
+input a second time just to count lines for the manifest.
+
+The `--stream` flag (set in the Andes sbatch) splits line-by-line to one open
+append handle per shard (raising `RLIMIT_NOFILE` for the ~8192 handles),
+accumulates coverage counts in the same pass, scans the pool only for its bucket
+*set* (not its rows), and does any coverage backfill as a targeted streaming
+pass. Peak memory stays roughly flat regardless of candidate count, and the
+output is identical to the in-memory path. The in-memory path is retained for
+small runs and unit tests.
+
 ### Slim ledgers by default
 
 Two ledgers — `candidate_registry` and `acquisition_decisions` — previously
