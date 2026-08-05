@@ -153,6 +153,7 @@ SHARD_ARGS=(
   --min-per-bucket "$MIN_PER_BUCKET"
   --max-backfill-additions "$MAX_BACKFILL_ADDITIONS"
   --score-key "$SCORE_KEY"
+  --stream
 )
 if [[ "$ENFORCE_COVERAGE" == "1" ]]; then
   SHARD_ARGS+=(--enforce-coverage)
