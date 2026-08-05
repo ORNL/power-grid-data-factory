@@ -101,3 +101,92 @@ def _count_selected_by_queue(selected: list[dict[str, Any]]) -> dict[str, int]:
         key = str(item.get("selection_queue", "unknown"))
         out[key] = out.get(key, 0) + 1
     return out
+
+
+def run_campaign_round_streaming(
+    campaign_root: Path,
+    round_index: int,
+    candidates_path: Path,
+    budget: int,
+    queue_fractions: dict[str, float],
+    constraints: PortfolioConstraints,
+    audit_seed: int,
+    candidate_count: int,
+) -> dict[str, Any]:
+    """Full-budget selection that never materializes the candidate set.
+
+    When ``budget >= candidate_count`` every constraint-passing candidate is
+    selected regardless of ranking, so the screened JSONL is streamed straight to
+    the selected-candidate JSONL with the selection fields added in place. Peak
+    memory is O(constraint buckets) rather than O(candidates) (~170 GB at 15M).
+    Portfolio limits are honoured with running per-bucket counters instead of the
+    O(n^2) scan over the growing selected list. Ledgers are always slim here:
+    the full per-candidate trail would require holding the whole set in memory,
+    which is exactly the peak this path exists to avoid.
+    """
+    check_grid = constraints.max_per_grid > 0
+    check_regime = constraints.max_per_regime > 0
+    check_class = constraints.max_per_contingency_class > 0
+    grid_counts: dict[Any, int] = {}
+    regime_counts: dict[Any, int] = {}
+    class_counts: dict[Any, int] = {}
+
+    selected_path = campaign_root / "round_summaries" / f"round_{round_index:03d}_selected_candidates.jsonl"
+    selected_path.parent.mkdir(parents=True, exist_ok=True)
+
+    selected_count = 0
+    with candidates_path.open("r", encoding="utf-8") as src, selected_path.open("w", encoding="utf-8") as out:
+        for line in src:
+            line = line.strip()
+            if not line:
+                continue
+            row = json.loads(line)
+
+            grid = row.get("grid_id")
+            regime = row.get("operating_regime")
+            cclass = row.get("contingency_class")
+            if check_grid and grid_counts.get(grid, 0) >= constraints.max_per_grid:
+                continue
+            if check_regime and regime_counts.get(regime, 0) >= constraints.max_per_regime:
+                continue
+            if check_class and class_counts.get(cclass, 0) >= constraints.max_per_contingency_class:
+                continue
+
+            row["selection_queue"] = "full_budget"
+            row["selection_reason"] = "selected_from_full_budget_queue"
+            row["selection_status"] = "selected"
+            out.write(json.dumps(row, ensure_ascii=True) + "\n")
+            selected_count += 1
+
+            if check_grid:
+                grid_counts[grid] = grid_counts.get(grid, 0) + 1
+            if check_regime:
+                regime_counts[regime] = regime_counts.get(regime, 0) + 1
+            if check_class:
+                class_counts[cclass] = class_counts.get(cclass, 0) + 1
+
+    append_parquet_rows(
+        campaign_root / "acquisition_decisions.parquet",
+        [
+            {
+                "round_index": round_index,
+                "candidate_count": candidate_count,
+                "selected_count": selected_count,
+                "selected_by_queue": json.dumps({"full_budget": selected_count}, sort_keys=True),
+                "random_seed": audit_seed,
+            }
+        ],
+    )
+
+    summary = {
+        "round_index": round_index,
+        "candidate_count": candidate_count,
+        "budget": budget,
+        "selected_count": selected_count,
+        "selected_by_queue": {"full_budget": selected_count},
+    }
+    summary_path = write_round_summary(campaign_root, round_index, summary)
+    summary["summary_path"] = str(summary_path)
+    summary["selected_candidates_path"] = str(selected_path)
+    return summary
+
