@@ -33,6 +33,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--enforce-coverage", action="store_true", help="Fail if coverage requirements are not met.")
     p.add_argument("--backfill-from-pool", action="store_true", help="Auto-backfill missing coverage buckets from pool JSONL.")
     p.add_argument(
+        "--full-budget",
+        action="store_true",
+        help="Selection already contains every candidate, so its own buckets are the full coverage universe. Skips the pool universe scan and backfill (both redundant), avoiding a full read of the pool JSONL.",
+    )
+    p.add_argument(
         "--max-backfill-additions",
         type=int,
         default=0,
@@ -102,7 +107,10 @@ def run_stream(args: argparse.Namespace, coverage_keys: list[str]) -> None:
     _raise_fd_limit(num_shards + 128)
 
     pool_path = Path(args.pool_jsonl).resolve() if args.pool_jsonl else None
-    need_ids = bool(args.backfill_from_pool and pool_path)
+    # Full-budget selection is the entire candidate universe, so the pool scan and
+    # backfill can add nothing: skip both and treat selected buckets as the universe.
+    use_pool = bool(pool_path) and not args.full_budget
+    need_ids = bool(args.backfill_from_pool and use_pool)
 
     files = [str(out_dir / f"{args.prefix}_{i:05d}.jsonl") for i in range(num_shards)]
     counts = [0] * num_shards
@@ -130,7 +138,7 @@ def run_stream(args: argparse.Namespace, coverage_keys: list[str]) -> None:
         for h in handles:
             h.close()
 
-    if pool_path and coverage_keys:
+    if use_pool and coverage_keys:
         universe: dict[str, set[str]] = {k: set() for k in coverage_keys}
         for line in _iter_jsonl_lines(pool_path):
             row = json.loads(line)
@@ -142,7 +150,7 @@ def run_stream(args: argparse.Namespace, coverage_keys: list[str]) -> None:
     missing_before = _missing(universe, sel_counts, coverage_keys, args.min_per_bucket)
 
     added_ids: list[str] = []
-    if missing_before and args.backfill_from_pool and pool_path:
+    if missing_before and args.backfill_from_pool and use_pool:
         needs: dict[tuple[str, str], int] = {}
         for key, buckets in missing_before.items():
             for bucket in buckets:
@@ -249,15 +257,16 @@ def main() -> None:
     rows = _read_jsonl(in_path)
     num_input = len(rows)
 
+    # Full-budget selection is the whole universe; skip the pool load + backfill.
     pool_rows: list[dict[str, Any]] = []
-    if args.pool_jsonl:
+    if args.pool_jsonl and not args.full_budget:
         pool_rows = _read_jsonl(Path(args.pool_jsonl).resolve())
 
     if coverage_keys:
-        if args.backfill_from_pool and not pool_rows:
+        if args.backfill_from_pool and not args.full_budget and not pool_rows:
             raise SystemExit("--backfill-from-pool requires --pool-jsonl")
 
-        if args.backfill_from_pool:
+        if args.backfill_from_pool and not args.full_budget:
             rows, added_ids, missing_before, missing_after = backfill_coverage(
                 selected=rows,
                 pool=pool_rows,
