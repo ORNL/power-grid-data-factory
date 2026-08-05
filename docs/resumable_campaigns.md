@@ -192,9 +192,9 @@ process environment (not `--export`) to avoid comma-parsing issues.
 ```bash
 cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 PYTHONPATH=src python3.11 scripts/drive_campaign.py \
-  --campaign-id ultrascale_60m \
+  --campaign-id ultrascale_150m \
   --rounds 10 \
-  --total-budget 60000000 \
+  --total-budget 150000000 \
   --set MAX_K=10 \
   --nodes 64 --ntasks-per-node 16 --cpus-per-task 1 --time 36:00:00
 ```
@@ -204,9 +204,9 @@ PYTHONPATH=src python3.11 scripts/drive_campaign.py \
 ```bash
 cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 PYTHONPATH=src python3.11 scripts/drive_campaign.py \
-  --campaign-id ultrascale_60m \
+  --campaign-id ultrascale_150m \
   --rounds 10 \
-  --total-budget 60000000 \
+  --total-budget 150000000 \
   --set MAX_K=10 \
   --nodes 64 --ntasks-per-node 16 --cpus-per-task 1 --time 36:00:00 \
   --chain
@@ -214,8 +214,8 @@ PYTHONPATH=src python3.11 scripts/drive_campaign.py \
 
 With `--chain`, each subsequent round is submitted with an
 `--dependency=afterok:<prev>` so it starts only after the previous round's job
-succeeds. For a 60M-solve campaign of 10 rounds this queues rounds `r..9` each
-with a 6M budget.
+succeeds. For a 150M-solve campaign of 10 rounds this queues rounds `r..9` each
+with a 15M budget.
 
 ### Preview without submitting
 
@@ -224,8 +224,8 @@ incomplete round, and per-round overrides) without calling `sbatch`. Example
 output:
 
 ```
-campaign=ultrascale_60m rounds=10 completed=[0, 1] furthest_incomplete=2
-[dry-run] sbatch ... overrides={'CAMPAIGN_ID': 'ultrascale_60m', 'ROUND_INDEX': '2', 'RESUME': '1', 'BUDGET': '6000000'}
+campaign=ultrascale_150m rounds=10 completed=[0, 1] furthest_incomplete=2
+[dry-run] sbatch ... overrides={'CAMPAIGN_ID': 'ultrascale_150m', 'ROUND_INDEX': '2', 'RESUME': '1', 'BUDGET': '15000000'}
 ```
 
 ## Monitoring progress
@@ -238,7 +238,7 @@ execution reports, and the `queue/done` markers.
 ```bash
 cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 PYTHONPATH=src python3.11 scripts/monitor_campaign.py \
-  --campaign-id ultrascale_60m_v1 --round-index 0 --watch 30
+  --campaign-id ultrascale_150m_v1 --round-index 0 --watch 30
 ```
 
 It reports the coarse pipeline stage (bootstrap sub-stage → sharding → map →

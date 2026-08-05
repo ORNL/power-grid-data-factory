@@ -11,14 +11,16 @@ try:
     from grid_data_factory.boundaries.security_margin import classify_security_margin_band, compute_security_margin
     from grid_data_factory.campaigns.ledgers import append_parquet_rows
     from grid_data_factory.campaigns.round_runner import (
+        _append_sample,
         _build_margins,
         _candidate_solver_dir,
         _descriptor_from_result,
         _load_bands,
+        _loaded_sample_ids,
         _read_existing_diversity,
         _read_jsonl,
         _resolve_case_file,
-        _write_attempt,
+        _write_shard_manifest,
     )
     from grid_data_factory.constraints.active_sets import build_active_constraint_signature
     from grid_data_factory.constraints.coverage_ledger import update_active_constraint_ledger
@@ -37,14 +39,16 @@ except ModuleNotFoundError:
     from grid_data_factory.boundaries.security_margin import classify_security_margin_band, compute_security_margin
     from grid_data_factory.campaigns.ledgers import append_parquet_rows
     from grid_data_factory.campaigns.round_runner import (
+        _append_sample,
         _build_margins,
         _candidate_solver_dir,
         _descriptor_from_result,
         _load_bands,
+        _loaded_sample_ids,
         _read_existing_diversity,
         _read_jsonl,
         _resolve_case_file,
-        _write_attempt,
+        _write_shard_manifest,
     )
     from grid_data_factory.constraints.active_sets import build_active_constraint_signature
     from grid_data_factory.constraints.coverage_ledger import update_active_constraint_ledger
@@ -110,6 +114,8 @@ def main() -> None:
     failed_rows: list[dict[str, Any]] = []
     skipped_rows: list[dict[str, Any]] = []
 
+    done_ids = _loaded_sample_ids(runs_root) if args.resume else set()
+
     for cand in candidates:
         case_id = str(cand.get("case_id"))
         case_family = grid_family_for(repo_root, case_id)
@@ -117,7 +123,7 @@ def main() -> None:
         cand.setdefault("grid_family", case_family)
         cand.setdefault("dataset", case_dataset)
         try:
-            if args.resume and has_finalized_attempt(_candidate_solver_dir(runs_root, cand, args.solver_id)):
+            if args.resume and str(cand.get("candidate_id")) in done_ids:
                 skipped_rows.append(
                     {
                         "candidate_id": cand.get("candidate_id"),
@@ -139,7 +145,7 @@ def main() -> None:
             case_data = apply_contingency(case_data, cand.get("contingency"))
 
             result = adapter.solve_ac_opf(case_data, options={"timeout_s": args.timeout_s})
-            final_dir, run_id = _write_attempt(repo_root, runs_root, cand, case_data, result, args.solver_id)
+            samples_path, run_id = _append_sample(repo_root, runs_root, cand, case_data, result, args.solver_id)
             result["_run_id"] = run_id
 
             margins = _build_margins(case_data, result)
@@ -152,7 +158,7 @@ def main() -> None:
             desc["duplicate_status"] = dup_status
             desc["nearest_neighbor_distance"] = dmin
             desc["training_weight_recommendation"] = 0.3 if dup_status == "near_duplicate" else 1.0
-            desc["attempt_dir"] = str(final_dir)
+            desc["attempt_dir"] = str(samples_path)
             desc["round_index"] = args.round_index
             desc["grid_family"] = case_family
             desc["dataset"] = case_dataset
@@ -188,7 +194,7 @@ def main() -> None:
                 {
                     "candidate_id": cand.get("candidate_id"),
                     "run_id": run_id,
-                    "attempt_dir": str(final_dir),
+                    "attempt_dir": str(samples_path),
                     "grid_family": case_family,
                     "dataset": case_dataset,
                     "topology_id": cand.get("topology_id", "topology_000000_baseline"),
@@ -251,6 +257,17 @@ def main() -> None:
     report_path = campaign_root / "round_summaries" / f"round_{args.round_index:03d}_ac_execution_report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(out_report, indent=2), encoding="utf-8")
+
+    _write_shard_manifest(
+        runs_root,
+        {
+            "campaign_id": args.campaign_id,
+            "round_index": args.round_index,
+            "solved_count": len(solved_rows),
+            "failed_count": len(failed_rows),
+            "skipped_count": len(skipped_rows),
+        },
+    )
 
     print(json.dumps({"ok": out_report["ok"], "report": str(report_path), "skipped_count": len(skipped_rows)}, indent=2))
     if not out_report["ok"]:

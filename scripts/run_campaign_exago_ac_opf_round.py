@@ -191,6 +191,8 @@ def main() -> None:
     failed_rows: list[dict[str, Any]] = []
     skipped_rows: list[dict[str, Any]] = []
 
+    done_ids = base._loaded_sample_ids(runs_root) if args.resume else set()
+
     tmp_root = (paths.tmp_dir(repo_root) / "exago_campaign").resolve()
     tmp_root.mkdir(parents=True, exist_ok=True)
 
@@ -203,7 +205,7 @@ def main() -> None:
             cand.setdefault("grid_family", case_family)
             cand.setdefault("dataset", case_dataset)
             try:
-                if args.resume and has_finalized_attempt(base._candidate_solver_dir(runs_root, cand, args.solver_id)):
+                if args.resume and str(cand.get("candidate_id")) in done_ids:
                     skipped_rows.append({"candidate_id": cand.get("candidate_id"), "grid_family": case_family, "dataset": case_dataset})
                     continue
 
@@ -224,7 +226,7 @@ def main() -> None:
                     exago_root, opflow_bin, case_data, args.solver_mode, args.timeout_s, tmp_dir, tag,
                 )
 
-                final_dir, run_id = base._write_attempt(repo_root, runs_root, cand, case_data, result, args.solver_id)
+                final_dir, run_id = base._append_sample(repo_root, runs_root, cand, case_data, result, args.solver_id)
                 result["_run_id"] = run_id
 
                 margins = base._build_margins(case_data, result)
@@ -334,6 +336,18 @@ def main() -> None:
     report_path = campaign_root / "round_summaries" / f"round_{args.round_index:03d}_ac_execution_report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(out_report, indent=2), encoding="utf-8")
+
+    base._write_shard_manifest(
+        runs_root,
+        {
+            "campaign_id": args.campaign_id,
+            "round_index": args.round_index,
+            "solver_backend": "exago",
+            "solved_count": len(solved_rows),
+            "failed_count": len(failed_rows),
+            "skipped_count": len(skipped_rows),
+        },
+    )
 
     print(json.dumps({"ok": out_report["ok"], "report": str(report_path), "skipped_count": len(skipped_rows)}, indent=2))
     if not out_report["ok"]:

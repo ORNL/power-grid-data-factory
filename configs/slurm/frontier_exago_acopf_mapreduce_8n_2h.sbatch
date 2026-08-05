@@ -109,6 +109,10 @@ SHARD_DIR="$CAMPAIGN_ROOT/round_summaries/round_${ROUND_PAD}_shards"
 SHARD_PREFIX="selected"
 SHARD_IDS_FILE="$SHARD_DIR/shard_campaign_ids.txt"
 POOL_JSONL_DEFAULT="$CAMPAIGN_ROOT/round${ROUND_INDEX}_screened_candidates.jsonl"
+# Screening always writes round0_screened_candidates.jsonl regardless of round index.
+if [[ ! -s "$POOL_JSONL_DEFAULT" ]]; then
+  POOL_JSONL_DEFAULT="$CAMPAIGN_ROOT/round0_screened_candidates.jsonl"
+fi
 POOL_JSONL=${POOL_JSONL:-$POOL_JSONL_DEFAULT}
 QUEUE_DIR="$SHARD_DIR/queue"
 QUEUE_FILE="$QUEUE_DIR/shards.txt"
@@ -172,10 +176,10 @@ SHARD_ARGS=(
 if [[ "$ENFORCE_COVERAGE" == "1" ]]; then
   SHARD_ARGS+=(--enforce-coverage)
 fi
-if [[ "$BACKFILL_FROM_POOL" == "1" ]]; then
-  SHARD_ARGS+=(--backfill-from-pool)
-fi
-if [[ -s "$POOL_JSONL" ]]; then
+# --backfill-from-pool requires --pool-jsonl, so gate both on the pool file existing.
+if [[ "$BACKFILL_FROM_POOL" == "1" && -s "$POOL_JSONL" ]]; then
+  SHARD_ARGS+=(--backfill-from-pool --pool-jsonl "$POOL_JSONL")
+elif [[ -s "$POOL_JSONL" ]]; then
   SHARD_ARGS+=(--pool-jsonl "$POOL_JSONL")
 fi
 

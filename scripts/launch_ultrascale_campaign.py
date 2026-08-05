@@ -38,6 +38,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--budget-ratio", type=float, default=1.0)
     p.add_argument("--per-case", type=int, default=30000)
     p.add_argument("--sampler", default="sobol")
+    p.add_argument("--audit-fraction", type=float, default=1.0, help="Screening bypass: 1.0 sends every enumerated candidate to AC solve. Lower to re-enable selective screening.")
 
     p.add_argument("--cases", nargs="+", default=[])
     p.add_argument("--cases-file", default="")
@@ -61,7 +62,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-switched-branches", type=int, default=3)
     p.add_argument("--max-k", type=int, default=10, help="Maximum simultaneous contingency order K (N-1 through N-K).")
 
-    p.add_argument("--nodes", type=int, default=10)
+    p.add_argument("--nodes", type=int, default=64)
     p.add_argument("--ntasks-per-node", type=int, default=16)
     p.add_argument("--cpus-per-task", type=int, default=1)
     p.add_argument("--time", default="36:00:00")
@@ -100,6 +101,7 @@ def _build_export_payload(args: argparse.Namespace, round_index: int, seed: int,
         "CASES": " ".join(cases),
         "PER_CASE": str(args.per_case),
         "SAMPLER": args.sampler,
+        "AUDIT_FRACTION": str(args.audit_fraction),
         "BUDGET": str(budget),
         "SEED": str(seed),
         "SOLVER_ID": args.solver_id,

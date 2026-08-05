@@ -262,6 +262,128 @@ def _write_attempt(
     return final_dir, run_id
 
 
+# ---------------------------------------------------------------------------
+# Lean shard-aggregated writer (Lustre-friendly training output).
+#
+# The per-attempt directory tree above creates ~40 inodes per candidate (~28
+# dirs + ~11 files), which overwhelms the Lustre metadata server at campaign
+# scale. The functions below instead append one self-contained, training-ready
+# JSON record per solve to a single per-shard ``samples.jsonl`` (~1 file per
+# shard). This folds Tier 1 (no empty dirs), Tier 2 (one aggregated record) and
+# Tier 3 (shard-level container) into a single path used by the campaign map
+# scripts. Appends are line-flushed so a walltime-killed job leaves at most one
+# truncated trailing line, which readers skip; resume is by candidate id.
+# ---------------------------------------------------------------------------
+
+SAMPLE_SCHEMA_VERSION = "1.0"
+
+
+def _shard_samples_path(runs_root: Path) -> Path:
+    return runs_root / "ac_opf" / "samples.jsonl"
+
+
+def _lean_result(result: dict[str, Any]) -> dict[str, Any]:
+    trimmed = dict(result)
+    trimmed.pop("stdout", None)
+    trimmed.pop("stderr", None)
+    return trimmed
+
+
+def _sample_record(
+    candidate: dict[str, Any],
+    case_data: dict[str, Any],
+    result: dict[str, Any],
+    solver_id: str,
+    run_id: str,
+) -> dict[str, Any]:
+    case_id, topology_id, operating_point_id, contingency_id = _candidate_identity(candidate)
+    runtime_meta = result.get("runtime_metadata") or {}
+    wallclock_seconds = runtime_meta.get("wallclock_seconds", result.get("solve_time", result.get("runtime")))
+    return {
+        "schema_version": SAMPLE_SCHEMA_VERSION,
+        "run_id": run_id,
+        "candidate_id": str(candidate.get("candidate_id")),
+        "task": "ac_opf",
+        "case_id": case_id,
+        "topology_id": topology_id,
+        "operating_point_id": operating_point_id,
+        "contingency_set_id": contingency_id,
+        "solver_id": solver_id,
+        "success": bool(result.get("success", False)),
+        "termination_status": str(result.get("termination_status", "unknown")),
+        "objective": result.get("objective"),
+        "solve_time": result.get("solve_time", result.get("runtime")),
+        "wallclock_seconds": wallclock_seconds,
+        "inputs": {"resolved_case": case_data, "candidate": candidate},
+        "result": _lean_result(result),
+        "runtime_metadata": runtime_meta,
+    }
+
+
+def _append_sample(
+    repo_root: Path,
+    runs_root: Path,
+    candidate: dict[str, Any],
+    case_data: dict[str, Any],
+    result: dict[str, Any],
+    solver_id: str,
+) -> tuple[Path, str]:
+    case_id, topology_id, operating_point_id, contingency_id = _candidate_identity(candidate)
+    run_id = f"{case_id}-{topology_id}-{operating_point_id}-{contingency_id}-{solver_id}"
+    record = _sample_record(candidate, case_data, result, solver_id, run_id)
+    samples_path = _shard_samples_path(runs_root)
+    samples_path.parent.mkdir(parents=True, exist_ok=True)
+    with samples_path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record) + "\n")
+        fh.flush()
+    return samples_path, run_id
+
+
+def _loaded_sample_ids(runs_root: Path) -> set[str]:
+    samples_path = _shard_samples_path(runs_root)
+    done: set[str] = set()
+    if not samples_path.exists():
+        return done
+    with samples_path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue  # tolerate a truncated trailing line from a walltime-killed job
+            cid = rec.get("candidate_id")
+            if cid is not None:
+                done.add(str(cid))
+    return done
+
+
+def _count_samples(samples_path: Path) -> int:
+    if not samples_path.exists():
+        return 0
+    count = 0
+    with samples_path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            if line.strip():
+                count += 1
+    return count
+
+
+def _write_shard_manifest(runs_root: Path, report: dict[str, Any]) -> Path:
+    samples_path = _shard_samples_path(runs_root)
+    manifest = {
+        "schema_version": SAMPLE_SCHEMA_VERSION,
+        "samples_file": samples_path.name,
+        "sample_count": _count_samples(samples_path),
+        **report,
+    }
+    out = runs_root / "ac_opf" / "shard_manifest.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    return out
+
+
 def _load_bands(repo_root: Path, config_path: str) -> dict[str, dict[str, float]]:
     p = (repo_root / config_path).resolve()
     yaml = _require_yaml()

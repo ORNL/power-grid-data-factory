@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -23,6 +24,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--per-case", type=int, default=500)
     p.add_argument("--sampler", default="latin_hypercube")
     p.add_argument("--budget", type=int, default=600)
+    p.add_argument("--audit-fraction", type=float, default=0.10, help="Fraction of screening-rejected candidates sampled for AC solve; 1.0 bypasses screening (solve all).")
     p.add_argument("--round-index", type=int, default=0)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--topologies-per-case", type=int, default=6)
@@ -48,6 +50,22 @@ def _run(cmd: list[str], cwd: Path, env: dict[str, str]) -> None:
                 indent=2,
             )
         )
+
+
+def _link_or_copy(src: Path, dst: Path) -> None:
+    # Screening-bypass fast path: expose the enumerated set as the screened pool
+    # without a second multi-GB read+write. Hardlink first (one metadata op, no
+    # data movement), then fall back through symlink to a real copy.
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists() or dst.is_symlink():
+        dst.unlink()
+    try:
+        os.link(src, dst)
+    except OSError:
+        try:
+            dst.symlink_to(src)
+        except OSError:
+            shutil.copyfile(src, dst)
 
 
 def main() -> None:
@@ -114,6 +132,8 @@ def main() -> None:
         str(audit_jsonl),
         "--config",
         args.config,
+        "--audit-fraction",
+        str(args.audit_fraction),
         "--seed",
         str(args.seed),
     ]
@@ -137,7 +157,13 @@ def main() -> None:
 
     _run(create_cmd, repo_root, env)
     _run(enum_cmd, repo_root, env)
-    _run(screen_cmd, repo_root, env)
+    if args.audit_fraction >= 1.0:
+        # Every enumerated candidate is solved, so the screened pool equals the
+        # enumerated set: link instead of re-scanning ~15M rows on Lustre.
+        _link_or_copy(ctg_jsonl, screened_jsonl)
+        print(json.dumps({"ok": True, "screening": "bypassed", "screened_candidates": str(screened_jsonl), "source": str(ctg_jsonl)}, indent=2), flush=True)
+    else:
+        _run(screen_cmd, repo_root, env)
     _run(round_cmd, repo_root, env)
 
     print(
