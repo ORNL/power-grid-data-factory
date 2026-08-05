@@ -38,7 +38,7 @@ def with_scores(base: dict[str, Any], order_k: int, contingency_class: str, base
     out["contingency_class"] = contingency_class
 
     severity_boost = 0.08 * order_k
-    if contingency_class in {"electrically_interacting", "common_corridor", "sequential_n1n1", "cut_set"}:
+    if contingency_class in {"electrically_interacting", "common_corridor", "sequential_n1n1", "sequential_cascade", "cut_set"}:
         severity_boost += 0.10
 
     out["contingency_severity_score"] = min(1.0, float(base_severity) + severity_boost)
@@ -179,6 +179,47 @@ def expand_one(base: dict[str, Any], rng: Random, sampling: Any, repo_root: Path
                 "event_type": "simultaneous",
                 "components": components,
                 "ontology_labels": ["cut_set", "electrically_interacting"],
+                "credibility_source": "synthetic_scenario_assumption",
+            }
+            out.append(row)
+
+    # Sequential cascades of ordered single outages (depth 3..seq_max_len); depth-2
+    # sequences are already covered by the sequential_n1n1 stream above. Off by
+    # default (count 0) so existing enumeration output is unchanged.
+    seq_count = max(0, int(getattr(sampling, "sequential_cascade_per_operating_point", 0)))
+    seq_max_len = int(getattr(sampling, "sequential_max_len", max_k))
+    seq_max_len = max(2, min(seq_max_len, max_k))
+    for length in range(3, seq_max_len + 1):
+        for _ in range(seq_count):
+            components = build_kplus_components(pool, length, rng)
+            if len(components) < 3:
+                continue
+            event_index += 1
+            # The drawn order defines the temporal sequence; a corrective-action
+            # window sits between stages (never after the final trip).
+            stages: list[dict[str, Any]] = []
+            for stage_idx, comp in enumerate(components, start=1):
+                stage: dict[str, Any] = {"index": stage_idx, "type": comp["type"], "id": comp["id"]}
+                if stage_idx < len(components):
+                    stage["corrective_action"] = "redispatch_and_voltage_control"
+                stages.append(stage)
+            depth = len(stages)
+            # Credibility decays with depth but stays above a same-size cut_set
+            # because operators can respond between stages.
+            cred = max(0.0, base_cred - 0.025 * (depth - 2))
+            row = with_scores(base, order_k=depth, contingency_class="sequential_cascade", base_severity=base_sev, base_credibility=cred)
+            row["candidate_id"] = f"{cid}::ctg::{event_index:03d}"
+            row["contingency"] = {
+                "contingency_id": f"ctg_{event_index:06d}",
+                "order": depth,
+                "event_type": "sequential_cascade",
+                "stages": stages,
+                # Endogenous consumers apply the first seed_stage_count stages as the
+                # initiating event and let physics drive the rest; exogenous consumers
+                # apply every stage in order.
+                "seed_stage_count": 1,
+                "allowed_corrective_action": "redispatch_and_voltage_control",
+                "ontology_labels": ["cascade_induced"],
                 "credibility_source": "synthetic_scenario_assumption",
             }
             out.append(row)
