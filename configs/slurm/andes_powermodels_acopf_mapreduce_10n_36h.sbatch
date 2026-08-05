@@ -25,6 +25,12 @@ module load julia/1.8.2 2>/dev/null || true
 PGDF_JULIA_SYSIMAGE=${PGDF_JULIA_SYSIMAGE:-$ROOT/julia/sysimages/andes/pgdf_sysimage.so}
 export PGDF_JULIA_SYSIMAGE
 
+# The sysimage was built against this Lustre depot; ranks MUST use the same one.
+# Without it every rank falls back to ~/.julia on NFS home, and 1024 concurrent
+# Julia startups storm NFS and stall at ~0 CPU. Lustre serves concurrent reads.
+JULIA_DEPOT_PATH=${JULIA_DEPOT_PATH:-$ROOT/.julia_depot_andes_profile}
+export JULIA_DEPOT_PATH
+
 CAMPAIGN_ID=${CAMPAIGN_ID:-pilot_pglib_14_57_118}
 ROUND_INDEX=${ROUND_INDEX:-0}
 CONFIG=${CONFIG:-configs/campaign_default.yaml}
@@ -232,6 +238,8 @@ DONE_DIR="'$DONE_DIR'"
 RESUMING="'$RESUMING'"
 PGDF_JULIA_SYSIMAGE="'$PGDF_JULIA_SYSIMAGE'"
 export PGDF_JULIA_SYSIMAGE
+JULIA_DEPOT_PATH="'$JULIA_DEPOT_PATH'"
+export JULIA_DEPOT_PATH
 TOTAL_SHARDS=$(wc -l < "$QUEUE_FILE")
 
 TASK_ID=${SLURM_PROCID:-0}
