@@ -120,7 +120,7 @@ merged ledgers and round marker.
 ```bash
 cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 sbatch \
-	--export=ALL,CAMPAIGN_ID=ultrascale_60m,ROUND_INDEX=2,RESUME=1,BUDGET=6000000 \
+	--export=ALL,CAMPAIGN_ID=ultrascale_150m,ROUND_INDEX=2,RESUME=1,BUDGET=15000000 \
 	configs/slurm/andes_powermodels_acopf_mapreduce_10n_36h.sbatch
 ```
 
@@ -139,12 +139,12 @@ for unattended completion. See
 cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 # resume just the current round
 PYTHONPATH=src python3.11 scripts/drive_campaign.py \
-	--campaign-id ultrascale_60m --rounds 10 --total-budget 60000000 --set MAX_K=10 \
+	--campaign-id ultrascale_150m --rounds 10 --total-budget 150000000 --set MAX_K=10 \
 	--nodes 64 --ntasks-per-node 16 --cpus-per-task 1 --time 36:00:00
 
 # resume and chain all remaining rounds
 PYTHONPATH=src python3.11 scripts/drive_campaign.py \
-	--campaign-id ultrascale_60m --rounds 10 --total-budget 60000000 --set MAX_K=10 \
+	--campaign-id ultrascale_150m --rounds 10 --total-budget 150000000 --set MAX_K=10 \
 	--nodes 64 --ntasks-per-node 16 --cpus-per-task 1 --time 36:00:00 --chain
 ```
 

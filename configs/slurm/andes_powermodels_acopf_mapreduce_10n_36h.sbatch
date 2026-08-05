@@ -2,7 +2,7 @@
 #SBATCH -J pgdf_campaign_mr
 #SBATCH -A LRN070
 #SBATCH -p batch
-#SBATCH -N 10
+#SBATCH -N 64
 #SBATCH --ntasks-per-node=16
 #SBATCH --cpus-per-task=1
 #SBATCH -t 36:00:00
@@ -29,17 +29,31 @@ CAMPAIGN_ID=${CAMPAIGN_ID:-pilot_pglib_14_57_118}
 ROUND_INDEX=${ROUND_INDEX:-0}
 CONFIG=${CONFIG:-configs/campaign_default.yaml}
 CASES=${CASES:-"pglib_opf_case14_ieee pglib_opf_case57_ieee pglib_opf_case118_ieee"}
-PER_CASE=${PER_CASE:-500}
+# Operating points per case. With screening bypassed (~24 contingencies/op) this
+# gives 3 cases x PER_CASE x ~24 candidates: 20000 -> ~1.44M pool, comfortably
+# above BUDGET so all 1024 ranks stay busy for the full 36h.
+PER_CASE=${PER_CASE:-20000}
 SAMPLER=${SAMPLER:-latin_hypercube}
-BUDGET=${BUDGET:-600}
+# Total AC-OPF solves selected for the round (drained across all tasks). Sized to
+# keep 64 nodes x 16 tasks = 1024 ranks busy for the full 36h even at the fast
+# (~2 min) end of the solve-time range: 1024 * 36h*3600 / 120s ~= 1.1M. Slight
+# overshoot is safe: the shard queue is bounded and RESUME=1 finishes leftovers.
+BUDGET=${BUDGET:-1200000}
 SEED=${SEED:-7}
+# Screening bypass: 1.0 sends every enumerated candidate to AC solve (the audit
+# sample becomes 100% of the pool). Lower it (e.g. 0.10) to re-enable selective
+# screening once the escalation features actually reflect post-contingency risk.
+AUDIT_FRACTION=${AUDIT_FRACTION:-1.0}
 SOLVER_ID=${SOLVER_ID:-powermodels_ac_opf_ipopt_campaign}
 TIMEOUT_S=${TIMEOUT_S:-1200}
 RUNS_ROOT=${RUNS_ROOT:-data/outputs/runs}
 MAX_CANDIDATES=${MAX_CANDIDATES:-0}
 RUN_BOOTSTRAP=${RUN_BOOTSTRAP:-1}
 CONTINUE_ON_ERROR=${CONTINUE_ON_ERROR:-1}
-SHARD_COUNT=${SHARD_COUNT:-${SLURM_NTASKS:-1}}
+# More shards than tasks so the dynamic work-queue hands each rank many small
+# shards instead of one large one; faster ranks pull extra shards, keeping every
+# task busy until walltime instead of idling on load imbalance.
+SHARD_COUNT=${SHARD_COUNT:-$(( ${SLURM_NTASKS:-1} * 8 ))}
 COVERAGE_KEYS=${COVERAGE_KEYS:-dataset,topology_id,operating_regime,contingency_class}
 MIN_PER_BUCKET=${MIN_PER_BUCKET:-1}
 ENFORCE_COVERAGE=${ENFORCE_COVERAGE:-1}
@@ -54,7 +68,7 @@ MAX_K=${MAX_K:-10}
 SEQ_CASCADE_PER_OP=${SEQ_CASCADE_PER_OP:-1}
 SEQ_MAX_LEN=${SEQ_MAX_LEN:-10}
 RESUME=${RESUME:-0}
-BOOTSTRAP_WORKERS=${BOOTSTRAP_WORKERS:-16}
+BOOTSTRAP_WORKERS=${BOOTSTRAP_WORKERS:-32}
 
 printf -v ROUND_PAD "%03d" "$ROUND_INDEX"
 CAMPAIGN_ROOT="$ROOT/data/outputs/campaigns/$CAMPAIGN_ID"
@@ -63,6 +77,10 @@ SHARD_DIR="$CAMPAIGN_ROOT/round_summaries/round_${ROUND_PAD}_shards"
 SHARD_PREFIX="selected"
 SHARD_IDS_FILE="$SHARD_DIR/shard_campaign_ids.txt"
 POOL_JSONL_DEFAULT="$CAMPAIGN_ROOT/round${ROUND_INDEX}_screened_candidates.jsonl"
+# Screening always writes round0_screened_candidates.jsonl regardless of round index.
+if [[ ! -s "$POOL_JSONL_DEFAULT" ]]; then
+  POOL_JSONL_DEFAULT="$CAMPAIGN_ROOT/round0_screened_candidates.jsonl"
+fi
 POOL_JSONL=${POOL_JSONL:-$POOL_JSONL_DEFAULT}
 QUEUE_DIR="$SHARD_DIR/queue"
 QUEUE_FILE="$QUEUE_DIR/shards.txt"
@@ -72,10 +90,23 @@ DONE_DIR="$QUEUE_DIR/done"
 
 mkdir -p "$ROOT/data/scratch/logs"
 
+# --- Lustre layout applied before any files land (setstripe sets the directory
+# default for new files). The per-round bootstrap writes a few multi-GB candidate
+# JSONLs (operating/contingency/selected) plus thousands of tiny shard/sample
+# files. Give the big files a wide stripe for aggregate bandwidth, and keep the
+# small files on a single OST each to avoid spraying the OSTs/MDS with tiny
+# objects and inflating metadata load. ---
+if command -v lfs >/dev/null 2>&1; then
+  mkdir -p "$CAMPAIGN_ROOT" "$SHARD_DIR" "$ROOT/$RUNS_ROOT"
+  lfs setstripe -c 8 "$CAMPAIGN_ROOT" 2>/dev/null || true
+  lfs setstripe -c 1 "$SHARD_DIR" 2>/dev/null || true
+  lfs setstripe -c 1 "$ROOT/$RUNS_ROOT" 2>/dev/null || true
+fi
+
 echo "[$(date -u +%FT%TZ)] JOB=$SLURM_JOB_ID mode=map_reduce campaign_id=$CAMPAIGN_ID round_index=$ROUND_INDEX"
 echo "[$(date -u +%FT%TZ)] config=$CONFIG budget=$BUDGET per_case=$PER_CASE seed=$SEED"
 echo "[$(date -u +%FT%TZ)] contingencies=simultaneous+cascade max_k=$MAX_K seq_cascade_per_op=$SEQ_CASCADE_PER_OP seq_max_len=$SEQ_MAX_LEN"
-echo "[$(date -u +%FT%TZ)] solver_id=$SOLVER_ID timeout_s=$TIMEOUT_S shard_count=$SHARD_COUNT"
+echo "[$(date -u +%FT%TZ)] solver_id=$SOLVER_ID timeout_s=$TIMEOUT_S shard_count=$SHARD_COUNT audit_fraction=$AUDIT_FRACTION"
 echo "[$(date -u +%FT%TZ)] coverage_keys=$COVERAGE_KEYS min_per_bucket=$MIN_PER_BUCKET enforce=$ENFORCE_COVERAGE backfill=$BACKFILL_FROM_POOL"
 
 RESUMING=0
@@ -99,6 +130,7 @@ if [[ "$RESUMING" == "0" && "$RUN_BOOTSTRAP" == "1" ]]; then
     --sequential-cascade-per-operating-point "$SEQ_CASCADE_PER_OP" \
     --sequential-max-len "$SEQ_MAX_LEN" \
     --budget "$BUDGET" \
+    --audit-fraction "$AUDIT_FRACTION" \
     --round-index "$ROUND_INDEX" \
     --seed "$SEED" \
     --workers "$BOOTSTRAP_WORKERS"
@@ -125,10 +157,10 @@ SHARD_ARGS=(
 if [[ "$ENFORCE_COVERAGE" == "1" ]]; then
   SHARD_ARGS+=(--enforce-coverage)
 fi
-if [[ "$BACKFILL_FROM_POOL" == "1" ]]; then
-  SHARD_ARGS+=(--backfill-from-pool)
-fi
-if [[ -s "$POOL_JSONL" ]]; then
+# --backfill-from-pool requires --pool-jsonl, so gate both on the pool file existing.
+if [[ "$BACKFILL_FROM_POOL" == "1" && -s "$POOL_JSONL" ]]; then
+  SHARD_ARGS+=(--backfill-from-pool --pool-jsonl "$POOL_JSONL")
+elif [[ -s "$POOL_JSONL" ]]; then
   SHARD_ARGS+=(--pool-jsonl "$POOL_JSONL")
 fi
 
