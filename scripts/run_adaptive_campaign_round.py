@@ -28,6 +28,17 @@ def _read_jsonl(path: Path) -> list[dict]:
     return rows
 
 
+def _count_lines(path: Path) -> int:
+    count = 0
+    with path.open("rb") as fh:
+        while True:
+            chunk = fh.read(1024 * 1024)
+            if not chunk:
+                break
+            count += chunk.count(b"\n")
+    return count
+
+
 def main() -> None:
     args = parse_args()
     repo_root = Path(__file__).resolve().parents[1]
@@ -39,13 +50,26 @@ def main() -> None:
     )
     campaign.initialize()
 
-    candidates = _read_jsonl((repo_root / args.candidates_jsonl).resolve())
-    summary = campaign.run_round(
-        round_index=args.round_index,
-        candidates=candidates,
-        budget=args.budget,
-        seed=args.seed,
-    )
+    candidates_path = (repo_root / args.candidates_jsonl).resolve()
+    # When the budget covers every candidate, stream selection straight to disk
+    # instead of loading the full (tens-of-GB) candidate set into memory.
+    candidate_count = _count_lines(candidates_path)
+    if args.budget >= candidate_count:
+        summary = campaign.run_round_streaming(
+            round_index=args.round_index,
+            candidates_path=candidates_path,
+            budget=args.budget,
+            seed=args.seed,
+            candidate_count=candidate_count,
+        )
+    else:
+        candidates = _read_jsonl(candidates_path)
+        summary = campaign.run_round(
+            round_index=args.round_index,
+            candidates=candidates,
+            budget=args.budget,
+            seed=args.seed,
+        )
 
     print(json.dumps({"ok": True, "campaign_id": args.campaign_id, "summary": summary}, indent=2))
 
