@@ -155,14 +155,27 @@ SHARD_ARGS=(
   --score-key "$SCORE_KEY"
   --stream
 )
-if [[ "$ENFORCE_COVERAGE" == "1" ]]; then
-  SHARD_ARGS+=(--enforce-coverage)
+# Full-budget selection (every candidate selected) already covers every bucket,
+# so the pool universe scan + backfill are redundant; skip them and the full read
+# of the 30+ GB pool JSONL they require.
+ROUND_SUMMARY="$CAMPAIGN_ROOT/round_summaries/round_${ROUND_PAD}.json"
+FULL_BUDGET=0
+if [[ -s "$ROUND_SUMMARY" ]]; then
+  FULL_BUDGET=$(python3.11 -c "import json,sys;d=json.load(open(sys.argv[1]));cc=int(d.get('candidate_count',0));sc=int(d.get('selected_count',-1));print(1 if cc>0 and cc==sc else 0)" "$ROUND_SUMMARY" 2>/dev/null || echo 0)
 fi
-# --backfill-from-pool requires --pool-jsonl, so gate both on the pool file existing.
-if [[ "$BACKFILL_FROM_POOL" == "1" && -s "$POOL_JSONL" ]]; then
-  SHARD_ARGS+=(--backfill-from-pool --pool-jsonl "$POOL_JSONL")
-elif [[ -s "$POOL_JSONL" ]]; then
-  SHARD_ARGS+=(--pool-jsonl "$POOL_JSONL")
+if [[ "$FULL_BUDGET" == "1" ]]; then
+  echo "[$(date -u +%FT%TZ)] full-budget selection detected; skipping pool universe scan + backfill (coverage complete by construction)"
+  SHARD_ARGS+=(--full-budget)
+else
+  if [[ "$ENFORCE_COVERAGE" == "1" ]]; then
+    SHARD_ARGS+=(--enforce-coverage)
+  fi
+  # --backfill-from-pool requires --pool-jsonl, so gate both on the pool file existing.
+  if [[ "$BACKFILL_FROM_POOL" == "1" && -s "$POOL_JSONL" ]]; then
+    SHARD_ARGS+=(--backfill-from-pool --pool-jsonl "$POOL_JSONL")
+  elif [[ -s "$POOL_JSONL" ]]; then
+    SHARD_ARGS+=(--pool-jsonl "$POOL_JSONL")
+  fi
 fi
 
 if [[ "$RESUMING" == "0" ]]; then
