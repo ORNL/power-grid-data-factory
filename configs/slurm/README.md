@@ -39,6 +39,15 @@ sbatch \
 - `BOOTSTRAP_WORKERS` (default: `16`, parallel workers for contingency enumeration during bootstrap)
 - `MAX_CANDIDATES` (default: `0`, meaning no cap)
 - `CONTINUE_ON_ERROR` (`1` to continue solving candidates after failures)
+- `CAMPAIGN_FULL_LEDGERS` (default: `0`; `1` restores the full per-candidate
+  `candidate_registry` and `acquisition_decisions` ledgers. Leave at `0` at scale
+  — the reducer does not read them, and at ~15M candidates/round they add ~75 GB
+  and a ~3× memory peak. See [../../docs/resumable_campaigns.md](../../docs/resumable_campaigns.md).)
+
+> Submit from a clean shell (`unset PYTHONUSERBASE PYTHONNOUSERSITE`). Do **not**
+> `module load python/3.7-anaconda3` first: `PYTHONUSERBASE` leaks via
+> `--export=ALL` and makes compute-node `python3.11` fail on `import yaml`.
+
 
 ### Reusing Existing Round Selection
 
@@ -54,6 +63,13 @@ parallel map/reduce variant:
 2. Deterministic sharding of selected candidates, with optional coverage enforcement and pool-based backfill.
 3. Parallel shard execution with dynamic shard pickup (workers claim next unfinished shard when they complete).
 4. Deterministic reducer merge into the target campaign ledgers.
+
+The map `srun` requests `--signal=USR1@120`, so each shard's writer flushes and
+`fsync`s its `samples.jsonl` ~120 s before the wall clock (and again on the
+automatic SIGTERM before SIGKILL). Combined with the keep-open shard writer this
+holds sample loss on a walltime kill to ~0 lines. See
+[../../docs/resumable_campaigns.md](../../docs/resumable_campaigns.md) for the
+HPC scale and I/O performance details.
 
 ### Submit Example (Map/Reduce)
 

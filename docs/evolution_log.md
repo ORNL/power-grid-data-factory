@@ -35,6 +35,16 @@ Copy this block for each update:
 - Related files: docs/adaptive_campaign_strategy.md, docs/scripts_reference.md, scripts/bootstrap_adaptive_campaign.py, scripts/run_adaptive_campaign_round.py, scripts/run_campaign_ac_opf_round.py
 - Related run/campaign ids: pilot_pglib_14_57_118
 
+## 2026-08-05 - HPC-aware scale, I/O, and walltime-resilience hardening
+
+- Change: Removed two hidden `O(n²)` hot paths and cut Lustre metadata pressure for 150M-scale rounds. (1) `sample_unit_vector` now draws Latin-hypercube strata via an affine-cipher bijection `(a_d·idx+b_d) mod total` (`_coprime_multiplier` + SplitMix64 `_mix64`) in `O(1)`/sample instead of reshuffling a length-`total` permutation per call; legacy path preserved as `sample_unit_vector_legacy`. (2) `run_campaign_round` records decisions via a `candidate_id → record` dict lookup instead of an `O(n²)` linear scan. (3) Ledgers are slim by default — one aggregate decision row/round and `candidate_registry` skipped — with `CAMPAIGN_FULL_LEDGERS=1` to restore full per-candidate ledgers. (4) `SampleSink` keeps one `samples.jsonl` handle open per shard (collapsing ~15M `open+write+close`/round to ~8192), flushing every 200 records. (5) `SampleSink` flushes+`fsync`s on Slurm walltime signals: SIGTERM (automatic, before SIGKILL, then terminates) and SIGUSR1 (early warning via map `srun --signal=USR1@120`, keeps solving); picker `bash` uses `trap 'true' USR1` to survive the warning.
+- Why: At `PER_CASE=210000` × 3 cases × 24 contingencies (~15M candidates/round) the `O(n²)` sampler and selection scans stalled rounds before any solve, the duplicated ledgers risked OOM on 230 GB nodes, and per-sample file reopen saturated Lustre metadata; walltime kills could lose buffered samples.
+- Expected data impact: `samples.jsonl` output is byte-identical to the prior writer; slim mode omits `candidate_registry` and writes one aggregate `acquisition_decisions` row/round (neither is read by the reducer); resume is unaffected (`_loaded_sample_ids` tolerates a truncated trailing line). No change to solved-state records or reduce output.
+- Rollback note: Revert to `sample_unit_vector_legacy`, restore the linear decision scan, set `CAMPAIGN_FULL_LEDGERS=1` (or revert the gate), use `_append_sample` in the AC map loop instead of `SampleSink`, and drop `--signal=USR1@120` / the `trap 'true' USR1` line from the sbatch template.
+- Operational note: Submit from a clean shell (`unset PYTHONUSERBASE PYTHONNOUSERSITE`); do not `module load python/3.7-anaconda3` before `sbatch`/`drive_campaign.py`, or `PYTHONUSERBASE` leaks via `--export=ALL` and compute-node `python3.11` fails on `import yaml`.
+- Related files: src/grid_data_factory/scenarios/operating_point_generation.py, src/grid_data_factory/campaigns/campaign_round.py, src/grid_data_factory/campaigns/round_runner.py, scripts/run_campaign_ac_opf_round.py, configs/slurm/andes_powermodels_acopf_mapreduce_10n_36h.sbatch, docs/resumable_campaigns.md
+- Related run/campaign ids: ultrascale_150m
+
 ## 2026-08-04 - Slurm global scheduler switched to campaign-round dispatch
 
 - Change: Updated Andes Slurm AC-OPF template to run adaptive campaign round dispatch (optional bootstrap + selected-candidate AC execution) instead of static MATPOWER file sweeping.

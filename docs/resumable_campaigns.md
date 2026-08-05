@@ -249,6 +249,107 @@ Note: the bootstrap stage runs on the batch head node. The contingency
 enumeration sub-stage is parallelized across cores (`BOOTSTRAP_WORKERS`, default
 16); operating-point generation, screening, and selection remain single-process.
 
+## HPC scale and I/O performance
+
+At 150M-solve scale a single round processes ~15M candidates across ~8192
+shards on 1024 ranks. Two classes of problem dominate at that size: **hidden
+super-linear work** (an `O(n²)` step that is invisible at 10³ but fatal at 10⁷)
+and **Lustre metadata pressure** (millions of tiny file operations). The
+following features keep both bounded. Each was validated in isolation before use.
+
+### O(1) unit-cube sampling
+
+Operating points are drawn by sampling the unit hypercube in
+[src/grid_data_factory/scenarios/operating_point_generation.py](../src/grid_data_factory/scenarios/operating_point_generation.py).
+The original `latin_hypercube` path rebuilt and shuffled a length-`total`
+permutation **on every sample**, i.e. `O(total²)` per case — at
+`PER_CASE=210000` this alone stalled the round before any solve began.
+
+`sample_unit_vector` now generates each stratum with an **affine-cipher
+permutation**: `stratum = (a_d · idx + b_d) mod total`, with `a_d` chosen
+coprime to `total` (via `_coprime_multiplier` + the SplitMix64 finalizer
+`_mix64`). This is a bijection over `[0, total)` — true Latin-hypercube
+stratification (one sample per stratum) — computed in **`O(1)` per sample** with
+no per-call allocation, and it is deterministic and independent of
+`PYTHONHASHSEED`. The value is `(stratum + rng.random()) / total`. The original
+implementation is preserved as `sample_unit_vector_legacy` (carrying a warning
+docstring) for reference and tests. Measured ~43× faster at `N=4000` with the
+gap growing linearly; ~6.7 s/case at `PER_CASE=210000`.
+
+### O(1) selection bookkeeping
+
+`run_campaign_round` in
+[src/grid_data_factory/campaigns/campaign_round.py](../src/grid_data_factory/campaigns/campaign_round.py)
+records a decision per candidate. It previously matched each selected candidate
+back to its record with a linear scan (`next(x for x in selected …)`), an
+`O(n²)` pattern over the selected set. It now builds a `candidate_id → record`
+dictionary once and looks up in `O(1)`, so decision recording is linear in the
+candidate count.
+
+### Slim ledgers by default
+
+Two ledgers — `candidate_registry` and `acquisition_decisions` — previously
+duplicated the **full** ~15M-candidate set every round (~75 GB) and built a
+15M-row decision list alongside the candidate and selected lists, giving a ~3×
+memory peak that risked OOM on a 230 GB node. Neither ledger is read by
+[reduce_campaign_shards.py](../scripts/reduce_campaign_shards.py).
+
+By default the round now writes a single **aggregate** decision row
+(round index, candidate/selected counts, per-queue selection counts, seed) and
+**skips** `candidate_registry` entirely. Set `CAMPAIGN_FULL_LEDGERS=1` to restore
+the full per-candidate ledgers when doing a detailed audit.
+
+### Keep-open shard writer (Lustre metadata relief)
+
+Each shard streams its solved records to one `ac_opf/samples.jsonl` file (plus a
+`shard_manifest.json`); the per-case output is already aggregated, so the shard
+count stays at ~8192/round rather than millions. The remaining metadata
+stressor was the **writer itself**: the legacy `_append_sample` reopened the
+file (`open(append) → write → close`) once per solved case, i.e. ~15M Lustre
+metadata round-trips per round.
+
+`SampleSink` in
+[src/grid_data_factory/campaigns/round_runner.py](../src/grid_data_factory/campaigns/round_runner.py)
+holds **one open handle per shard** for the shard's lifetime, collapsing ~15M
+opens/round to ~8192. It flushes every 200 records so an abrupt kill loses at
+most that many un-flushed lines, and `_loaded_sample_ids` tolerates a truncated
+trailing line, so resume stays correct. Output is byte-for-byte identical to the
+legacy writer. `_append_sample` is retained for the ExaGO path and tests; only
+the PowerModels AC map path uses the sink.
+
+### Walltime-signal flushing
+
+`SampleSink` additionally drains its buffer to **~0 lost lines** when a job runs
+out of wall clock, via two signal handlers:
+
+- **SIGTERM** — always sent by Slurm before the final `SIGKILL` (grace period
+  `KillWait`). The handler flushes and `fsync`s, then chains to the previous or
+  default handler so the task still terminates normally. This is automatic and
+  requires no configuration.
+- **SIGUSR1** — an *earlier* warning. The map `srun` requests
+  `--signal=USR1@120`, so `slurmstepd` signals each task's process group 120 s
+  before the wall clock; the handler flushes and `fsync`s but **keeps solving**.
+  The shard-picker `bash` uses `trap 'true' USR1` so the loop survives the
+  warning (children reset `USR1` to a catchable default, then install the Python
+  handler).
+
+Handlers are restored on `close()`, and installation is silently skipped when
+the sink is created off the main thread.
+
+### Clean-environment job submission
+
+The compute-node interpreter is `/usr/bin/python3.11`, and `PyYAML` lives in the
+default user site (`~/.local/lib/python3.11/site-packages`). Do **not**
+`module load python/3.7-anaconda3` before `sbatch`/`drive_campaign.py`: it sets
+`PYTHONUSERBASE`, which leaks to the compute nodes through `sbatch --export=ALL`
+and makes `python3.11` miss `yaml`, so every task dies immediately on
+`import yaml`. Submit from a clean shell:
+
+```bash
+unset PYTHONUSERBASE PYTHONNOUSERSITE
+PYTHONPATH=src python3.11 scripts/drive_campaign.py …
+```
+
 ## Typical end-to-end flow
 
 1. Launch the campaign (bootstrap the first round on the cluster, or plan rounds
