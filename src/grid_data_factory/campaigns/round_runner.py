@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import signal
 from pathlib import Path
 from typing import Any
 
@@ -348,6 +350,11 @@ class SampleSink:
     ``flush_every`` records so a walltime-killed job loses at most that many
     un-flushed lines; ``_loaded_sample_ids`` already tolerates a truncated
     trailing line, so resume stays correct.
+
+    As an extra safeguard we flush on Slurm's walltime signals: SIGUSR1 (the
+    early warning from ``--signal=USR1@<sec>``, after which we keep running) and
+    SIGTERM (sent before the final SIGKILL, after which we terminate normally).
+    This drains the buffer down to ~0 un-flushed lines before the kill.
     """
 
     def __init__(self, runs_root: Path, solver_id: str, flush_every: int = 200) -> None:
@@ -357,6 +364,41 @@ class SampleSink:
         self._flush_every = max(1, int(flush_every))
         self._since_flush = 0
         self._fh = self.path.open("a", encoding="utf-8")
+        self._prev_handlers: dict[int, Any] = {}
+        self._install_signal_flush()
+
+    def _install_signal_flush(self) -> None:
+        # Signal handlers can only be set from the main thread; skip otherwise.
+        for sig, handler in ((signal.SIGUSR1, self._on_warning), (signal.SIGTERM, self._on_terminate)):
+            try:
+                self._prev_handlers[sig] = signal.signal(sig, handler)
+            except (ValueError, OSError, AttributeError):
+                pass
+
+    def _safe_flush(self) -> None:
+        try:
+            if self._fh is not None and not self._fh.closed:
+                self._fh.flush()
+                os.fsync(self._fh.fileno())
+                self._since_flush = 0
+        except Exception:
+            pass
+
+    def _on_warning(self, signum: int, frame: Any) -> None:
+        # Early walltime warning: drain the buffer but keep solving.
+        self._safe_flush()
+
+    def _on_terminate(self, signum: int, frame: Any) -> None:
+        # Imminent kill: drain the buffer, then let normal termination proceed.
+        self._safe_flush()
+        prev = self._prev_handlers.get(signum)
+        if callable(prev):
+            prev(signum, frame)
+        elif prev == signal.SIG_IGN:
+            return
+        else:
+            signal.signal(signum, signal.SIG_DFL)
+            os.kill(os.getpid(), signum)
 
     def append(self, candidate: dict[str, Any], case_data: dict[str, Any], result: dict[str, Any]) -> tuple[Path, str]:
         case_id, topology_id, operating_point_id, contingency_id = _candidate_identity(candidate)
@@ -369,10 +411,19 @@ class SampleSink:
             self._since_flush = 0
         return self.path, run_id
 
+    def _restore_signal_handlers(self) -> None:
+        for sig, prev in self._prev_handlers.items():
+            try:
+                signal.signal(sig, prev)
+            except (ValueError, OSError, TypeError):
+                pass
+        self._prev_handlers = {}
+
     def close(self) -> None:
         if self._fh is not None and not self._fh.closed:
             self._fh.flush()
             self._fh.close()
+        self._restore_signal_handlers()
 
     def __enter__(self) -> "SampleSink":
         return self

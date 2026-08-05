@@ -190,8 +190,13 @@ fi
 
 echo "[$(date -u +%FT%TZ)] Starting map stage with srun tasks=${SLURM_NTASKS}"
 
-srun --ntasks="${SLURM_NTASKS}" --nodes="${SLURM_JOB_NUM_NODES}" bash -lc '
+# --signal=USR1@120: slurmstepd signals each task's process group 120s before
+# the walltime, so python's SampleSink flushes early (SIGTERM before SIGKILL is
+# the automatic backstop). The picker bash traps USR1 as a no-op to survive the
+# warning; children reset it to default, then install their own handler.
+srun --ntasks="${SLURM_NTASKS}" --nodes="${SLURM_JOB_NUM_NODES}" --signal=USR1@120 bash -lc '
 set -euo pipefail
+trap '"'"'true'"'"' USR1
 ROOT="'$ROOT'"
 CAMPAIGN_ID="'$CAMPAIGN_ID'"
 ROUND_INDEX="'$ROUND_INDEX'"
