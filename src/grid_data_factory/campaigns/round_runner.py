@@ -339,6 +339,48 @@ def _append_sample(
     return samples_path, run_id
 
 
+class SampleSink:
+    """Keep a shard's ``samples.jsonl`` handle open for the shard's lifetime.
+
+    ``_append_sample`` reopens the file (``open(append)+write+close``) once per
+    solved case, i.e. ~15M MDS round-trips/round on Lustre. Holding a single
+    handle collapses that to one ``open`` per shard. We flush every
+    ``flush_every`` records so a walltime-killed job loses at most that many
+    un-flushed lines; ``_loaded_sample_ids`` already tolerates a truncated
+    trailing line, so resume stays correct.
+    """
+
+    def __init__(self, runs_root: Path, solver_id: str, flush_every: int = 200) -> None:
+        self.path = _shard_samples_path(runs_root)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._solver_id = solver_id
+        self._flush_every = max(1, int(flush_every))
+        self._since_flush = 0
+        self._fh = self.path.open("a", encoding="utf-8")
+
+    def append(self, candidate: dict[str, Any], case_data: dict[str, Any], result: dict[str, Any]) -> tuple[Path, str]:
+        case_id, topology_id, operating_point_id, contingency_id = _candidate_identity(candidate)
+        run_id = f"{case_id}-{topology_id}-{operating_point_id}-{contingency_id}-{self._solver_id}"
+        record = _sample_record(candidate, case_data, result, self._solver_id, run_id)
+        self._fh.write(json.dumps(record) + "\n")
+        self._since_flush += 1
+        if self._since_flush >= self._flush_every:
+            self._fh.flush()
+            self._since_flush = 0
+        return self.path, run_id
+
+    def close(self) -> None:
+        if self._fh is not None and not self._fh.closed:
+            self._fh.flush()
+            self._fh.close()
+
+    def __enter__(self) -> "SampleSink":
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        self.close()
+
+
 def _loaded_sample_ids(runs_root: Path) -> set[str]:
     samples_path = _shard_samples_path(runs_root)
     done: set[str] = set()

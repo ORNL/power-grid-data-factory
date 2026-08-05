@@ -21,6 +21,7 @@ try:
         _read_jsonl,
         _resolve_case_file,
         _write_shard_manifest,
+        SampleSink,
     )
     from grid_data_factory.constraints.active_sets import build_active_constraint_signature
     from grid_data_factory.constraints.coverage_ledger import update_active_constraint_ledger
@@ -49,6 +50,7 @@ except ModuleNotFoundError:
         _read_jsonl,
         _resolve_case_file,
         _write_shard_manifest,
+        SampleSink,
     )
     from grid_data_factory.constraints.active_sets import build_active_constraint_signature
     from grid_data_factory.constraints.coverage_ledger import update_active_constraint_ledger
@@ -116,6 +118,9 @@ def main() -> None:
 
     done_ids = _loaded_sample_ids(runs_root) if args.resume else set()
 
+    # One open handle for the whole shard instead of reopening per sample.
+    sink = SampleSink(runs_root, args.solver_id)
+
     for cand in candidates:
         case_id = str(cand.get("case_id"))
         case_family = grid_family_for(repo_root, case_id)
@@ -145,7 +150,7 @@ def main() -> None:
             case_data = apply_contingency(case_data, cand.get("contingency"))
 
             result = adapter.solve_ac_opf(case_data, options={"timeout_s": args.timeout_s})
-            samples_path, run_id = _append_sample(repo_root, runs_root, cand, case_data, result, args.solver_id)
+            samples_path, run_id = sink.append(cand, case_data, result)
             result["_run_id"] = run_id
 
             margins = _build_margins(case_data, result)
@@ -222,6 +227,8 @@ def main() -> None:
             )
             if not args.continue_on_error:
                 break
+
+    sink.close()
 
     append_parquet_rows(campaign_root / "diversity_ledger.parquet", diversity_rows)
     append_parquet_rows(campaign_root / "active_constraint_ledger.parquet", active_ledger_rows)
