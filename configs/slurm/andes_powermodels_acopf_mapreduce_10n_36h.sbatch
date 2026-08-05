@@ -50,6 +50,8 @@ MAX_FAILURE_FRACTION=${MAX_FAILURE_FRACTION:-0.5}
 TOPOLOGIES_PER_CASE=${TOPOLOGIES_PER_CASE:-6}
 MAX_SWITCHED_BRANCHES=${MAX_SWITCHED_BRANCHES:-3}
 MAX_K=${MAX_K:-10}
+SEQ_CASCADE_PER_OP=${SEQ_CASCADE_PER_OP:-0}
+SEQ_MAX_LEN=${SEQ_MAX_LEN:-10}
 RESUME=${RESUME:-0}
 BOOTSTRAP_WORKERS=${BOOTSTRAP_WORKERS:-16}
 
@@ -92,6 +94,8 @@ if [[ "$RESUMING" == "0" && "$RUN_BOOTSTRAP" == "1" ]]; then
     --topologies-per-case "$TOPOLOGIES_PER_CASE" \
     --max-switched-branches "$MAX_SWITCHED_BRANCHES" \
     --max-k "$MAX_K" \
+    --sequential-cascade-per-operating-point "$SEQ_CASCADE_PER_OP" \
+    --sequential-max-len "$SEQ_MAX_LEN" \
     --budget "$BUDGET" \
     --round-index "$ROUND_INDEX" \
     --seed "$SEED" \

@@ -28,6 +28,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--topologies-per-case", type=int, default=6)
     p.add_argument("--max-switched-branches", type=int, default=3)
     p.add_argument("--max-k", type=int, default=10)
+    p.add_argument("--sequential-cascade-per-operating-point", type=int, default=0, help="Ordered sequential cascades per depth (0 disables cascades).")
+    p.add_argument("--sequential-max-len", type=int, default=10, help="Maximum sequential cascade depth; capped at --max-k.")
     p.add_argument("--workers", type=int, default=1, help="Parallel workers for the enumeration stage (0=all cores).")
     return p.parse_args()
 
@@ -91,6 +93,10 @@ def main() -> None:
         str(ctg_jsonl),
         "--max-k",
         str(args.max_k),
+        "--sequential-cascade-per-operating-point",
+        str(args.sequential_cascade_per_operating_point),
+        "--sequential-max-len",
+        str(args.sequential_max_len),
         "--seed",
         str(args.seed),
         "--workers",
