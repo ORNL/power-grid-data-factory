@@ -304,6 +304,19 @@ the candidate count keep the full multi-queue strategy unchanged. To hit the
 fast path, keep the per-round budget at or above the enumerated candidate count
 (`PER_CASE × cases × contingencies_per_op`).
 
+#### Streaming full-budget selection
+
+Even with the fast path above, `run_adaptive_campaign_round.py` still loaded the
+entire screened candidate JSONL into a list to pass to the selector — ~170 GB at
+15M candidates, plus a full `dict()` copy inside `assign_selection_reason`. When
+the budget covers every candidate it now counts the input lines cheaply and calls
+`run_campaign_round_streaming`, which reads the screened JSONL line-by-line and
+writes the selected JSONL in place (adding the selection fields), never holding
+the full set. Portfolio limits are enforced with running per-bucket counters
+instead of the `O(n^2)` scan over the growing selected list. Peak memory drops
+from ~170 GB to roughly flat. Budgets below the candidate count keep the ranked
+in-memory path.
+
 ### Streaming shard split
 
 [scripts/shard_selected_candidates.py](../scripts/shard_selected_candidates.py)
