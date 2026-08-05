@@ -50,7 +50,8 @@ MAX_FAILURE_FRACTION=${MAX_FAILURE_FRACTION:-0.5}
 TOPOLOGIES_PER_CASE=${TOPOLOGIES_PER_CASE:-6}
 MAX_SWITCHED_BRANCHES=${MAX_SWITCHED_BRANCHES:-3}
 MAX_K=${MAX_K:-10}
-SEQ_CASCADE_PER_OP=${SEQ_CASCADE_PER_OP:-0}
+# Cascades on by default alongside the always-on simultaneous N-1/N-2/N-k streams: mixed dataset.
+SEQ_CASCADE_PER_OP=${SEQ_CASCADE_PER_OP:-1}
 SEQ_MAX_LEN=${SEQ_MAX_LEN:-10}
 RESUME=${RESUME:-0}
 BOOTSTRAP_WORKERS=${BOOTSTRAP_WORKERS:-16}
@@ -73,6 +74,7 @@ mkdir -p "$ROOT/data/scratch/logs"
 
 echo "[$(date -u +%FT%TZ)] JOB=$SLURM_JOB_ID mode=map_reduce campaign_id=$CAMPAIGN_ID round_index=$ROUND_INDEX"
 echo "[$(date -u +%FT%TZ)] config=$CONFIG budget=$BUDGET per_case=$PER_CASE seed=$SEED"
+echo "[$(date -u +%FT%TZ)] contingencies=simultaneous+cascade max_k=$MAX_K seq_cascade_per_op=$SEQ_CASCADE_PER_OP seq_max_len=$SEQ_MAX_LEN"
 echo "[$(date -u +%FT%TZ)] solver_id=$SOLVER_ID timeout_s=$TIMEOUT_S shard_count=$SHARD_COUNT"
 echo "[$(date -u +%FT%TZ)] coverage_keys=$COVERAGE_KEYS min_per_bucket=$MIN_PER_BUCKET enforce=$ENFORCE_COVERAGE backfill=$BACKFILL_FROM_POOL"
 
