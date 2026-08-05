@@ -57,7 +57,18 @@ def _lhs_value(position: int, total: int, rng: Random) -> float:
     return lo + (hi - lo) * rng.random()
 
 
-def sample_unit_vector(dim: int, idx: int, total: int, sampler: str, rng: Random) -> list[float]:
+def sample_unit_vector_legacy(dim: int, idx: int, total: int, sampler: str, rng: Random) -> list[float]:
+    """Original sampler. Kept for reference/reproducibility of earlier runs.
+
+    WARNING (computational complexity): the ``latin_hypercube`` branch below
+    rebuilds and shuffles a fresh permutation of size ``total`` on EVERY call.
+    Because ``sample_unit_vector`` is invoked once per operating point and
+    ``total`` equals ``per_case``, the cost to generate a full batch is
+    O(total) work per point x total points = O(total^2). At ``per_case`` in the
+    hundreds this is negligible, but at ``per_case = 210_000`` it explodes to
+    ~4.4e10 Python-level operations per case and dominates the whole bootstrap
+    (hours per round). Prefer :func:`sample_unit_vector` (O(1) in ``total``).
+    """
     if sampler == "sobol":
         primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41]
         return [_halton(idx + 1, primes[d % len(primes)]) for d in range(dim)]
@@ -73,9 +84,95 @@ def sample_unit_vector(dim: int, idx: int, total: int, sampler: str, rng: Random
         wave = 0.5 + 0.5 * math.sin(2.0 * math.pi * t)
         return [min(0.999, max(0.001, wave + (rng.random() - 0.5) * 0.08)) for _ in range(dim)]
 
+    # O(total) per call because of the allocation + shuffle -> O(total^2) per batch.
     perm = list(range(total))
     rng.shuffle(perm)
     return [_lhs_value((perm[(idx + d) % total]), total, rng) for d in range(dim)]
+
+
+def _mix64(x: int) -> int:
+    """SplitMix64 finalizer: a fast, deterministic, process-independent hash.
+
+    Runs in O(1) (a fixed number of 64-bit integer ops) and does NOT depend on
+    ``PYTHONHASHSEED``, so the permutation it drives is reproducible across
+    processes/nodes -- essential for a distributed campaign.
+    """
+    x &= 0xFFFFFFFFFFFFFFFF
+    x = ((x ^ (x >> 30)) * 0xBF58476D1CE4E5B9) & 0xFFFFFFFFFFFFFFFF
+    x = ((x ^ (x >> 27)) * 0x94D049BB133111EB) & 0xFFFFFFFFFFFFFFFF
+    return x ^ (x >> 31)
+
+
+def _coprime_multiplier(seed: int, total: int) -> int:
+    """Return a multiplier ``a`` coprime with ``total``.
+
+    With ``gcd(a, total) == 1`` the affine map ``i -> (a*i + b) mod total`` is a
+    bijection (an "affine cipher") over ``[0, total)`` -- i.e. a full permutation
+    -- which is exactly what a Latin-hypercube design needs (one sample per
+    stratum, no collisions).
+
+    Complexity: ``total`` has O(log total) distinct prime factors, so a coprime
+    is found within O(log total) probes in the worst case and O(1) on average;
+    each gcd probe is O(log total). This runs a constant number of times per
+    dimension and is independent of the batch size.
+    """
+    if total <= 1:
+        return 1
+    a = _mix64(seed) % total
+    if a == 0:
+        a = 1
+    while math.gcd(a, total) != 1:
+        a = (a + 1) % total
+        if a == 0:
+            a = 1
+    return a
+
+
+def sample_unit_vector(dim: int, idx: int, total: int, sampler: str, rng: Random) -> list[float]:
+    """Draw a ``dim``-length unit-cube vector for operating point ``idx``.
+
+    Computational complexity: O(dim) per call and, crucially, O(1) in ``total``.
+    Generating a full batch is therefore O(dim * total) -- linear in the number
+    of operating points -- versus the O(total^2) of
+    :func:`sample_unit_vector_legacy`. This is what makes large ``per_case``
+    values (e.g. 210_000) feasible: the whole bootstrap stays proportional to
+    the amount of data produced instead of its square.
+
+    The ``latin_hypercube`` design is realised without ever materialising a
+    size-``total`` permutation array. For each dimension ``d`` we build an
+    affine permutation ``stratum(idx) = (a_d * idx + b_d) mod total`` whose
+    coefficients are derived deterministically from ``(d, total)`` via
+    :func:`_mix64` (NOT from the shared ``rng`` stream, so the permutation is
+    stable across the whole batch and reproducible across processes). Because
+    ``a_d`` is coprime with ``total``, ``idx`` sweeping ``[0, total)`` hits every
+    stratum exactly once -- the defining LHS property. ``rng`` only adds
+    intra-stratum jitter, matching the legacy behaviour.
+    """
+    if sampler == "sobol":
+        primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41]
+        return [_halton(idx + 1, primes[d % len(primes)]) for d in range(dim)]
+
+    if sampler == "stratified":
+        block = max(1, int(math.sqrt(total)))
+        row = idx // block
+        base = (row + 0.5) / block
+        return [min(0.999, max(0.001, base + (rng.random() - 0.5) * 0.1)) for _ in range(dim)]
+
+    if sampler == "time_series":
+        t = idx / max(total - 1, 1)
+        wave = 0.5 + 0.5 * math.sin(2.0 * math.pi * t)
+        return [min(0.999, max(0.001, wave + (rng.random() - 0.5) * 0.08)) for _ in range(dim)]
+
+    # latin_hypercube (default): O(dim) per call, O(1) in `total` -- no shuffle.
+    if total <= 1:
+        return [min(0.999, max(0.001, rng.random())) for _ in range(dim)]
+    out: list[float] = []
+    for d in range(dim):
+        a = _coprime_multiplier(_mix64(total * 0x9E3779B1 + d), total)
+        b = _mix64(total + d * 0x85EBCA77) % total
+        stratum = (a * idx + b) % total
+        out.append((stratum + rng.random()) / total)
+    return out
 
 
 def _lin(lo: float, hi: float, x: float) -> float:
