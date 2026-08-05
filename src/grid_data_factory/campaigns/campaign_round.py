@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 import json
+import os
 
 from grid_data_factory.acquisition.portfolio_constraints import PortfolioConstraints
 from grid_data_factory.acquisition.selector import select_ac_evaluations
@@ -27,37 +28,54 @@ def run_campaign_round(
         audit_seed=audit_seed,
     )
 
-    # Map candidate_id -> selected row ONCE (O(len(selected))). Looking the match
-    # up per candidate with next()/scan would be O(len(candidates)*len(selected))
-    # ~ O(n^2); at budget=15M that is ~2e14 ops (weeks). The dict makes it O(n).
-    selected_by_id = {str(x.get("candidate_id")): x for x in selected}
-    decisions = []
-    for cand in candidates:
-        cid = str(cand.get("candidate_id"))
-        match = selected_by_id.get(cid)
-        picked = match is not None
-        decisions.append(
-            {
-                "round_index": round_index,
-                "candidate_id": cid,
-                "selected": picked,
-                "primary_selection_reason": match.get("selection_reason") if match else "not_selected",
-                "selection_queue": match.get("selection_queue") if match else "none",
-                "scores_at_selection_time": {
-                    "novelty_score": cand.get("novelty_score"),
-                    "active_constraint_score": cand.get("active_constraint_score"),
-                    "security_boundary_score": cand.get("security_boundary_score"),
-                    "contingency_severity_score": cand.get("contingency_severity_score"),
-                    "physical_credibility_score": cand.get("physical_credibility_score"),
-                    "model_uncertainty_score": cand.get("model_uncertainty_score"),
-                    "estimated_compute_cost": cand.get("estimated_compute_cost"),
-                },
-                "random_seed": audit_seed,
-            }
+    # Ledger writes. Default (slim) writes one compact aggregate row per round.
+    # The full per-candidate audit trail duplicates the already-on-disk screened
+    # candidate JSONL ~1:1 (tens of GB/round) and, worse, building the 15M-row
+    # `decisions` list next to `candidates` and `selected` is a 3x in-memory peak
+    # (OOM risk at budget=15M). Nothing downstream (reduce stage) reads these two
+    # ledgers. Set CAMPAIGN_FULL_LEDGERS=1 to restore the full per-candidate trail.
+    full_ledgers = os.environ.get("CAMPAIGN_FULL_LEDGERS", "0").strip().lower() in {"1", "true", "yes", "on"}
+    if full_ledgers:
+        # O(len(selected)) map so per-candidate lookup is O(1), not O(n^2).
+        selected_by_id = {str(x.get("candidate_id")): x for x in selected}
+        decisions = []
+        for cand in candidates:
+            cid = str(cand.get("candidate_id"))
+            match = selected_by_id.get(cid)
+            decisions.append(
+                {
+                    "round_index": round_index,
+                    "candidate_id": cid,
+                    "selected": match is not None,
+                    "primary_selection_reason": match.get("selection_reason") if match else "not_selected",
+                    "selection_queue": match.get("selection_queue") if match else "none",
+                    "scores_at_selection_time": {
+                        "novelty_score": cand.get("novelty_score"),
+                        "active_constraint_score": cand.get("active_constraint_score"),
+                        "security_boundary_score": cand.get("security_boundary_score"),
+                        "contingency_severity_score": cand.get("contingency_severity_score"),
+                        "physical_credibility_score": cand.get("physical_credibility_score"),
+                        "model_uncertainty_score": cand.get("model_uncertainty_score"),
+                        "estimated_compute_cost": cand.get("estimated_compute_cost"),
+                    },
+                    "random_seed": audit_seed,
+                }
+            )
+        append_parquet_rows(campaign_root / "candidate_registry.parquet", candidates)
+        append_parquet_rows(campaign_root / "acquisition_decisions.parquet", decisions)
+    else:
+        append_parquet_rows(
+            campaign_root / "acquisition_decisions.parquet",
+            [
+                {
+                    "round_index": round_index,
+                    "candidate_count": len(candidates),
+                    "selected_count": len(selected),
+                    "selected_by_queue": json.dumps(_count_selected_by_queue(selected), sort_keys=True),
+                    "random_seed": audit_seed,
+                }
+            ],
         )
-
-    append_parquet_rows(campaign_root / "candidate_registry.parquet", candidates)
-    append_parquet_rows(campaign_root / "acquisition_decisions.parquet", decisions)
 
     summary = {
         "round_index": round_index,
