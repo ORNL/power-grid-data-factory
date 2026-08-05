@@ -62,6 +62,26 @@ def select_ac_evaluations(
     if missing:
         raise ValueError(f"Missing queue fractions for: {missing}")
 
+    # Fast path: when the budget covers every candidate, the per-queue ranking is
+    # irrelevant — every candidate is selected regardless of order. Skip
+    # build_queues, which does 6 full sorts plus a dict() copy of *every*
+    # candidate in two of the queues (~2n copies). At n=15M that path costs
+    # ~20 min and ~190 GB RAM; this one is a single O(n) pass. The result is
+    # equivalent to the full path (all constraint-passing candidates, capped at
+    # budget >= n) apart from the queue label.
+    if budget >= len(candidates):
+        selected = []
+        selected_ids = set()
+        for candidate in candidates:
+            cid = str(candidate.get("candidate_id"))
+            if cid in selected_ids:
+                continue
+            if violates_portfolio_constraints(candidate, selected, constraints):
+                continue
+            selected.append(assign_selection_reason(candidate, "full_budget"))
+            selected_ids.add(cid)
+        return selected
+
     queues = build_queues(
         candidates=candidates,
         audit_strata=audit_strata,
