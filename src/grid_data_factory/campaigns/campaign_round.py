@@ -27,12 +27,15 @@ def run_campaign_round(
         audit_seed=audit_seed,
     )
 
-    selected_ids = {str(x.get("candidate_id")) for x in selected}
+    # Map candidate_id -> selected row ONCE (O(len(selected))). Looking the match
+    # up per candidate with next()/scan would be O(len(candidates)*len(selected))
+    # ~ O(n^2); at budget=15M that is ~2e14 ops (weeks). The dict makes it O(n).
+    selected_by_id = {str(x.get("candidate_id")): x for x in selected}
     decisions = []
     for cand in candidates:
         cid = str(cand.get("candidate_id"))
-        picked = cid in selected_ids
-        match = next((x for x in selected if str(x.get("candidate_id")) == cid), None)
+        match = selected_by_id.get(cid)
+        picked = match is not None
         decisions.append(
             {
                 "round_index": round_index,
