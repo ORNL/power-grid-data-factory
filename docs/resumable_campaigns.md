@@ -286,6 +286,24 @@ back to its record with a linear scan (`next(x for x in selected …)`), an
 dictionary once and looks up in `O(1)`, so decision recording is linear in the
 candidate count.
 
+### Full-budget selection fast path
+
+`select_ac_evaluations` in
+[src/grid_data_factory/acquisition/selector.py](../src/grid_data_factory/acquisition/selector.py)
+normally builds six ranked queues (`build_queues`) to allocate a scarce budget.
+That machinery does six full sorts of the candidate set **and a `dict()` copy of
+every candidate in two of the queues** — at 15M candidates that measured ~20 min
+and ~190 GB RSS on one core, dangerously close to the node limit.
+
+When `AUDIT_FRACTION=1.0` (solve everything) the per-round budget is set to
+**cover all candidates**, so the ranking is irrelevant — every candidate is
+selected regardless of order. The selector now short-circuits: when
+`budget >= len(candidates)` it takes a single `O(n)` pass (constraint-filtered,
+labelled `full_budget`) and skips `build_queues` entirely. Budgets smaller than
+the candidate count keep the full multi-queue strategy unchanged. To hit the
+fast path, keep the per-round budget at or above the enumerated candidate count
+(`PER_CASE × cases × contingencies_per_op`).
+
 ### Slim ledgers by default
 
 Two ledgers — `candidate_registry` and `acquisition_decisions` — previously
