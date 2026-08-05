@@ -20,6 +20,8 @@ def _outaged_components(contingency: dict[str, Any]) -> list[tuple[str, str]]:
             (str(first.get("type")), str(first.get("id"))),
             (str(second.get("type")), str(second.get("id"))),
         ]
+    if event_type == "sequential_cascade":
+        return [(str(s.get("type")), str(s.get("id"))) for s in contingency.get("stages", [])]
     return [(str(c.get("type")), str(c.get("id"))) for c in contingency.get("components", [])]
 
 
@@ -37,7 +39,7 @@ def contingency_slug(contingency: dict[str, Any] | None, max_readable: int = 48)
     if not contingency:
         return "ctg_base"
     comps = _outaged_components(contingency)
-    sequential = contingency.get("event_type") == "sequential_n1n1"
+    sequential = contingency.get("event_type") in ("sequential_n1n1", "sequential_cascade")
     order = len(comps)
     key_comps = comps if sequential else sorted(comps)
     readable = "-".join(f"{t[:1]}{_sanitize_token(i)}" for t, i in key_comps)
@@ -70,5 +72,10 @@ def apply_contingency(case_data: dict[str, Any], contingency: dict[str, Any] | N
         second = contingency.get("second_outage") or {}
         remove_component(out, str(first.get("type")), str(first.get("id")))
         remove_component(out, str(second.get("type")), str(second.get("id")))
+    elif event_type == "sequential_cascade":
+        # Exogenous flatten: the post-cascade topology is every staged component
+        # removed. Stage-by-stage evaluation is a deferred solver-side concern.
+        for stage in contingency.get("stages", []):
+            remove_component(out, str(stage.get("type")), str(stage.get("id")))
 
     return out

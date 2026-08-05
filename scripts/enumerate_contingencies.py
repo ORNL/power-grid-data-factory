@@ -30,6 +30,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--n1n1-per-operating-point", type=int, default=1)
     p.add_argument("--max-k", type=int, default=2, help="Maximum simultaneous contingency order K to generate (K>=2).")
     p.add_argument("--nk-per-operating-point", type=int, default=1, help="Number of simultaneous events to generate per order for K>=3.")
+    p.add_argument("--sequential-cascade-per-operating-point", type=int, default=0, help="Number of ordered sequential cascades to generate per depth for depth 3..sequential-max-len (0 disables).")
+    p.add_argument("--sequential-max-len", type=int, default=10, help="Maximum sequential cascade depth (stages); capped at --max-k.")
     p.add_argument("--workers", type=int, default=1, help="Parallel worker processes (>1 enables per-row deterministic seeding; 0=all cores).")
     return p.parse_args()
 
@@ -77,6 +79,8 @@ def main() -> None:
             "n1n1_per_operating_point": args.n1n1_per_operating_point,
             "max_k": args.max_k,
             "nk_per_operating_point": args.nk_per_operating_point,
+            "sequential_cascade_per_operating_point": args.sequential_cascade_per_operating_point,
+            "sequential_max_len": args.sequential_max_len,
         }
         chunks = split_rows(rows, workers)
         shard_paths = [out_path.parent / f".{out_path.name}.part{idx:04d}" for idx in range(len(chunks))]
