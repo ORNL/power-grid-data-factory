@@ -33,6 +33,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--sequential-cascade-per-operating-point", type=int, default=0, help="Number of ordered sequential cascades to generate per depth for depth 3..sequential-max-len (0 disables).")
     p.add_argument("--sequential-max-len", type=int, default=10, help="Maximum sequential cascade depth (stages); capped at --max-k.")
     p.add_argument("--workers", type=int, default=1, help="Parallel worker processes (>1 enables per-row deterministic seeding; 0=all cores).")
+    p.add_argument("--feasibility-prefilter", dest="feasibility_prefilter", action="store_true", default=True, help="Drop structurally infeasible contingencies (islanding, generation inadequacy, oversized order for small cases) at enumeration time (default on).")
+    p.add_argument("--no-feasibility-prefilter", dest="feasibility_prefilter", action="store_false", help="Disable the enumeration-time feasibility prefilter.")
     return p.parse_args()
 
 
@@ -60,12 +62,18 @@ def main() -> None:
     workers = args.workers if args.workers > 0 else (os.cpu_count() or 1)
     workers = max(1, min(workers, len(rows) or 1))
 
+    filter_stats: dict[str, int] = {}
+
+    def _merge_stats(part: dict[str, int]) -> None:
+        for key, value in part.items():
+            filter_stats[key] = filter_stats.get(key, 0) + value
+
     if workers == 1:
         rng = Random(args.seed)
         expanded_count = 0
         with out_path.open("w", encoding="utf-8") as fh:
             for i, row in enumerate(rows):
-                for out in expand_one(row, rng, args, repo_root):
+                for out in expand_one(row, rng, args, repo_root, stats=filter_stats):
                     fh.write(json.dumps(out, ensure_ascii=True) + "\n")
                     expanded_count += 1
                 if (i + 1) % 50000 == 0:
@@ -81,6 +89,7 @@ def main() -> None:
             "nk_per_operating_point": args.nk_per_operating_point,
             "sequential_cascade_per_operating_point": args.sequential_cascade_per_operating_point,
             "sequential_max_len": args.sequential_max_len,
+            "feasibility_prefilter": args.feasibility_prefilter,
         }
         chunks = split_rows(rows, workers)
         shard_paths = [out_path.parent / f".{out_path.name}.part{idx:04d}" for idx in range(len(chunks))]
@@ -90,8 +99,9 @@ def main() -> None:
         with ProcessPoolExecutor(max_workers=workers) as ex:
             futures = {ex.submit(expand_chunk, idx, chunk, sampling, str(repo_root), str(shard_paths[idx])): idx for idx, chunk in enumerate(chunks)}
             for fut in as_completed(futures):
-                idx, count = fut.result()
+                idx, count, chunk_stats = fut.result()
                 counts[idx] = count
+                _merge_stats(chunk_stats)
                 done += 1
                 print(f"[enumerate] chunk {done}/{len(chunks)} done ({count} candidates)", flush=True)
         expanded_count = 0
@@ -111,6 +121,11 @@ def main() -> None:
                 "base_candidates": len(rows),
                 "expanded_candidates": expanded_count,
                 "workers": workers,
+                "feasibility_prefilter": args.feasibility_prefilter,
+                "prefilter_dropped": {
+                    key: filter_stats.get(key, 0)
+                    for key in ("dropped_op_inadequate", "dropped_order", "dropped_island", "dropped_adequacy")
+                },
             },
             indent=2,
         )
