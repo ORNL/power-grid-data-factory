@@ -6,6 +6,7 @@ from random import Random
 from types import SimpleNamespace
 from typing import Any
 
+from grid_data_factory.contingencies import feasibility
 from grid_data_factory.contingencies.ontology import ONTOLOGY_CLASSES
 from grid_data_factory.sources.registry import bus_count_for
 
@@ -82,12 +83,27 @@ def build_kplus_components(pool: dict[str, list[str]], k: int, rng: Random) -> l
     return unique_components(chosen)
 
 
-def expand_one(base: dict[str, Any], rng: Random, sampling: Any, repo_root: Path | None = None) -> list[dict[str, Any]]:
+def expand_one(base: dict[str, Any], rng: Random, sampling: Any, repo_root: Path | None = None, stats: dict[str, int] | None = None) -> list[dict[str, Any]]:
     case_id = str(base.get("case_id"))
     cid = str(base.get("candidate_id"))
     pool = case_component_pool(case_id, repo_root)
     base_sev = float(base.get("contingency_severity_score", 0.0))
     base_cred = float(base.get("physical_credibility_score", 0.9))
+
+    # Enumeration-time feasibility prefilter (default on). Skips structurally
+    # infeasible contingencies before they reach the AC solver. See
+    # grid_data_factory.contingencies.feasibility for the rationale.
+    prefilter_on = bool(getattr(sampling, "feasibility_prefilter", True))
+    ctx = feasibility.build_case_context(case_id, repo_root) if prefilter_on else None
+    op_params = base.get("operating_point_parameters", {}) or {}
+    switched = base.get("switched_off_branches", []) or []
+
+    # If the operating point cannot cover its load even before any contingency,
+    # every contingency for it is power-balance infeasible: skip the whole point.
+    if prefilter_on and ctx is not None and not feasibility.generation_adequate(ctx, op_params, None):
+        if stats is not None:
+            stats["dropped_op_inadequate"] = stats.get("dropped_op_inadequate", 0) + 1
+        return []
 
     out: list[dict[str, Any]] = []
     event_index = 0
@@ -230,7 +246,33 @@ def expand_one(base: dict[str, Any], rng: Random, sampling: Any, repo_root: Path
         if unknown:
             raise ValueError(f"Unknown ontology labels: {unknown}")
 
-    return out
+    if not prefilter_on:
+        return out
+
+    bus_count = ctx.bus_count if ctx is not None else feasibility.bus_count_hint(case_id, repo_root)
+    kept: list[dict[str, Any]] = []
+    for row in out:
+        cont = row["contingency"]
+        order = int(cont.get("order", 0))
+        event_type = str(cont.get("event_type", ""))
+        if not feasibility.order_allowed(bus_count, order, event_type):
+            if stats is not None:
+                stats["dropped_order"] = stats.get("dropped_order", 0) + 1
+            continue
+        if ctx is not None:
+            if feasibility.creates_island(ctx, switched, cont):
+                if stats is not None:
+                    stats["dropped_island"] = stats.get("dropped_island", 0) + 1
+                continue
+            if not feasibility.generation_adequate(ctx, op_params, cont):
+                if stats is not None:
+                    stats["dropped_adequacy"] = stats.get("dropped_adequacy", 0) + 1
+                continue
+        if stats is not None:
+            stats["kept"] = stats.get("kept", 0) + 1
+        kept.append(row)
+
+    return kept
 
 
 def split_rows(rows: list[Any], n: int) -> list[list[Any]]:
@@ -245,16 +287,17 @@ def split_rows(rows: list[Any], n: int) -> list[list[Any]]:
     return [c for c in chunks if c]
 
 
-def expand_chunk(chunk_index: int, rows: list[dict[str, Any]], sampling: dict[str, Any], repo_root_str: str, shard_path_str: str) -> tuple[int, int]:
+def expand_chunk(chunk_index: int, rows: list[dict[str, Any]], sampling: dict[str, Any], repo_root_str: str, shard_path_str: str) -> tuple[int, int, dict[str, int]]:
     # Per-row deterministic seeding makes output independent of worker count and chunk boundaries.
     repo_root = Path(repo_root_str)
     args = SimpleNamespace(**sampling)
     seed = sampling["seed"]
     count = 0
+    stats: dict[str, int] = {}
     with open(shard_path_str, "w", encoding="utf-8") as fh:
         for row in rows:
             rng = Random(f"{seed}::{row.get('candidate_id')}")
-            for out in expand_one(row, rng, args, repo_root):
+            for out in expand_one(row, rng, args, repo_root, stats=stats):
                 fh.write(json.dumps(out, ensure_ascii=True) + "\n")
                 count += 1
-    return chunk_index, count
+    return chunk_index, count, stats

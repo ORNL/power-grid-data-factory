@@ -44,6 +44,9 @@ class BuildKPlusComponentsTests(unittest.TestCase):
             n1n1_per_operating_point = 1
             max_k = 10
             nk_per_operating_point = 1
+            # Raw-enumeration test: exercise the generator's full order range,
+            # independent of the feasibility prefilter (which caps small cases).
+            feasibility_prefilter = False
 
         base = {"case_id": "pglib_opf_case14_ieee", "candidate_id": "op1", "physical_credibility_score": 0.9}
         rows = _ENUM.expand_one(base, Random(1), _Args())
