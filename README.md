@@ -7,18 +7,27 @@ This repository is initialized from the planning document:
 
 ## Documentation
 
-- `docs/README.md`
-- `docs/project_scope.md`
-- `docs/architecture.md`
-- `docs/setup.md`
-- `docs/external_sources.md`
-- `docs/reproducibility.md`
-- `docs/scripts_reference.md`
-- `docs/production_readiness_checklist.md`
-- `docs/first_reproducible_run.md`
-- `docs/first_real_case_run.md`
+Full index: [docs/README.md](docs/README.md).
 
-GO Challenge duplicate-audit documentation is available at `docs/go_challenge_duplicate_audit.md`.
+- [Project Purpose and Scope](docs/project_scope.md)
+- [Architecture and Data Layout](docs/architecture.md)
+- [Environment and Setup Guide](docs/setup.md)
+- [External Dependencies and Data Sources](docs/external_sources.md)
+- [ExaGO Frontier Build Notes](docs/exago_frontier_build.md)
+- [ExaGO Andes CPU Build and Run](docs/exago_andes_cpu_build.md)
+- [Reproducibility Workflow](docs/reproducibility.md)
+- [Script Reference](docs/scripts_reference.md)
+- [First Reproducible Run Walkthrough](docs/first_reproducible_run.md)
+- [First Real-Case Input Run with Registry Append](docs/first_real_case_run.md)
+- [Three-Solver Runbook (ExaGO + pandapower + PowerModels)](docs/three_solver_runbook.md)
+- [Production Readiness Checklist](docs/production_readiness_checklist.md)
+- [Adaptive Campaign Strategy (Default)](docs/adaptive_campaign_strategy.md)
+- [Resumable Campaigns and the Top-Level Driver](docs/resumable_campaigns.md)
+- [Enumeration-Time Feasibility Prefiltering](docs/feasibility_prefiltering.md)
+- [Configuration Reference](docs/configuration_reference.md)
+- [Schema Contracts](docs/schema_contracts.md)
+- [GO Challenge MATPOWER Duplicate Audit](docs/go_challenge_duplicate_audit.md)
+- [Evolution Log](docs/evolution_log.md)
 
 ## Core principles
 
