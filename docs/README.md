@@ -22,6 +22,7 @@ This documentation describes the purpose, architecture, setup, and reproducibili
 16. [Evolution Log](evolution_log.md)
 17. [Configuration Reference](configuration_reference.md)
 18. [Resumable Campaigns and the Top-Level Driver](resumable_campaigns.md)
+19. [Enumeration-Time Feasibility Prefiltering](feasibility_prefiltering.md)
 
 ## Intended audience
 
