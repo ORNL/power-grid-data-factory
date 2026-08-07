@@ -211,7 +211,7 @@ def main() -> None:
 
                 case_file = base._resolve_case_file(repo_root, case_id)
                 case_data = parse_matpower_case(case_file, case_id)
-                case_data = apply_topology(case_data, cand.get("switched_off_branches"))
+                case_data = apply_topology(case_data, cand.get("switched_off_branches"), cand.get("reinforced_branches"))
                 op_params = dict(cand.get("operating_point_parameters", {}))
                 snapshot_id = op_params.get("load_snapshot_id")
                 if snapshot_id:

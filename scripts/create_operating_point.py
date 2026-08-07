@@ -106,7 +106,7 @@ def main() -> None:
     rng = Random(args.seed)
 
     rows: list[dict[str, Any]] = []
-    dim = 13
+    dim = 18
     for case_id in args.cases:
         family = grid_family_for(repo_root, case_id)
         dataset = dataset_for(repo_root, case_id)

@@ -1,0 +1,92 @@
+default_strategy: adaptive_coverage_constrained_multifidelity_ultrascale
+
+acquisition_budget:
+  broad_coverage: 0.22
+  active_constraint_novelty: 0.20
+  security_boundary: 0.20
+  credible_contingencies: 0.16
+  high_severity_and_uncertainty: 0.12
+  unscreened_audit: 0.10
+
+portfolio_constraints:
+  # Disabled (0) for the 3B full-budget campaign: audit_fraction=1.0 means every
+  # enumerated candidate is solved, so per-bucket caps would only DROP data and
+  # throttle each round far below its budget. Re-enable (non-zero) only for
+  # budget-constrained runs where dominant-case saturation must be limited.
+  max_per_grid: 0
+  max_per_regime: 0
+  max_per_contingency_class: 0
+
+operating_regimes:
+  - baseline
+  - low_load
+  - shoulder
+  - summer_peak
+  - winter_peak
+  - high_renewable
+  - low_renewable
+  - high_import
+  - high_export
+  - maintenance
+  - branch_derating
+  - generator_cost_shift
+  - reactive_stress
+  - extreme_peak
+
+operating_space:
+  generators:
+    - sobol
+    - latin_hypercube
+    - stratified
+    - regime_specific
+    - time_series
+  load_model:
+    global_scale: true
+    regional_correlated_variation: true
+    local_residual_variation: true
+    preserve_power_factor_default: true
+
+security_margin_bands:
+  comfortably_secure:
+    minimum_margin: 0.10
+  moderately_secure:
+    minimum_margin: 0.03
+    maximum_margin: 0.10
+  near_boundary_secure:
+    minimum_margin: 0.00
+    maximum_margin: 0.03
+  near_boundary_insecure:
+    minimum_margin: -0.03
+    maximum_margin: 0.00
+  severely_insecure:
+    maximum_margin: -0.03
+
+active_constraint_tolerances:
+  active_tolerance: 1.0e-4
+  near_active_tolerance: 5.0e-3
+
+screening:
+  dc_as_feature_only: true
+  multi_trigger_escalation: true
+  uncertainty_multiplier: 2.33
+  escalation_thresholds:
+    dc_severity: 0.65
+    voltage_risk: 0.65
+    reactive_risk: 0.65
+    novelty: 0.75
+    uncertainty: 0.55
+
+contingency_policy:
+  ontology_required: true
+  use_state_aware_scoring: true
+  constrained_beam_search:
+    enabled: true
+    beam_width: 32
+  preserve_random_credible_controls: true
+  separate_simultaneous_vs_sequential: true
+
+stopping_criteria:
+  novelty_saturation:
+    min_new_cluster_rate: 0.005
+    min_new_active_set_rate: 0.005
+  severe_false_negative_upper_confidence_tolerance: 0.01

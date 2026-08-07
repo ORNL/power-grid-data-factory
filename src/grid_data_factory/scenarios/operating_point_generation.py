@@ -70,7 +70,7 @@ def sample_unit_vector_legacy(dim: int, idx: int, total: int, sampler: str, rng:
     (hours per round). Prefer :func:`sample_unit_vector` (O(1) in ``total``).
     """
     if sampler == "sobol":
-        primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41]
+        primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61]
         return [_halton(idx + 1, primes[d % len(primes)]) for d in range(dim)]
 
     if sampler == "stratified":
@@ -101,6 +101,14 @@ def _mix64(x: int) -> int:
     x = ((x ^ (x >> 30)) * 0xBF58476D1CE4E5B9) & 0xFFFFFFFFFFFFFFFF
     x = ((x ^ (x >> 27)) * 0x94D049BB133111EB) & 0xFFFFFFFFFFFFFFFF
     return x ^ (x >> 31)
+
+
+def _text_key(s: str) -> int:
+    """FNV-1a hash of a string -> stable 64-bit int (unlike salted ``hash``)."""
+    h = 0xCBF29CE484222325
+    for ch in s.encode("utf-8"):
+        h = ((h ^ ch) * 0x100000001B3) & 0xFFFFFFFFFFFFFFFF
+    return h
 
 
 def _coprime_multiplier(seed: int, total: int) -> int:
@@ -149,7 +157,7 @@ def sample_unit_vector(dim: int, idx: int, total: int, sampler: str, rng: Random
     intra-stratum jitter, matching the legacy behaviour.
     """
     if sampler == "sobol":
-        primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41]
+        primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61]
         return [_halton(idx + 1, primes[d % len(primes)]) for d in range(dim)]
 
     if sampler == "stratified":
@@ -371,6 +379,14 @@ def build_candidate(
     topology: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     rr = _regime_ranges(regime)
+    # Tolerate shorter sample vectors from legacy callers (line-parameter and
+    # cost-permutation dims 13-17 default to the stratum midpoint = no bias).
+    if len(vec) < 18:
+        vec = list(vec) + [0.5] * (18 - len(vec))
+    # Deterministic, process-independent perturbation seed for this candidate:
+    # folds the case id (so different grids with the same index diverge) with
+    # the candidate index. Drives per-branch admittance noise + cost permutation.
+    pert_seed = _mix64(_text_key(case_id) ^ _mix64(candidate_index + 1))
     params = {
         "global_load_scale": _lin(*rr["global_load_scale"], vec[0]),
         "renewable_scale": _lin(*rr["renewable_scale"], vec[1]),
@@ -388,6 +404,19 @@ def build_candidate(
         "hydro_availability": _lin(0.75, 1.1, vec[0]),
         "generator_fleet_availability": _lin(0.85, 1.0, vec[1]),
         "area_interchange_target": _lin(-0.15, 0.15, vec[2]),
+        # Per-branch i.i.d. transmission-line admittance perturbation: the
+        # candidate stores only the deviation magnitude (sigma) per quantity and
+        # a shared seed; each branch's actual factor U[1-sigma, 1+sigma) is
+        # derived deterministically at solve time (see apply_operating_point).
+        "line_resistance_sigma": _lin(0.0, 0.15, vec[13]),
+        "line_reactance_sigma": _lin(0.0, 0.15, vec[14]),
+        "line_charging_sigma": _lin(0.0, 0.20, vec[15]),
+        "perturbation_seed": int(pert_seed),
+        # Generator cost-curve permutation: activate on ~half the candidates.
+        "cost_permutation": 1.0 if vec[16] > 0.5 else 0.0,
+        # Per-bus i.i.d. shunt susceptance (Bs) perturbation: models switchable
+        # capacitor-bank / reactor availability. Applied at solve time.
+        "bus_shunt_susceptance_sigma": _lin(0.0, 0.25, vec[17]),
     }
 
     for key in (
@@ -427,6 +456,8 @@ def build_candidate(
         "topology_class": topology.get("topology_class", "baseline"),
         "switched_off_branches": list(topology.get("switched_off_branches", [])),
         "switched_branch_count": int(topology.get("switched_branch_count", 0)),
+        "reinforced_branches": list(topology.get("reinforced_branches", [])),
+        "reinforced_branch_count": int(topology.get("reinforced_branch_count", 0)),
         "security_margin_hint": 0.2 - scores["security_boundary_score"],
         "dc_severity_score": dc_severity_score,
         "voltage_risk_score": voltage_risk_score,
@@ -445,6 +476,8 @@ _BASELINE_TOPOLOGY = {
     "topology_class": "baseline",
     "switched_off_branches": [],
     "switched_branch_count": 0,
+    "reinforced_branches": [],
+    "reinforced_branch_count": 0,
 }
 
 
@@ -490,6 +523,12 @@ _NEUTRAL_OP_PARAMS = {
     "hydro_availability": 1.0,
     "generator_fleet_availability": 1.0,
     "area_interchange_target": 0.0,
+    "line_resistance_sigma": 0.0,
+    "line_reactance_sigma": 0.0,
+    "line_charging_sigma": 0.0,
+    "perturbation_seed": 0,
+    "cost_permutation": 0.0,
+    "bus_shunt_susceptance_sigma": 0.0,
 }
 
 
@@ -536,6 +575,8 @@ def build_snapshot_candidate(
         "topology_class": topology.get("topology_class", "baseline"),
         "switched_off_branches": list(topology.get("switched_off_branches", [])),
         "switched_branch_count": int(topology.get("switched_branch_count", 0)),
+        "reinforced_branches": list(topology.get("reinforced_branches", [])),
+        "reinforced_branch_count": int(topology.get("reinforced_branch_count", 0)),
         "security_margin_hint": max(0.0, 0.2 - stress * 0.2),
         "dc_severity_score": stress,
         "voltage_risk_score": 0.6 * stress if voltage_regime == "tight" else 0.3 * stress,

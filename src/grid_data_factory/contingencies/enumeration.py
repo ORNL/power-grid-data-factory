@@ -97,6 +97,7 @@ def expand_one(base: dict[str, Any], rng: Random, sampling: Any, repo_root: Path
     ctx = feasibility.build_case_context(case_id, repo_root) if prefilter_on else None
     op_params = base.get("operating_point_parameters", {}) or {}
     switched = base.get("switched_off_branches", []) or []
+    reinforced_ids = [str(b) for b in (base.get("reinforced_branches", []) or [])]
 
     # If the operating point cannot cover its load even before any contingency,
     # every contingency for it is power-balance infeasible: skip the whole point.
@@ -119,6 +120,40 @@ def expand_one(base: dict[str, Any], rng: Random, sampling: Any, repo_root: Path
             "components": [{"type": "branch", "id": branch}],
             "ontology_labels": ["independent_random"],
             "credibility_source": "electrically_inferred",
+        }
+        out.append(row)
+
+    # Reinforced (upgraded) corridors carry a parallel circuit ("<id>_parallel")
+    # added at solve time. The base branch pool cannot express two outages that
+    # only exist once a corridor is reinforced: (1) losing the new circuit alone,
+    # and (2) a common-mode loss of BOTH circuits (e.g. a shared-structure /
+    # shared right-of-way event). Losing the ORIGINAL circuit alone is already
+    # covered by the N-1 branch stream above (its parallel keeps the corridor up).
+    for bid in reinforced_ids:
+        parallel_id = f"{bid}_parallel"
+        event_index += 1
+        row = with_scores(base, order_k=1, contingency_class="independent_random", base_severity=base_sev, base_credibility=base_cred)
+        row["candidate_id"] = f"{cid}::ctg::{event_index:03d}"
+        row["contingency"] = {
+            "contingency_id": f"ctg_{event_index:06d}",
+            "order": 1,
+            "event_type": "simultaneous",
+            "components": [{"type": "branch", "id": parallel_id}],
+            "ontology_labels": ["independent_random"],
+            "credibility_source": "electrically_inferred",
+        }
+        out.append(row)
+
+        event_index += 1
+        row = with_scores(base, order_k=2, contingency_class="common_corridor", base_severity=base_sev, base_credibility=max(0.0, base_cred - 0.05))
+        row["candidate_id"] = f"{cid}::ctg::{event_index:03d}"
+        row["contingency"] = {
+            "contingency_id": f"ctg_{event_index:06d}",
+            "order": 2,
+            "event_type": "simultaneous",
+            "components": [{"type": "branch", "id": bid}, {"type": "branch", "id": parallel_id}],
+            "ontology_labels": ["common_corridor"],
+            "credibility_source": "topologically_inferred",
         }
         out.append(row)
 
@@ -260,7 +295,7 @@ def expand_one(base: dict[str, Any], rng: Random, sampling: Any, repo_root: Path
                 stats["dropped_order"] = stats.get("dropped_order", 0) + 1
             continue
         if ctx is not None:
-            if feasibility.creates_island(ctx, switched, cont):
+            if feasibility.creates_island(ctx, switched, cont, reinforced_ids):
                 if stats is not None:
                     stats["dropped_island"] = stats.get("dropped_island", 0) + 1
                 continue

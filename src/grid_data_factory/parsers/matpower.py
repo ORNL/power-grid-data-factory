@@ -103,9 +103,10 @@ def _sanitize_function_name(name: str) -> str:
 def write_matpower_case(case_data: dict[str, Any], out_path: Path, case_name: str | None = None) -> Path:
     """Serialize a canonical case dict back to a MATPOWER ``.m`` file.
 
-    Emits the same reduced model the parser reads (no shunts, no branch
-    charging, no transformer taps) so a downstream solver such as ExaGO OPFLOW
-    sees a network identical to the one PowerModels solves from the same dict.
+    Emits the same reduced model the parser reads (bus shunts Gs/Bs and branch
+    charging b are carried through; transformer taps are not) so a downstream
+    solver such as ExaGO OPFLOW sees a network identical to the one PowerModels
+    solves from the same dict.
     """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -132,7 +133,8 @@ def write_matpower_case(case_data: dict[str, Any], out_path: Path, case_name: st
         pd, qd = load_by_bus.get(bid, [0.0, 0.0])
         base_kv = float(bus.get("base_kv", 100.0) or 100.0)
         cols = [
-            int(float(bid)), int(bus.get("type", 1)), pd, qd, 0.0, 0.0, 1,
+            int(float(bid)), int(bus.get("type", 1)), pd, qd,
+            float(bus.get("gs", 0.0)), float(bus.get("bs", 0.0)), 1,
             float(bus.get("vm", 1.0)), float(bus.get("va", 0.0)), base_kv, 1,
             float(bus.get("vmax", 1.1)), float(bus.get("vmin", 0.9)),
         ]
@@ -163,7 +165,7 @@ def write_matpower_case(case_data: dict[str, Any], out_path: Path, case_name: st
             rate_a = 0.0  # MATPOWER: 0 means unlimited thermal rating
         cols = [
             int(float(str(br.get("from")))), int(float(str(br.get("to")))),
-            float(br.get("r", 0.0)), float(br.get("x", 0.0)), 0.0,
+            float(br.get("r", 0.0)), float(br.get("x", 0.0)), float(br.get("b", 0.0)),
             rate_a, rate_a, rate_a, 0.0, 0.0, 1, -360.0, 360.0,
         ]
         lines.append("\t" + "\t".join(_fmt_number(c) for c in cols) + ";")
@@ -208,6 +210,8 @@ def parse_matpower_case(case_file: Path, case_id: str) -> dict[str, Any]:
                 "va": float(row[8]),
                 "vmin": float(row[12]),
                 "vmax": float(row[11]),
+                "gs": float(row[4]),
+                "bs": float(row[5]),
             }
         )
         pd = float(row[2])
@@ -252,6 +256,7 @@ def parse_matpower_case(case_file: Path, case_id: str) -> dict[str, Any]:
                 "to": str(int(row[1])),
                 "r": float(row[2]),
                 "x": float(row[3]),
+                "b": float(row[4]),
                 "rate_a": rate_a,
             }
         )
