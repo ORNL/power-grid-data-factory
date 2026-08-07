@@ -1,15 +1,20 @@
 # Power Grid Data Factory
 
-Power-grid simulation data factory for PF, DC-OPF, AC-OPF, and SCOPF campaigns with full provenance and preservation.
+A high-throughput, provenance-first engine for manufacturing PF, DC-OPF, AC-OPF,
+and SCOPF datasets at extreme scale. It sweeps an unusually wide space of grid
+variability — demand, dispatch, network admittance, bus shunts, topology,
+reinforcements, contingencies, and cost structure — and turns it into billions of
+fully labeled, reproducible samples by saturating leadership-class HPC resources.
 
-This repository is initialized from the planning document:
-`Power_Grid_Foundation_Model_Data_Generation_and_Preservation_Plan.docx`.
+For a capabilities-first overview, see
+[Data Generation Capabilities](docs/data_generation_capabilities.md).
 
 ## Documentation
 
 Full index: [docs/README.md](docs/README.md).
 
 - [Project Purpose and Scope](docs/project_scope.md)
+- [Data Generation Capabilities](docs/data_generation_capabilities.md)
 - [Architecture and Data Layout](docs/architecture.md)
 - [Environment and Setup Guide](docs/setup.md)
 - [External Dependencies and Data Sources](docs/external_sources.md)
@@ -48,19 +53,27 @@ The default strategy is an adaptive, coverage-constrained, multi-fidelity campai
 
 See `docs/adaptive_campaign_strategy.md` and `configs/campaign_default.yaml`.
 
-## Current scaffold scope
+## Capabilities at a glance
 
-This initial codebase provides:
+- **Multi-axis variability**: seeded, parametrized sweeps of load (4 samplers, 14
+  regimes, regional + per-bus variation), generator dispatch/reserves, per-branch
+  admittance and bus shunts, generator cost permutation, topology switching, and
+  distinct-conductor grid reinforcements.
+- **Rich contingencies**: N-1 / N-2 / N-k, common-mode and parallel-circuit
+  events, sequential N-1-N-1 and cascades across a ~15-class credibility ontology,
+  with enumeration-time feasibility prefiltering.
+- **Multi-solver**: PowerModels.jl, ExaGO (incl. GPU HiOp on MI250X), and
+  pandapower for consistency validation.
+- **HPC scale**: resumable, `afterok`-chained map/reduce campaigns running
+  thousands of ranks across 64+ nodes, Lustre-aware sharding/striping, and zstd
+  archiving for inode relief — billion-configuration campaigns are a supported
+  operating point.
+- **Labeled for classification**: both feasible and infeasible solves are
+  preserved, with a per-round feasible/infeasible convergence sidecar.
 
-- Deterministic naming and run-layout APIs.
-- Attempt directory creation with atomic finalization conventions.
-- Artifact manifest and checksum generation.
-- Integrity verification and preservation audit scripts.
-- Global run registry append interface.
-- Solver interface with adapters:
-  - `PowerModelsAdapter` (implemented as process wrapper stub)
-  - `ExaGOAdapter` (stub)
-- Julia project skeleton for PowerModels runners.
+Deterministic naming/run-layout APIs, atomic attempt finalization, artifact
+manifests, checksums, integrity/preservation audits, and append-only run
+registries underpin the full provenance guarantees.
 
 MATPOWER is used in this project as a case-data format and external reference source, not as an active solver backend.
 

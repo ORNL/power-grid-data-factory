@@ -196,21 +196,44 @@ def contingency_generator_ids(contingency: dict[str, Any]) -> set[str]:
 
 
 def creates_island(
-    ctx: CaseContext, switched_off_branches: Any, contingency: dict[str, Any]
+    ctx: CaseContext,
+    switched_off_branches: Any,
+    contingency: dict[str, Any],
+    reinforced_branches: Any = None,
 ) -> bool:
-    """True if switched-off + contingency branch removals disconnect the graph."""
+    """True if switched-off + contingency branch removals disconnect the graph.
+
+    Reinforced corridors carry a solve-time parallel circuit (``<id>_parallel``).
+    For connectivity they are modelled as a second edge with the same endpoints,
+    so losing one circuit of a reinforced corridor keeps it connected while a
+    common-mode loss of both circuits can still island it.
+    """
+    edges = ctx.edges
+    branch_edge_index = ctx.branch_edge_index
+
+    reinforced = [
+        str(b) for b in (reinforced_branches or []) if str(b) in ctx.branch_edge_index
+    ]
+    if reinforced:
+        edges = list(ctx.edges)
+        branch_edge_index = dict(ctx.branch_edge_index)
+        for bid in reinforced:
+            src_idx = ctx.branch_edge_index[bid]
+            branch_edge_index[f"{bid}_parallel"] = len(edges)
+            edges.append(ctx.edges[src_idx])
+
     removed: set[int] = set()
     for bid in switched_off_branches or []:
-        idx = ctx.branch_edge_index.get(str(bid))
+        idx = branch_edge_index.get(str(bid))
         if idx is not None:
             removed.add(idx)
     for bid in contingency_branch_ids(contingency):
-        idx = ctx.branch_edge_index.get(bid)
+        idx = branch_edge_index.get(bid)
         if idx is not None:
             removed.add(idx)
     if not removed:
         return False
-    return _num_components(ctx.bus_count, ctx.edges, removed) > ctx.base_components
+    return _num_components(ctx.bus_count, edges, removed) > ctx.base_components
 
 
 def _avail_factor(pos: int, fleet_availability: float, renewable_scale: float) -> float:

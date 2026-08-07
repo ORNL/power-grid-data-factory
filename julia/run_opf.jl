@@ -77,6 +77,27 @@ function to_powermodels_data(case_data)
         bus_index_by_id[Int(b["bus_i"])] = Int(b["index"])
     end
 
+    # Bus shunt elements (fixed capacitor banks / reactors). MATPOWER Gs/Bs are
+    # MW/MVAr at 1 p.u.; PowerModels expects per-unit (divided by baseMVA).
+    pm_shunt = Dict{String, Any}()
+    shunt_idx = 0
+    for b in buses
+        bid = parse(Int, String(b[:bus_id]))
+        gs = haskey(b, :gs) ? Float64(b[:gs]) : 0.0
+        bs = haskey(b, :bs) ? Float64(b[:bs]) : 0.0
+        if gs != 0.0 || bs != 0.0
+            shunt_idx += 1
+            pm_shunt[string(shunt_idx)] = Dict(
+                "index" => shunt_idx,
+                "shunt_bus" => bid,
+                "gs" => gs / base_mva,
+                "bs" => bs / base_mva,
+                "status" => 1,
+                "source_id" => Any["bus", bid],
+            )
+        end
+    end
+
     pm_gen = Dict{String, Any}()
     for (idx, g) in enumerate(gens)
         bus_id = parse(Int, String(g[:bus_id]))
@@ -117,14 +138,15 @@ function to_powermodels_data(case_data)
     for (idx, br) in enumerate(branches)
         f_bus = parse(Int, String(br[:from]))
         t_bus = parse(Int, String(br[:to]))
+        b_ch = haskey(br, :b) ? Float64(br[:b]) : 0.0
         pm_branch[string(idx)] = Dict(
             "index" => idx,
             "f_bus" => f_bus,
             "t_bus" => t_bus,
             "br_r" => Float64(br[:r]),
             "br_x" => Float64(br[:x]),
-            "b_fr" => 0.0,
-            "b_to" => 0.0,
+            "b_fr" => b_ch / 2.0,
+            "b_to" => b_ch / 2.0,
             "g_fr" => 0.0,
             "g_to" => 0.0,
             "br_status" => 1,
@@ -161,7 +183,7 @@ function to_powermodels_data(case_data)
         "bus" => pm_bus,
         "gen" => pm_gen,
         "load" => pm_load,
-        "shunt" => Dict{String, Any}(),
+        "shunt" => pm_shunt,
         "branch" => pm_branch,
         "dcline" => Dict{String, Any}(),
         "storage" => Dict{String, Any}(),
@@ -185,7 +207,11 @@ if task == "ac_opf"
             "sb" => "yes",
             "tol" => 1e-8,
         )
-        pm_out = solve_opf(pm_data, ACPPowerModel, optimizer)
+        # Enable dual variables (nodal-balance duals ~ LMPs, branch/bound multipliers).
+        pm_out = solve_opf(
+            pm_data, ACPPowerModel, optimizer;
+            setting = Dict("output" => Dict("duals" => true)),
+        )
         term = string(pm_out["termination_status"])
         ok = term in ("LOCALLY_SOLVED", "OPTIMAL", "ALMOST_LOCALLY_SOLVED", "ALMOST_OPTIMAL")
         result["success"] = ok

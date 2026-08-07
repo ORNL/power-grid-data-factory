@@ -1,35 +1,43 @@
 # Project Purpose and Scope
 
-Power Grid Data Factory is intended to orchestrate large simulation campaigns for:
+Power Grid Data Factory orchestrates **large, highly parametrized simulation
+campaigns** for:
 
 - PF
 - DC-OPF
 - AC-OPF
 - SCOPF
 
-The goal is to produce datasets for foundation-model training while preserving full provenance and reproducibility.
+The goal is to produce diverse, reproducible datasets for foundation-model
+training and evaluation while preserving full provenance. For a capabilities-first
+overview of the variability the generator sweeps and how it scales on HPC, see
+[Data Generation Capabilities](data_generation_capabilities.md).
 
-## What the code is meant to do
+## What the code does
 
 The project provides infrastructure to:
 
 1. Register and materialize grid cases and scenario variants.
-2. Generate and track topology perturbations and operating-point perturbations.
-3. Run solver workflows across multiple solver frameworks.
-4. Preserve complete run artifacts for successful and unsuccessful runs.
-5. Validate physical consistency and record validation status.
-6. Maintain queryable run registries and integrity manifests.
+2. Generate and track topology perturbations, grid reinforcements, and
+   operating-point / physics perturbations (load, dispatch, per-branch admittance,
+   bus shunts, cost structure).
+3. Enumerate, screen, and prioritize contingencies across a credibility-labeled
+   ontology (N-1, N-2, N-k, common-mode, sequential, cascades).
+4. Run solver workflows across multiple solver frameworks (PowerModels.jl, ExaGO,
+   pandapower) on CPU and GPU.
+5. Preserve complete run artifacts for both feasible and infeasible runs, so the
+   output is usable for classification as well as regression.
+6. Validate physical consistency and record validation status.
+7. Maintain queryable run registries and integrity manifests.
 
-## Explicitly out of scope for current scaffold
+## Production-scale execution
 
-The current scaffold is not yet a full production runner for all solver workflows. It includes:
-
-- Core directory and naming APIs.
-- Preservation and integrity utilities.
-- Solver adapter interfaces and placeholders.
-- Script entrypoints and configuration templates.
-
-Additional implementation work is still required for complete solver execution and high-scale HPC workflows.
+The generator runs as a **resumable, chained map/reduce campaign** designed to
+saturate leadership-class HPC allocations — thousands of concurrent ranks across
+64+ nodes, chained across many walltime windows, with Lustre-aware sharding and
+zstd archiving. Campaigns of billions of configurations are a supported operating
+point. See [Data Generation Capabilities](data_generation_capabilities.md) and
+[Resumable Campaigns](resumable_campaigns.md) for details.
 
 ## Governing principles
 

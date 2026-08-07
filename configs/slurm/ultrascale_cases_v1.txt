@@ -1,0 +1,26 @@
+# Ultra-scale v1 case set (26 cases).
+# Derived from ultrascale_cases.txt with the three already-saturated small IEEE
+# cases removed (case14_ieee, case57_ieee, case118_ieee) — those are covered in
+# depth by the ultrascale_150m pilot (round 0). This list focuses new compute on
+# the 26 cases with little/no coverage.
+# Keep one or more whitespace-separated case ids per line.
+
+# PGLib core (small IEEE 14/57/118 dropped; already covered by pilot)
+pglib_opf_case24_ieee_rts pglib_opf_case30_ieee pglib_opf_case73_ieee_rts
+pglib_opf_case162_ieee_dtc pglib_opf_case300_ieee
+
+# Large PGLib/GOC families
+pglib_opf_case500_goc pglib_opf_case2000_goc pglib_opf_case10000_goc
+pglib_opf_case4661_sdet pglib_opf_case6470_rte pglib_opf_case13659_pegase
+
+# EPIGRIDS from current portfolio
+epigrids_florida_5658 epigrids_texas_7336 epigrids_midwest_10192
+epigrids_western_20758 epigrids_eastern_78484
+
+# ACTIVSg currently available
+activsg200
+
+# Manual-portfolio expansions (include when ingested/registered locally)
+activsg500 activsg2000 activsg10k
+activsg25k activsg70k activsg82k
+memphis2026 epigrids_wisconsin_1664 epigrids_new_england_250
