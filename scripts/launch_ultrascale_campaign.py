@@ -68,7 +68,30 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--time", default="36:00:00")
 
     p.add_argument("--submit", action="store_true")
-    p.add_argument("--chain", action="store_true", help="When --submit, chain rounds with afterok dependency.")
+    p.add_argument("--chain", action="store_true", help="When --submit, chain rounds with a Slurm dependency (see --dependency-type).")
+    p.add_argument(
+        "--dependency-type",
+        choices=["afterany", "afterok", "afternotok"],
+        default="afterany",
+        help=(
+            "Slurm dependency type used to chain rounds. Default 'afterany' so a "
+            "round that TIMES OUT (which Slurm counts as failure) still releases "
+            "the next job instead of poisoning the whole chain with "
+            "DependencyNeverSatisfied. Use with --auto-round so the next job "
+            "resumes the still-incomplete round rather than skipping ahead."
+        ),
+    )
+    p.add_argument(
+        "--auto-round",
+        action="store_true",
+        help=(
+            "Submit identical self-healing jobs (AUTO_ROUND=1): each job ignores "
+            "its baked-in ROUND_INDEX and targets the furthest INCOMPLETE round "
+            "at runtime, resuming timed-out rounds. Combine with "
+            "--dependency-type afterany to grind through every round across many "
+            "walltime windows unattended."
+        ),
+    )
     return p.parse_args()
 
 
@@ -123,6 +146,13 @@ def _build_export_payload(args: argparse.Namespace, round_index: int, seed: int,
     }
     if args.shard_count > 0:
         exports["SHARD_COUNT"] = str(args.shard_count)
+    if args.auto_round:
+        # Self-healing: the sbatch re-selects the furthest incomplete round at
+        # runtime and derives SEED = SEED_BASE + round, so each identical job
+        # matches the original per-round seed while never skipping unfinished work.
+        exports["AUTO_ROUND"] = "1"
+        exports["TOTAL_ROUNDS"] = str(args.start_round + args.rounds)
+        exports["SEED_BASE"] = str(args.seed_start)
 
     return "ALL," + ",".join(f"{k}={v}" for k, v in exports.items())
 
@@ -148,12 +178,12 @@ def _build_sbatch_command(
         "--time",
         args.time,
         "--job-name",
-        f"pgdf_mr_r{round_index:03d}",
+        (f"pgdf_mr_auto{round_index:03d}" if args.auto_round else f"pgdf_mr_r{round_index:03d}"),
         "--export",
         _build_export_payload(args, round_index, seed, budget, cases),
     ]
     if dependency_jobid:
-        cmd.extend(["--dependency", f"afterok:{dependency_jobid}"])
+        cmd.extend(["--dependency", f"{args.dependency_type}:{dependency_jobid}"])
     cmd.append(str((repo_root / args.slurm_script).resolve()))
     return cmd
 

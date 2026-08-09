@@ -76,6 +76,37 @@ SEQ_MAX_LEN=${SEQ_MAX_LEN:-10}
 RESUME=${RESUME:-0}
 BOOTSTRAP_WORKERS=${BOOTSTRAP_WORKERS:-32}
 
+# Self-healing round selection. When AUTO_ROUND=1 the passed ROUND_INDEX is
+# ignored and the job (re)targets the furthest INCOMPLETE round at runtime (the
+# lowest round whose reduce marker is missing or not "ok"). Combined with an
+# afterany-chained pool of identical jobs this lets the campaign grind through
+# every round across many walltime windows: a round that times out is simply
+# resumed by the next job instead of being skipped, and rounds that need several
+# 36h windows get them. SEED stays tied to the round via SEED_BASE + round so
+# per-round sampling matches the original fixed-index launch.
+AUTO_ROUND=${AUTO_ROUND:-0}
+TOTAL_ROUNDS=${TOTAL_ROUNDS:-1}
+SEED_BASE=${SEED_BASE:-$SEED}
+if [[ "$AUTO_ROUND" == "1" ]]; then
+  _detected=""
+  for ((_r=0; _r<TOTAL_ROUNDS; _r++)); do
+    printf -v _rp "%03d" "$_r"
+    _marker="$ROOT/data/outputs/campaigns/$CAMPAIGN_ID/round_summaries/round_${_rp}_mapreduce_reduce_report.json"
+    if [[ -s "$_marker" ]] && grep -q '"ok": true' "$_marker" 2>/dev/null; then
+      continue
+    fi
+    _detected="$_r"; break
+  done
+  if [[ -z "$_detected" ]]; then
+    echo "[$(date -u +%FT%TZ)] [auto-round] all $TOTAL_ROUNDS rounds already complete; nothing to do"
+    exit 0
+  fi
+  ROUND_INDEX="$_detected"
+  RESUME=1
+  SEED=$(( SEED_BASE + ROUND_INDEX ))
+  echo "[$(date -u +%FT%TZ)] [auto-round] furthest incomplete round=$ROUND_INDEX seed=$SEED (RESUME=1, total_rounds=$TOTAL_ROUNDS)"
+fi
+
 printf -v ROUND_PAD "%03d" "$ROUND_INDEX"
 CAMPAIGN_ROOT="$ROOT/data/outputs/campaigns/$CAMPAIGN_ID"
 SELECTED_JSONL="$CAMPAIGN_ROOT/round_summaries/round_${ROUND_PAD}_selected_candidates.jsonl"
