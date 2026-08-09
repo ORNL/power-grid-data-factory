@@ -46,6 +46,20 @@ def _branch_factor(seed: int, branch_key: int, dim: int, sigma: float) -> float:
     return 1.0 + (2.0 * u - 1.0) * sigma
 
 
+def _branch_offset(seed: int, branch_key: int, dim: int, sigma: float) -> float:
+    """Per-branch i.i.d. additive offset drawn from U[-sigma, +sigma).
+
+    Additive companion to :func:`_branch_factor` for quantities that are centered
+    on zero (e.g. phase-shift angle in degrees), where a multiplicative factor
+    would leave a zero value unchanged.
+    """
+    if sigma <= 0.0:
+        return 0.0
+    h = _mix64(seed + branch_key + (dim + 1) * 0x9E3779B97F4A7C15)
+    u = (h & 0x1FFFFFFFFFFFFF) / float(0x20000000000000)  # 53-bit mantissa -> [0,1)
+    return (2.0 * u - 1.0) * sigma
+
+
 def _seeded_permutation(n: int, seed: int) -> list[int]:
     """Deterministic Fisher-Yates permutation of ``range(n)`` from ``seed``."""
     perm = list(range(n))
@@ -113,6 +127,10 @@ def apply_operating_point(case_data: dict[str, Any], params: dict[str, Any]) -> 
     r_scale_global = float(params.get("line_resistance_scale", 1.0))
     x_scale_global = float(params.get("line_reactance_scale", 1.0))
     b_scale_global = float(params.get("line_charging_scale", 1.0))
+    # Optional transformer setpoint sweep (default off). Only touches elements
+    # that are already transformers, so plain lines never gain a tap/shift.
+    tap_sigma = float(params.get("transformer_tap_sigma", 0.0))
+    shift_sigma = float(params.get("transformer_shift_sigma", 0.0))
 
     if bus_bs_sigma > 0.0:
         for bus in out.get("buses", []):
@@ -170,5 +188,14 @@ def apply_operating_point(case_data: dict[str, Any], params: dict[str, Any]) -> 
         br["x"] = max(1e-6, float(br["x"]) * x_factor)  # keep strictly positive for solver stability
         if "b" in br:
             br["b"] = float(br["b"]) * b_factor
+        if tap_sigma > 0.0 or shift_sigma > 0.0:
+            tap = float(br.get("tap", 1.0))
+            shift = float(br.get("shift", 0.0))
+            is_xfmr = bool(br.get("transformer", False)) or tap != 1.0 or shift != 0.0
+            if is_xfmr:
+                if tap_sigma > 0.0:
+                    br["tap"] = min(1.1, max(0.9, tap * _branch_factor(pert_seed, branch_key, 3, tap_sigma)))
+                if shift_sigma > 0.0:
+                    br["shift"] = shift + _branch_offset(pert_seed, branch_key, 4, shift_sigma)
 
     return out

@@ -21,14 +21,18 @@ The project provides infrastructure to:
 2. Generate and track topology perturbations, grid reinforcements, and
    operating-point / physics perturbations (load, dispatch, per-branch admittance,
    bus shunts, cost structure).
-3. Enumerate, screen, and prioritize contingencies across a credibility-labeled
+3. Model network expansion by synthesizing new equipment on both the generation
+   side (generators, greenfield buses, transformers, bus-tie splits) and the load
+   side (new demand), applied singly or as cascaded, connectivity-checked
+   multi-step build-outs.
+4. Enumerate, screen, and prioritize contingencies across a credibility-labeled
    ontology (N-1, N-2, N-k, common-mode, sequential, cascades).
-4. Run solver workflows across multiple solver frameworks (PowerModels.jl, ExaGO,
+5. Run solver workflows across multiple solver frameworks (PowerModels.jl, ExaGO,
    pandapower) on CPU and GPU.
-5. Preserve complete run artifacts for both feasible and infeasible runs, so the
+6. Preserve complete run artifacts for both feasible and infeasible runs, so the
    output is usable for classification as well as regression.
-6. Validate physical consistency and record validation status.
-7. Maintain queryable run registries and integrity manifests.
+7. Validate physical consistency and record validation status.
+8. Maintain queryable run registries and integrity manifests.
 
 ## Production-scale execution
 

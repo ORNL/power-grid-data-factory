@@ -377,6 +377,9 @@ def build_candidate(
     dataset: str = "unknown",
     bus_count: int | None = None,
     topology: dict[str, Any] | None = None,
+    expansion: dict[str, Any] | None = None,
+    transformer_tap_sigma: float = 0.0,
+    transformer_shift_sigma: float = 0.0,
 ) -> dict[str, Any]:
     rr = _regime_ranges(regime)
     # Tolerate shorter sample vectors from legacy callers (line-parameter and
@@ -429,6 +432,13 @@ def build_candidate(
     ):
         params[key] = float(params[key]) * float(math.exp(rng.gauss(0.0, local_noise_stddev)))
 
+    # Optional transformer-setpoint sweep. Only emitted when enabled, so default
+    # candidate records (incl. any running branch-only campaign) stay unchanged.
+    if transformer_tap_sigma > 0.0:
+        params["transformer_tap_sigma"] = float(transformer_tap_sigma)
+    if transformer_shift_sigma > 0.0:
+        params["transformer_shift_sigma"] = float(transformer_shift_sigma)
+
     scores = _compute_scores(params, regime, rng)
     dc_severity_score = min(1.0, 0.55 * scores["security_boundary_score"] + 0.45 * scores["contingency_severity_score"])
     voltage_risk_score = min(
@@ -440,7 +450,7 @@ def build_candidate(
 
     topology = topology or {"topology_id": "topology_000000_baseline", "topology_class": "baseline", "switched_off_branches": [], "switched_branch_count": 0}
 
-    return {
+    candidate = {
         "candidate_id": f"{case_id}::op::{candidate_index:06d}",
         "grid_id": case_id,
         "grid_family": grid_family,
@@ -468,6 +478,14 @@ def build_candidate(
         "estimated_compute_cost": _estimated_cost(case_id, params, bus_count),
         **scores,
     }
+    # Optional network-expansion axis (new buses/generators/transformers). Absent
+    # by default so existing branch-only campaigns are unchanged; when present the
+    # solve runner applies the plan on top of the topology.
+    if expansion:
+        candidate["expansion"] = expansion
+        candidate["expansion_id"] = expansion.get("expansion_id")
+        candidate["expansion_class"] = expansion.get("expansion_class")
+    return candidate
 
 
 _BASELINE_TOPOLOGY = {
@@ -504,6 +522,45 @@ def prepare_topologies(repo_root: Path, case_id: str, n_variants: int, seed: int
     return variants
 
 
+def prepare_expansions(repo_root: Path, case_id: str, n_variants: int, seed: int, max_steps: int = 1, size_multiplier: float = 1.0, max_additions_fraction: float = 0.0) -> list[dict[str, Any]]:
+    """Return deterministic network-expansion plans for ``case_id``.
+
+    The first plan is always the empty baseline (no expansion), so a caller can
+    cycle plans across candidates and get a baseline share for free. Returns a
+    baseline-only list on any parse failure. Additive: unused unless a caller
+    opts into the expansion axis. ``max_steps``>1 emits cascade plans (multiple
+    units added sequentially); ``size_multiplier`` scales each new unit's size;
+    ``max_additions_fraction``>0 scales cascade depth to the network size.
+    """
+    baseline = [{"expansion_id": "expansion_000000_baseline", "expansion_class": "baseline"}]
+    if n_variants <= 1:
+        return baseline
+    try:
+        from grid_data_factory.parsers.matpower import parse_matpower_case
+        from grid_data_factory.topology.expansion import generate_expansion_variants
+
+        case_file = resolve_case_file(repo_root, case_id)
+        if not case_file.exists():
+            return baseline
+        case_data = parse_matpower_case(case_file, case_id)
+        variants = generate_expansion_variants(
+            case_id, case_data, n_variants=n_variants, seed=seed, max_steps=max_steps,
+            size_multiplier=size_multiplier, max_additions_fraction=max_additions_fraction,
+        )
+    except Exception:  # noqa: BLE001 - fall back to baseline-only on any parse failure
+        return baseline
+
+    registry_dir = paths.topology_registry_dir(repo_root) / case_id
+    registry_dir.mkdir(parents=True, exist_ok=True)
+    with (registry_dir / "expansion_variants.jsonl").open("w", encoding="utf-8") as fh:
+        for v in variants:
+            record = dict(v)
+            record["case_id"] = case_id
+            record["seed"] = seed
+            fh.write(json.dumps(record, ensure_ascii=True) + "\n")
+    return variants
+
+
 _DIFFICULTY_STRESS = {"easy": 0.2, "medium": 0.5, "hard": 0.8, "unknown": 0.4}
 
 _NEUTRAL_OP_PARAMS = {
@@ -529,6 +586,8 @@ _NEUTRAL_OP_PARAMS = {
     "perturbation_seed": 0,
     "cost_permutation": 0.0,
     "bus_shunt_susceptance_sigma": 0.0,
+    "transformer_tap_sigma": 0.0,
+    "transformer_shift_sigma": 0.0,
 }
 
 

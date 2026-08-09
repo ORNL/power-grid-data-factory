@@ -18,6 +18,7 @@ try:
         fallback_local_noise,
         fallback_regimes_from_text,
         prepare_topologies,
+        prepare_expansions,
         sample_unit_vector,
     )
 except ModuleNotFoundError:
@@ -32,6 +33,7 @@ except ModuleNotFoundError:
         fallback_local_noise,
         fallback_regimes_from_text,
         prepare_topologies,
+        prepare_expansions,
         sample_unit_vector,
     )
 
@@ -60,6 +62,42 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--topologies-per-case", type=int, default=6, help="Distinct independent base topologies to generate per case (>=1).")
     p.add_argument("--max-switched-branches", type=int, default=3, help="Maximum persistently switched-off branches per non-baseline topology.")
+    p.add_argument(
+        "--expansions-per-case",
+        type=int,
+        default=0,
+        help="Network-expansion plans (new buses/generators/transformers) to cycle across candidates per case. 0 (default) disables the expansion axis.",
+    )
+    p.add_argument(
+        "--expansion-max-steps",
+        type=int,
+        default=1,
+        help="Max units per expansion plan. >1 emits cascades (units added sequentially, each seeing the prior ones). Default 1 = single-unit plans.",
+    )
+    p.add_argument(
+        "--expansion-size-multiplier",
+        type=float,
+        default=1.0,
+        help="Scale factor on each new unit's capacity (generator pmax, branch rating). Default 1.0 = self-scaled to the case median.",
+    )
+    p.add_argument(
+        "--expansion-max-additions-fraction",
+        type=float,
+        default=0.0,
+        help="Relative cascade depth: ceiling = round(fraction * bus_count), floored at 1, capped by --expansion-max-steps. Bigger grids get proportionally bigger expansions. 0 (default) = use --expansion-max-steps directly.",
+    )
+    p.add_argument(
+        "--transformer-tap-sigma",
+        type=float,
+        default=0.0,
+        help="Per-sample transformer tap sweep magnitude (multiplicative, U[1-sigma,1+sigma), clamped to [0.9,1.1]). Only affects transformers. 0 (default) = off. Requires run_opf_expansion.jl to be observed.",
+    )
+    p.add_argument(
+        "--transformer-shift-sigma",
+        type=float,
+        default=0.0,
+        help="Per-sample transformer phase-shift sweep magnitude in degrees (additive, U[-sigma,+sigma)). Only affects transformers. 0 (default) = off. Requires run_opf_expansion.jl to be observed.",
+    )
     p.add_argument(
         "--load-snapshots",
         choices=["auto", "off"],
@@ -112,10 +150,24 @@ def main() -> None:
         dataset = dataset_for(repo_root, case_id)
         bus_count = bus_count_for(repo_root, case_id)
         topologies = prepare_topologies(repo_root, case_id, args.topologies_per_case, args.seed, args.max_switched_branches)
+        expansions = (
+            prepare_expansions(
+                repo_root,
+                case_id,
+                args.expansions_per_case,
+                args.seed,
+                max_steps=args.expansion_max_steps,
+                size_multiplier=args.expansion_size_multiplier,
+                max_additions_fraction=args.expansion_max_additions_fraction,
+            )
+            if args.expansions_per_case > 0
+            else []
+        )
         for i in range(args.per_case):
             regime = choose_regime(regimes, i, args.per_case, args.sampler, rng)
             vec = sample_unit_vector(dim=dim, idx=i, total=args.per_case, sampler=args.sampler, rng=rng)
             topology = topologies[i % len(topologies)]
+            expansion = expansions[i % len(expansions)] if expansions else None
             rows.append(
                 build_candidate(
                     case_id,
@@ -129,6 +181,9 @@ def main() -> None:
                     dataset=dataset,
                     bus_count=bus_count,
                     topology=topology,
+                    expansion=expansion,
+                    transformer_tap_sigma=args.transformer_tap_sigma,
+                    transformer_shift_sigma=args.transformer_shift_sigma,
                 )
             )
 

@@ -42,7 +42,7 @@ and scale figures behind them.
 
 ## 2. Variability and parametrization
 
-The generator samples a high-dimensional space along five independent axes. Each
+The generator samples a high-dimensional space along six independent axes. Each
 axis is seeded deterministically and controlled by explicit config knobs, so the
 diversity is both broad and fully reproducible.
 
@@ -84,12 +84,18 @@ matrix twice ([operating_points.py](../src/grid_data_factory/scenarios/operating
 - Per-branch **series reactance** — `line_reactance_sigma`
 - Per-branch **shunt charging susceptance** — `line_charging_sigma`
 - Per-bus **shunt susceptance (Bs)** — `bus_shunt_susceptance_sigma`
+- Per-transformer **tap ratio** — `transformer_tap_sigma` (multiplicative,
+  clamped to [0.9, 1.1]) — and **phase-shift angle** — `transformer_shift_sigma`
+  (additive, degrees). Both default off and apply only to elements that are
+  already transformers; observable only through the transformer-aware runner.
 - **Generator cost-curve permutation** (deterministic Fisher–Yates) to decouple
   network state from merit order
 
 Every perturbation is drawn i.i.d. from `U[1−σ, 1+σ)` using a SplitMix64 hash of
 `(perturbation_seed, branch/bus key, dimension)`, so it is identical across
-processes and fully reproducible.
+processes and fully reproducible. Equipment synthesized by the network-expansion
+axis (§2.6) is inserted *before* this step, so new lines/transformers/loads
+participate in the same per-element perturbation as native equipment.
 
 ### 2.3 Topology variability
 
@@ -153,6 +159,30 @@ over-representation, and a **full-budget streaming path**
 ([campaign_round.py](../src/grid_data_factory/campaigns/campaign_round.py))
 selects every constraint-passing candidate with O(buckets) memory when the budget
 exceeds the pool — essential at billion-scale.
+
+### 2.6 Network-expansion variability
+
+Beyond re-configuring the *existing* grid, the factory can also **grow the
+network** — synthesizing new equipment to model long-horizon build-out
+([topology/expansion.py](../src/grid_data_factory/topology/expansion.py)). Where
+the topology axis (§2.3) switches and reinforces branches that already exist,
+this axis adds entirely new devices, on **both the generation and the load side**:
+
+- **Generation-side additions**: new **generators** at existing load buses,
+  **greenfield buses** (a new bus with its own generator and interconnecting
+  line), **transformers** with off-nominal tap/phase shift, and low-impedance
+  **bus-tie / substation splits** that expand switching capacity.
+- **Load-side additions**: new **loads** (organic demand growth,
+  electrification, or a new interconnecting customer) attached to well-connected
+  buses, sized from the case's typical demand and power factor.
+
+Expansions can be applied singly or as **cascaded, multi-step build-outs**
+(`max_steps`), where each new unit is placed against the network state left by
+the previous step. New capacity is scaled by a `size_multiplier`, and the total
+amount of build-out can be pinned as a **fraction of grid size**
+(`max_additions_fraction`) so larger topologies admit proportionally larger
+expansions. Every plan is deterministic (seed-threaded IDs), immutable in
+application, and **connectivity-checked** before use.
 
 ---
 
