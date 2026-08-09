@@ -3,8 +3,9 @@
 A high-throughput, provenance-first engine for manufacturing PF, DC-OPF, AC-OPF,
 and SCOPF datasets at extreme scale. It sweeps an unusually wide space of grid
 variability — demand, dispatch, network admittance, bus shunts, topology,
-reinforcements, contingencies, and cost structure — and turns it into billions of
-fully labeled, reproducible samples by saturating leadership-class HPC resources.
+reinforcements, network expansion (new generation and load), contingencies, and
+cost structure — and turns it into billions of fully labeled, reproducible
+samples by saturating leadership-class HPC resources.
 
 For a capabilities-first overview, see
 [Data Generation Capabilities](docs/data_generation_capabilities.md).
@@ -59,6 +60,10 @@ See `docs/adaptive_campaign_strategy.md` and `configs/campaign_default.yaml`.
   regimes, regional + per-bus variation), generator dispatch/reserves, per-branch
   admittance and bus shunts, generator cost permutation, topology switching, and
   distinct-conductor grid reinforcements.
+- **Network expansion**: synthesizes new equipment to model grid build-out on
+  both the generation side (generators, greenfield buses, transformers, bus-tie
+  splits) and the load side (new demand), applied singly or as cascaded,
+  connectivity-checked, size-scaled multi-step expansions.
 - **Rich contingencies**: N-1 / N-2 / N-k, common-mode and parallel-circuit
   events, sequential N-1-N-1 and cascades across a ~15-class credibility ontology,
   with enumeration-time feasibility prefiltering.

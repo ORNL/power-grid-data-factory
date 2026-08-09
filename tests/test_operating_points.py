@@ -33,6 +33,52 @@ class TestOperatingPoints(unittest.TestCase):
         out = apply_operating_point(_BASE, {"branch_rating_scale": 0.5})
         self.assertAlmostEqual(out["branches"][0]["rate_a"], 50.0)
 
+    def test_transformer_sweep_off_by_default(self):
+        xfmr_case = {
+            **_BASE,
+            "branches": [
+                {"branch_id": "line_1", "from": "1", "to": "2", "r": 0.01, "x": 0.1, "rate_a": 100.0, "tap": 1.0, "shift": 0.0},
+                {"branch_id": "xfmr_1", "from": "1", "to": "2", "r": 0.01, "x": 0.1, "rate_a": 100.0, "tap": 1.02, "shift": 3.0, "transformer": True},
+            ],
+        }
+        out = apply_operating_point(xfmr_case, {"perturbation_seed": 7})
+        self.assertEqual(out["branches"][0]["tap"], 1.0)
+        self.assertEqual(out["branches"][0]["shift"], 0.0)
+        self.assertEqual(out["branches"][1]["tap"], 1.02)
+        self.assertEqual(out["branches"][1]["shift"], 3.0)
+
+    def test_transformer_sweep_only_affects_transformers(self):
+        xfmr_case = {
+            **_BASE,
+            "branches": [
+                {"branch_id": "line_1", "from": "1", "to": "2", "r": 0.01, "x": 0.1, "rate_a": 100.0, "tap": 1.0, "shift": 0.0},
+                {"branch_id": "xfmr_1", "from": "1", "to": "2", "r": 0.01, "x": 0.1, "rate_a": 100.0, "tap": 1.02, "shift": 3.0, "transformer": True},
+            ],
+        }
+        params = {"perturbation_seed": 7, "transformer_tap_sigma": 0.05, "transformer_shift_sigma": 2.0}
+        out = apply_operating_point(xfmr_case, params)
+        # Plain line (tap=1, shift=0, not a transformer) is left untouched.
+        self.assertEqual(out["branches"][0]["tap"], 1.0)
+        self.assertEqual(out["branches"][0]["shift"], 0.0)
+        # Transformer tap/shift move, and stay within the clamp band.
+        self.assertNotAlmostEqual(out["branches"][1]["tap"], 1.02)
+        self.assertNotAlmostEqual(out["branches"][1]["shift"], 3.0)
+        self.assertGreaterEqual(out["branches"][1]["tap"], 0.9)
+        self.assertLessEqual(out["branches"][1]["tap"], 1.1)
+
+    def test_transformer_sweep_is_deterministic(self):
+        xfmr_case = {
+            **_BASE,
+            "branches": [
+                {"branch_id": "xfmr_1", "from": "1", "to": "2", "r": 0.01, "x": 0.1, "rate_a": 100.0, "tap": 1.02, "shift": 3.0, "transformer": True},
+            ],
+        }
+        params = {"perturbation_seed": 11, "transformer_tap_sigma": 0.05, "transformer_shift_sigma": 2.0}
+        a = apply_operating_point(xfmr_case, params)
+        b = apply_operating_point(xfmr_case, params)
+        self.assertEqual(a["branches"][0]["tap"], b["branches"][0]["tap"])
+        self.assertEqual(a["branches"][0]["shift"], b["branches"][0]["shift"])
+
     def test_snapshot_rebuild(self):
         snap = {"2": [123.0, 45.0], "1": [0.0, 0.0]}
         out = apply_operating_point(_BASE, {"_load_snapshot_map": snap})
