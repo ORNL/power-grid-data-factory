@@ -41,6 +41,9 @@ B3_ROUNDS=150
 mkdir -p "$V1_ARCHIVE_DIR/prev_run"
 for f in round_000_raw.tar.zst \
          round_000_raw.tar.zst.sha256 \
+         round_000_campaign_meta.tar.zst \
+         round_000_campaign_meta.tar.zst.sha256 \
+         round_000_campaign_meta_files.txt \
          round_000_convergence_summary.json \
          round_000_shard_campaign_dirs.txt; do
   if [[ -e "$V1_ARCHIVE_DIR/$f" ]]; then
@@ -52,7 +55,7 @@ done
 # ---------------------------------------------------------------------------
 # 2) archive v1 (job 3428668) output, chained to its completion
 # ---------------------------------------------------------------------------
-V1_ARCHIVE_JOB=$(CAMPAIGN_ID="$V1_CAMPAIGN" ROUND_INDEX=0 \
+V1_ARCHIVE_JOB=$(CAMPAIGN_ID="$V1_CAMPAIGN" ROUND_INDEX=0 TOTAL_ROUNDS=1 \
   RUNS_ROOT="$V1_RUNS_ROOT" ARCHIVE_DIR="$V1_ARCHIVE_DIR" \
   sbatch --parsable --dependency=afterok:$V1_JOB "$ARCHIVE_SBATCH")
 echo "v1 archive job $V1_ARCHIVE_JOB submitted (afterok:$V1_JOB) -> $V1_ARCHIVE_DIR/round_000_raw.tar.zst"
@@ -78,7 +81,7 @@ echo "verified 3B map jobs $B3_FIRST_MAP_JOB..$last map to rounds 000..$(printf 
 for i in $(seq 0 $((B3_ROUNDS - 1))); do
   round_pad=$(printf "%03d" "$i")
   map_job=$((B3_FIRST_MAP_JOB + i))
-  aj=$(CAMPAIGN_ID="$B3_CAMPAIGN" ROUND_INDEX="$i" \
+  aj=$(CAMPAIGN_ID="$B3_CAMPAIGN" ROUND_INDEX="$i" TOTAL_ROUNDS="$B3_ROUNDS" \
     RUNS_ROOT="$B3_RUNS_ROOT" ARCHIVE_DIR="$B3_ARCHIVE_DIR" \
     sbatch --parsable --dependency=afterok:$map_job "$ARCHIVE_SBATCH")
   echo "3B round $round_pad: archive job $aj (afterok:$map_job) -> $B3_ARCHIVE_DIR/round_${round_pad}_raw.tar.zst"
