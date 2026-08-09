@@ -7,7 +7,8 @@ exists with ``"ok": true``. The furthest incomplete round is the lowest round
 index that is not complete; because rounds run in sequence, that is the round
 currently in progress. It is resubmitted with ``RESUME=1`` so the SLURM job
 skips finished shards and finalized runs. With ``--chain`` the remaining rounds
-are also queued, each depending on the previous via ``afterok``.
+are also queued, each depending on the previous via ``--dependency-type``
+(default ``afterany`` so a timed-out predecessor still releases the next job).
 
 Resource flags (``--nodes``, ``--ntasks-per-node``, ``--cpus-per-task``,
 ``--time``) override the sbatch header when set, so continuation matches the
@@ -47,7 +48,17 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--budget", type=int, default=0, help="Per-round budget when --total-budget is not used.")
     p.add_argument("--budget-schedule", default="constant", choices=("constant", "linear", "geometric"))
     p.add_argument("--budget-ratio", type=float, default=1.0)
-    p.add_argument("--chain", action="store_true", help="Also queue all subsequent rounds, chained via afterok.")
+    p.add_argument("--chain", action="store_true", help="Also queue all subsequent rounds, chained via the dependency type.")
+    p.add_argument(
+        "--dependency-type",
+        choices=("afterany", "afterok", "afternotok"),
+        default="afterany",
+        help=(
+            "Slurm dependency type for chaining. Default 'afterany' so a round "
+            "that TIMES OUT (counted as failure by Slurm) still releases the next "
+            "job. The next job auto-resumes the furthest incomplete round."
+        ),
+    )
     p.add_argument("--dry-run", action="store_true", help="Print the submission plan without calling sbatch.")
     p.add_argument("--nodes", type=int, default=0, help="Override sbatch node count (0 keeps the template header value).")
     p.add_argument("--ntasks-per-node", type=int, default=0, help="Override sbatch tasks per node (0 keeps the header value).")
@@ -128,15 +139,15 @@ def build_resource_flags(nodes: int, ntasks_per_node: int, cpus_per_task: int, t
     return flags
 
 
-def submit_round(repo_root: Path, sbatch_path: Path, env: dict[str, str], dependency: str | None, dry_run: bool, resource_flags: list[str] | None = None) -> str:
+def submit_round(repo_root: Path, sbatch_path: Path, env: dict[str, str], dependency: str | None, dry_run: bool, resource_flags: list[str] | None = None, dependency_type: str = "afterany") -> str:
     resource_flags = resource_flags or []
     cmd = ["sbatch", "--parsable", *resource_flags]
     if dependency:
-        cmd.append(f"--dependency=afterok:{dependency}")
+        cmd.append(f"--dependency={dependency_type}:{dependency}")
     cmd.append(str(sbatch_path))
     overrides = {k: env[k] for k in ("CAMPAIGN_ID", "ROUND_INDEX", "RESUME", "BUDGET") if k in env}
     if dry_run:
-        dep = f" (afterok:{dependency})" if dependency else ""
+        dep = f" ({dependency_type}:{dependency})" if dependency else ""
         res = f" {resource_flags}" if resource_flags else ""
         print(f"[dry-run] sbatch{dep}{res} {sbatch_path}  overrides={overrides}")
         return f"DRYRUN_R{env['ROUND_INDEX']}"
@@ -144,7 +155,7 @@ def submit_round(repo_root: Path, sbatch_path: Path, env: dict[str, str], depend
     if proc.returncode != 0:
         raise RuntimeError(f"sbatch failed (rc={proc.returncode}): {proc.stderr.strip()}")
     job_id = proc.stdout.strip().split(";")[0]
-    dep = f" (afterok:{dependency})" if dependency else ""
+    dep = f" ({dependency_type}:{dependency})" if dependency else ""
     print(f"submitted job {job_id}{dep}  overrides={overrides}")
     return job_id
 
@@ -181,7 +192,7 @@ def main() -> None:
     submitted: list[dict[str, object]] = []
     for r in targets:
         env = build_submit_env(dict(os.environ), args.campaign_id, r, budgets[r], resume=True, extra_env=extra_env)
-        job_id = submit_round(repo_root, sbatch_path, env, dependency=prev_job, dry_run=args.dry_run, resource_flags=resource_flags)
+        job_id = submit_round(repo_root, sbatch_path, env, dependency=prev_job, dry_run=args.dry_run, resource_flags=resource_flags, dependency_type=args.dependency_type)
         submitted.append({"round_index": r, "budget": budgets[r], "job_id": job_id, "dependency": prev_job})
         prev_job = job_id
 
