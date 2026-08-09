@@ -83,6 +83,7 @@ def run_campaign_round(
         "budget": budget,
         "selected_count": len(selected),
         "selected_by_queue": _count_selected_by_queue(selected),
+        "random_seed": audit_seed,
     }
     selected_path = campaign_root / "round_summaries" / f"round_{round_index:03d}_selected_candidates.jsonl"
     with selected_path.open("w", encoding="utf-8") as fh:
@@ -184,6 +185,7 @@ def run_campaign_round_streaming(
         "budget": budget,
         "selected_count": selected_count,
         "selected_by_queue": {"full_budget": selected_count},
+        "random_seed": audit_seed,
     }
     summary_path = write_round_summary(campaign_root, round_index, summary)
     summary["summary_path"] = str(summary_path)
