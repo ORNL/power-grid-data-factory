@@ -101,7 +101,13 @@ class PowerModelsAdapter:
         return self._run_julia_script("run_opf.jl", case, {"task": "relaxed_opf", "formulation": formulation, "options": options or {}})
 
     def solve_ac_opf(self, case: dict, options: dict | None = None) -> dict:
-        return self._run_julia_script("run_opf.jl", case, {"task": "ac_opf", "options": options or {}})
+        # Default runner is run_opf.jl. Network-expansion campaigns can opt into
+        # the transformer-aware fork by exporting PGDF_OPF_SCRIPT=run_opf_expansion.jl
+        # (or by passing options["julia_script"]); the default is unchanged so
+        # existing campaigns are unaffected.
+        opts = options or {}
+        script = str(opts.get("julia_script") or os.environ.get("PGDF_OPF_SCRIPT", "").strip() or "run_opf.jl")
+        return self._run_julia_script(script, case, {"task": "ac_opf", "options": opts})
 
     def solve_contingency_pf(self, case: dict, contingency: dict, controls: dict | None = None, options: dict | None = None) -> dict:
         return self._run_julia_script(

@@ -31,6 +31,7 @@ try:
     from grid_data_factory.solvers.powermodels_adapter import PowerModelsAdapter
     from grid_data_factory.sources.registry import dataset_for, grid_family_for
     from grid_data_factory.topology.generation import apply_topology
+    from grid_data_factory.topology.expansion import apply_expansion
     from grid_data_factory.scenarios.load_snapshots import get_snapshot_bus_loads
     from grid_data_factory.scenarios.operating_points import apply_operating_point
     from grid_data_factory.storage.layout import has_finalized_attempt
@@ -60,6 +61,7 @@ except ModuleNotFoundError:
     from grid_data_factory.solvers.powermodels_adapter import PowerModelsAdapter
     from grid_data_factory.sources.registry import dataset_for, grid_family_for
     from grid_data_factory.topology.generation import apply_topology
+    from grid_data_factory.topology.expansion import apply_expansion
     from grid_data_factory.scenarios.load_snapshots import get_snapshot_bus_loads
     from grid_data_factory.scenarios.operating_points import apply_operating_point
     from grid_data_factory.storage.layout import has_finalized_attempt
@@ -140,6 +142,9 @@ def main() -> None:
             case_file = _resolve_case_file(repo_root, case_id)
             case_data = parse_matpower_case(case_file, case_id)
             case_data = apply_topology(case_data, cand.get("switched_off_branches"), cand.get("reinforced_branches"))
+            expansion_plan = cand.get("expansion")
+            if expansion_plan:
+                case_data = apply_expansion(case_data, expansion_plan)
             op_params = dict(cand.get("operating_point_parameters", {}))
             snapshot_id = op_params.get("load_snapshot_id")
             if snapshot_id:
@@ -169,6 +174,9 @@ def main() -> None:
             desc["dataset"] = case_dataset
             desc["topology_id"] = cand.get("topology_id", "topology_000000_baseline")
             desc["switched_branch_count"] = int(cand.get("switched_branch_count", 0))
+            if expansion_plan:
+                desc["expansion_id"] = expansion_plan.get("expansion_id")
+                desc["expansion_class"] = expansion_plan.get("expansion_class")
 
             existing_diversity.append(desc)
             diversity_rows.append(desc)
