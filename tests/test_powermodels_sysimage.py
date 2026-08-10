@@ -1,11 +1,38 @@
 import os
 import unittest
+from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from _bootstrap import REPO_ROOT  # noqa: F401  (ensures src on path)
 
-from grid_data_factory.solvers.powermodels_adapter import PowerModelsAdapter
+from grid_data_factory.solvers.powermodels_adapter import PersistentPowerModelsSession, PowerModelsAdapter
+
+
+class _FakeProcess:
+    def __init__(self) -> None:
+        self.stdin = StringIO()
+        self.stdout = StringIO(
+            'PowerModels informational output\n'
+            'PGDF_RESULT\t{"success": true, "termination_status": "LOCALLY_SOLVED"}\n'
+            'PGDF_RESULT\t{"success": false, "termination_status": "LOCALLY_INFEASIBLE"}\n'
+        )
+        self.pid = 1234
+        self.returncode = None
+
+    def poll(self):
+        return self.returncode
+
+    def wait(self, timeout=None):
+        self.returncode = 0
+        return 0
+
+    def terminate(self):
+        self.returncode = -15
+
+    def kill(self):
+        self.returncode = -9
 
 
 class SysimageResolutionTests(unittest.TestCase):
@@ -51,6 +78,25 @@ class SysimageResolutionTests(unittest.TestCase):
 
     def test_no_repo_root_returns_none(self) -> None:
         self.assertIsNone(PowerModelsAdapter.resolve_julia_sysimage(None))
+
+
+class PersistentSessionTests(unittest.TestCase):
+    def test_reuses_process_and_ignores_unframed_stdout(self) -> None:
+        with TemporaryDirectory() as tmp:
+            adapter = PowerModelsAdapter(repo_root=Path(tmp))
+            session = PersistentPowerModelsSession(adapter, {"timeout_s": 5})
+            process = _FakeProcess()
+
+            with patch.object(session, "_start", side_effect=lambda: setattr(session, "process", process)) as start:
+                with patch("grid_data_factory.solvers.powermodels_adapter.select.select", side_effect=lambda streams, *_: (streams, [], [])):
+                    first = session.solve_ac_opf({"case_id": "case"})
+                    second = session.solve_ac_opf({"case_id": "case"})
+
+            self.assertEqual(start.call_count, 1)
+            self.assertTrue(first["success"])
+            self.assertEqual(second["termination_status"], "LOCALLY_INFEASIBLE")
+            self.assertTrue(first["runtime_metadata"]["persistent_julia"])
+            self.assertEqual(process.stdin.getvalue().count("\n"), 2)
 
 
 if __name__ == "__main__":
