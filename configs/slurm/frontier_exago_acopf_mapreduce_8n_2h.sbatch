@@ -81,6 +81,7 @@ SEED=${SEED:-7}
 SOLVER_ID=${SOLVER_ID:-exago_ac_opf_hiopsparsegpu_campaign}
 SOLVER_MODE=${SOLVER_MODE:-gpu_then_ipopt}
 TIMEOUT_S=${TIMEOUT_S:-1800}
+EXECUTION_POLICY=${EXECUTION_POLICY:-}
 RUNS_ROOT=${RUNS_ROOT:-data/outputs/runs}
 MAX_CANDIDATES=${MAX_CANDIDATES:-0}
 RUN_BOOTSTRAP=${RUN_BOOTSTRAP:-1}
@@ -126,6 +127,7 @@ echo "[$(date -u +%FT%TZ)] JOB=$SLURM_JOB_ID mode=map_reduce backend=exago campa
 echo "[$(date -u +%FT%TZ)] config=$CONFIG budget=$BUDGET per_case=$PER_CASE seed=$SEED max_k=$MAX_K"
 echo "[$(date -u +%FT%TZ)] contingencies=simultaneous+cascade seq_cascade_per_op=$SEQ_CASCADE_PER_OP seq_max_len=$SEQ_MAX_LEN"
 echo "[$(date -u +%FT%TZ)] solver_id=$SOLVER_ID solver_mode=$SOLVER_MODE timeout_s=$TIMEOUT_S shard_count=$SHARD_COUNT"
+echo "[$(date -u +%FT%TZ)] execution_policy=${EXECUTION_POLICY:-none}"
 echo "[$(date -u +%FT%TZ)] opflow_bin=$PGDF_EXAGO_OPFLOW_BIN"
 echo "[$(date -u +%FT%TZ)] coverage_keys=$COVERAGE_KEYS min_per_bucket=$MIN_PER_BUCKET enforce=$ENFORCE_COVERAGE backfill=$BACKFILL_FROM_POOL"
 
@@ -283,6 +285,10 @@ while true; do
     --timeout-s "$TIMEOUT_S"
     --max-failure-fraction "$MAX_FAILURE_FRACTION"
   )
+
+  if [[ -n "'$EXECUTION_POLICY'" ]]; then
+    ARGS+=(--execution-policy "'$EXECUTION_POLICY'")
+  fi
 
   if [[ "$MAX_CANDIDATES" != "0" ]]; then
     ARGS+=(--max-candidates "$MAX_CANDIDATES")

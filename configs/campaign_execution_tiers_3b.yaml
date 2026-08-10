@@ -1,0 +1,23 @@
+schema_version: "1.0"
+
+defaults:
+  enabled: true
+  timeout_s: 300
+  tier: benchmark_required
+
+cases:
+  pglib_opf_case13659_pegase:
+    enabled: false
+    timeout_s: 300
+    tier: quarantine_timeout
+    reason: Dominated by 1800-second timeouts in the cancelled round-0 run.
+  epigrids_western_20758:
+    enabled: false
+    timeout_s: 120
+    tier: quarantine_invalid_model
+    reason: Dominated by INVALID_MODEL results in the cancelled round-0 run.
+  epigrids_eastern_78484:
+    enabled: false
+    timeout_s: 300
+    tier: benchmark_required
+    reason: Benchmark before enabling the largest grid in the portfolio.

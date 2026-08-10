@@ -52,6 +52,7 @@ SEED=${SEED:-7}
 AUDIT_FRACTION=${AUDIT_FRACTION:-1.0}
 SOLVER_ID=${SOLVER_ID:-powermodels_ac_opf_ipopt_campaign}
 TIMEOUT_S=${TIMEOUT_S:-1200}
+EXECUTION_POLICY=${EXECUTION_POLICY:-}
 RUNS_ROOT=${RUNS_ROOT:-data/outputs/runs}
 MAX_CANDIDATES=${MAX_CANDIDATES:-0}
 RUN_BOOTSTRAP=${RUN_BOOTSTRAP:-1}
@@ -144,6 +145,7 @@ echo "[$(date -u +%FT%TZ)] JOB=$SLURM_JOB_ID mode=map_reduce campaign_id=$CAMPAI
 echo "[$(date -u +%FT%TZ)] config=$CONFIG budget=$BUDGET per_case=$PER_CASE seed=$SEED"
 echo "[$(date -u +%FT%TZ)] contingencies=simultaneous+cascade max_k=$MAX_K seq_cascade_per_op=$SEQ_CASCADE_PER_OP seq_max_len=$SEQ_MAX_LEN"
 echo "[$(date -u +%FT%TZ)] solver_id=$SOLVER_ID timeout_s=$TIMEOUT_S shard_count=$SHARD_COUNT audit_fraction=$AUDIT_FRACTION"
+echo "[$(date -u +%FT%TZ)] execution_policy=${EXECUTION_POLICY:-none}"
 echo "[$(date -u +%FT%TZ)] coverage_keys=$COVERAGE_KEYS min_per_bucket=$MIN_PER_BUCKET enforce=$ENFORCE_COVERAGE backfill=$BACKFILL_FROM_POOL"
 
 RESUMING=0
@@ -259,6 +261,7 @@ MAP_SCRIPT="'$MAP_SCRIPT'"
 SOLVER_ID="'$SOLVER_ID'"
 TIMEOUT_S="'$TIMEOUT_S'"
 RUNS_ROOT="'$RUNS_ROOT'"
+EXECUTION_POLICY="'$EXECUTION_POLICY'"
 MAX_CANDIDATES="'$MAX_CANDIDATES'"
 CONTINUE_ON_ERROR="'$CONTINUE_ON_ERROR'"
 MAX_FAILURE_FRACTION="'$MAX_FAILURE_FRACTION'"
@@ -318,6 +321,10 @@ while true; do
     --timeout-s "$TIMEOUT_S"
     --max-failure-fraction "$MAX_FAILURE_FRACTION"
   )
+
+  if [[ -n "$EXECUTION_POLICY" ]]; then
+    ARGS+=(--execution-policy "$EXECUTION_POLICY")
+  fi
 
   if [[ "$MAX_CANDIDATES" != "0" ]]; then
     ARGS+=(--max-candidates "$MAX_CANDIDATES")
