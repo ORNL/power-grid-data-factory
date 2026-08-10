@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import select
 import shlex
 import socket
 import subprocess
@@ -11,6 +12,138 @@ import time
 from pathlib import Path
 
 from grid_data_factory.runtime_metadata import collect_execution_context
+
+
+class PersistentPowerModelsSession:
+    def __init__(self, adapter: "PowerModelsAdapter", options: dict | None = None):
+        self.adapter = adapter
+        self.options = dict(options or {})
+        self.timeout_s = float(self.options.get("timeout_s", 1200.0))
+        self.process: subprocess.Popen[str] | None = None
+        self._stderr = None
+
+    def _environment(self) -> dict[str, str]:
+        env = os.environ.copy()
+        if self.adapter.depot_path:
+            env["JULIA_DEPOT_PATH"] = self.adapter.depot_path
+        env.setdefault("OPENBLAS_NUM_THREADS", "1")
+        env.setdefault("JULIA_NUM_THREADS", "1")
+        env.setdefault("JULIA_PKG_PRECOMPILE_AUTO", "0")
+        return env
+
+    def _start(self) -> None:
+        script_name = str(self.options.get("julia_script") or os.environ.get("PGDF_OPF_SCRIPT", "").strip() or "run_opf.jl")
+        script = self.adapter.julia_scripts_dir / script_name
+        if script_name != "run_opf.jl":
+            raise ValueError(f"persistent PowerModels mode does not support {script_name}")
+        if not script.exists():
+            raise FileNotFoundError(script)
+
+        cmd = [
+            "julia",
+            f"--project={self.adapter.julia_project_dir}",
+            *self.adapter._julia_mode_flags(),
+            str(script),
+            "--server",
+        ]
+        shell_cmd = f"module load julia 2>/dev/null || true; exec {' '.join(shlex.quote(c) for c in cmd)}"
+        self._stderr = tempfile.TemporaryFile(mode="w+t", encoding="utf-8")
+        self.process = subprocess.Popen(
+            ["bash", "-lc", shell_cmd],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=self._stderr,
+            text=True,
+            bufsize=1,
+            env=self._environment(),
+        )
+
+    def _error_text(self) -> str:
+        if self._stderr is None:
+            return ""
+        self._stderr.flush()
+        self._stderr.seek(0)
+        return self._stderr.read()
+
+    def solve_ac_opf(self, case: dict) -> dict:
+        start_t = time.perf_counter()
+        exec_ctx = collect_execution_context()
+
+        def finalize(result: dict) -> dict:
+            out = dict(result)
+            runtime = {
+                "wallclock_seconds": round(time.perf_counter() - start_t, 6),
+                "execution_context": exec_ctx,
+                "persistent_julia": True,
+            }
+            out["runtime_metadata"] = runtime
+            out.setdefault("runtime", runtime["wallclock_seconds"])
+            out.setdefault("solve_time", runtime["wallclock_seconds"])
+            return out
+
+        if self.process is None or self.process.poll() is not None:
+            self.close()
+            try:
+                self._start()
+            except Exception as exc:  # noqa: BLE001
+                return finalize({"success": False, "termination_status": "process_error", "solver_name": "powermodels", "stderr": str(exc)})
+
+        assert self.process is not None and self.process.stdin is not None and self.process.stdout is not None
+        request = {"case": case, "payload": {"task": "ac_opf", "options": self.options}}
+        try:
+            self.process.stdin.write(json.dumps(request) + "\n")
+            self.process.stdin.flush()
+            deadline = time.monotonic() + self.timeout_s
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    self.close()
+                    return finalize({"success": False, "termination_status": "timeout", "solver_name": "powermodels"})
+                ready, _, _ = select.select([self.process.stdout], [], [], remaining)
+                if not ready:
+                    self.close()
+                    return finalize({"success": False, "termination_status": "timeout", "solver_name": "powermodels"})
+                line = self.process.stdout.readline()
+                if not line:
+                    stderr = self._error_text()
+                    self.close()
+                    return finalize({"success": False, "termination_status": "process_error", "solver_name": "powermodels", "stderr": stderr})
+                if line.startswith("PGDF_RESULT\t"):
+                    return finalize(json.loads(line.removeprefix("PGDF_RESULT\t")))
+        except Exception as exc:  # noqa: BLE001
+            stderr = self._error_text()
+            self.close()
+            return finalize({"success": False, "termination_status": "process_error", "solver_name": "powermodels", "stderr": f"{exc}\n{stderr}"})
+
+    def close(self) -> None:
+        if self.process is not None:
+            if self.process.stdin is not None:
+                try:
+                    self.process.stdin.close()
+                except OSError:
+                    pass
+            if self.process.poll() is None:
+                try:
+                    self.process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.process.terminate()
+                    try:
+                        self.process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        self.process.kill()
+                        self.process.wait()
+            if self.process.stdout is not None:
+                self.process.stdout.close()
+            self.process = None
+        if self._stderr is not None:
+            self._stderr.close()
+            self._stderr = None
+
+    def __enter__(self) -> "PersistentPowerModelsSession":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
 
 class PowerModelsAdapter:
@@ -108,6 +241,9 @@ class PowerModelsAdapter:
         opts = options or {}
         script = str(opts.get("julia_script") or os.environ.get("PGDF_OPF_SCRIPT", "").strip() or "run_opf.jl")
         return self._run_julia_script(script, case, {"task": "ac_opf", "options": opts})
+
+    def persistent_ac_opf_session(self, options: dict | None = None) -> PersistentPowerModelsSession:
+        return PersistentPowerModelsSession(self, options)
 
     def solve_contingency_pf(self, case: dict, contingency: dict, controls: dict | None = None, options: dict | None = None) -> dict:
         return self._run_julia_script(

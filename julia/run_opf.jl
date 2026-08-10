@@ -2,19 +2,6 @@ using JSON3
 using Ipopt
 using PowerModels
 
-if length(ARGS) < 3
-    error("usage: run_opf.jl <case_json> <payload_json> <out_json>")
-end
-
-case_path = ARGS[1]
-payload_path = ARGS[2]
-out_path = ARGS[3]
-
-case_data = JSON3.read(read(case_path, String))
-payload = JSON3.read(read(payload_path, String))
-
-task = haskey(payload, :task) ? String(payload[:task]) : "ac_opf"
-
 function sanitize_json_value(x)
     if x isa AbstractDict
         out = Dict{String, Any}()
@@ -191,14 +178,20 @@ function to_powermodels_data(case_data)
     )
 end
 
-result = Dict{String, Any}(
-    "success" => false,
-    "termination_status" => "not_implemented",
-    "solver_name" => "powermodels",
-    "task" => task,
-)
+function solve_request(case_data, payload)
+    task = haskey(payload, :task) ? String(payload[:task]) : "ac_opf"
+    result = Dict{String, Any}(
+        "success" => false,
+        "termination_status" => "not_implemented",
+        "solver_name" => "powermodels",
+        "task" => task,
+    )
 
-if task == "ac_opf"
+    if task != "ac_opf"
+        result["note"] = "Only ac_opf task is currently implemented in run_opf.jl"
+        return result
+    end
+
     try
         pm_data = to_powermodels_data(case_data)
         optimizer = optimizer_with_attributes(
@@ -225,12 +218,39 @@ if task == "ac_opf"
         result["error"] = sprint(showerror, err)
         result["stacktrace"] = sprint(showerror, err, catch_backtrace())
     end
-else
-    result["success"] = false
-    result["termination_status"] = "not_implemented"
-    result["note"] = "Only ac_opf task is currently implemented in run_opf.jl"
+    return result
 end
 
-open(out_path, "w") do io
-    JSON3.write(io, result)
+function run_server()
+    for line in eachline(stdin)
+        result = try
+            request = JSON3.read(line)
+            solve_request(request[:case], request[:payload])
+        catch err
+            Dict{String, Any}(
+                "success" => false,
+                "termination_status" => "server_exception",
+                "solver_name" => "powermodels",
+                "error" => sprint(showerror, err),
+                "stacktrace" => sprint(showerror, err, catch_backtrace()),
+            )
+        end
+        write(stdout, "PGDF_RESULT\t")
+        JSON3.write(stdout, result)
+        write(stdout, '\n')
+        flush(stdout)
+    end
+end
+
+if length(ARGS) == 1 && ARGS[1] == "--server"
+    run_server()
+elseif length(ARGS) >= 3
+    case_data = JSON3.read(read(ARGS[1], String))
+    payload = JSON3.read(read(ARGS[2], String))
+    result = solve_request(case_data, payload)
+    open(ARGS[3], "w") do io
+        JSON3.write(io, result)
+    end
+else
+    error("usage: run_opf.jl <case_json> <payload_json> <out_json> | --server")
 end

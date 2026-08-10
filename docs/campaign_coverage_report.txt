@@ -1,0 +1,173 @@
+================================================================================
+POWER-GRID AC-OPF DATASET -- CAMPAIGN COVERAGE REPORT
+Generated: 2026-08-09
+Source: reconstructed directly from the archives (reduce reports + convergence
+        summaries inside the meta tarballs), after the source campaign dirs were
+        deleted -- confirming the archives are self-describing.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+GENERATION METHODOLOGY (common to both campaigns)
+--------------------------------------------------------------------------------
+Both datasets were produced by the adaptive, coverage-constrained, multi-fidelity
+"ultrascale" sampler. Per seed grid, the pipeline expands one base case into
+millions of labeled AC-OPF instances:
+
+1. Seed grids
+   Canonical pglib-opf cases (plus a few synthetic grids as probes in v1).
+
+2. Operating-point synthesis
+   For each grid, operating points are drawn across 14 operating regimes
+   (baseline, low_load, shoulder, summer_peak, winter_peak, high_renewable,
+   low_renewable, high_import, high_export, maintenance, branch_derating,
+   generator_cost_shift, reactive_stress, extreme_peak) using space-filling
+   designs (Sobol, Latin-hypercube, stratified, regime-specific, time-series).
+   Each point perturbs global + regionally-correlated + local-residual load,
+   renewable scale, reserve margin, branch ratings, and cost.
+
+3. Topology variation
+   Baseline plus single-line switching, double-line switching, and maintenance
+   configurations (N-1 / N-2 branch removals).
+
+4. Contingencies
+   Credible N-1 / N-2 branch outages selected via an ontology-driven,
+   state-aware constrained beam search (beam width 32).
+
+5. Screening
+   DC-based severity features (dc / voltage / reactive risk) with multi-trigger
+   escalation (uncertainty multiplier 2.33) prioritize informative, near-boundary,
+   active-constraint-novel candidates.
+
+6. Acquisition / selection
+   A portfolio budget split across queues (broad_coverage 0.22,
+   active_constraint_novelty 0.20, security_boundary 0.20, credible_contingencies
+   0.16, high_severity_and_uncertainty 0.12, unscreened_audit 0.10) under
+   portfolio caps (max_per_grid, max_per_regime, max_per_contingency_class).
+   When budget >= candidate count, all constraint-passing candidates are taken
+   ("full-budget").
+
+7. Solve & label
+   Every candidate is solved as AC-OPF with PowerModels + Ipopt, and every result
+   is retained regardless of termination status, producing a labeled
+   feasibility-classification corpus (feasible = LOCALLY_SOLVED /
+   ALMOST_LOCALLY_SOLVED / OPTIMAL; infeasible = everything else). Execution is
+   map/reduce over 8192 shards / 1024 MPI ranks; the reduce stage dedups into
+   ledgers + a reduce report.
+
+Two counting levels appear below:
+   - Selected candidates = distinct (grid, operating-point, topology, contingency)
+     instances chosen (one reduce-report "solved" entry each).
+   - Raw sample rows = every solver output row written to samples.jsonl (each
+     candidate expands to a base + contingency solves, ~3x the candidate count);
+     this is the actual training corpus.
+
+
+================================================================================
+CAMPAIGN 1 -- PILOT (ultrascale_150m, archives/prev_run/)
+================================================================================
+Selected = solved candidates : 5,271,602  (full-budget: all candidates taken; no per-grid cap)
+Raw sample rows (corpus)      : 16,835,806  -- 36.48% feasible (6,140,988 LOCALLY_SOLVED)
+
+Row status histogram:
+   LOCALLY_SOLVED         6,140,988
+   LOCALLY_INFEASIBLE    10,321,476
+   ITERATION_LIMIT          373,002
+   timeout                      268
+   ALMOST_LOCALLY_SOLVED         72
+
+Selected candidates per grid:
+   GRID                       BUSES  FAMILY   SOLVED CAND.     FEASIBLE   FEAS%
+   pglib_opf_case118_ieee       118  ieee        3,564,421    1,909,910   53.6%
+   pglib_opf_case57_ieee         57  ieee        1,282,576            0    0.0%
+   pglib_opf_case14_ieee         14  ieee          424,605       50,049   11.8%
+   ------------------------------------------------------------------------
+   TOTAL                                          5,271,602   ~1,959,959   ~37%
+
+Topology coverage (6 configurations, evenly sampled):
+   TOPOLOGY                                      CANDIDATES
+   topology_000004_single_line_switching            903,783
+   topology_000000_baseline                         903,618
+   topology_000001_single_line_switching            888,505
+   topology_000005_double_line_switching            871,314
+   topology_000002_double_line_switching            862,040
+   topology_000003_maintenance_configuration        842,342
+
+NOTABLE:
+   case57_ieee returned 0% feasible -- every operating-point/contingency
+   combination in the sampled ranges was infeasible for this grid. Worth flagging
+   as either an over-stressed sampling envelope or a modeling artifact before
+   reusing this grid.
+
+
+================================================================================
+CAMPAIGN 2 -- VALIDATION (ultrascale_v1, archives/)
+================================================================================
+Selected = solved candidates : 180,006  (capped at max_per_grid = 25,000)
+Raw sample rows (corpus)      : 539,461  -- 32.07% feasible (172,983 LOCALLY_SOLVED)
+
+Row status histogram:
+   LOCALLY_SOLVED           172,983
+   LOCALLY_INFEASIBLE       288,660
+   INVALID_MODEL             75,003
+   ITERATION_LIMIT            1,698
+   timeout                    1,010
+   process_error                 98
+   JSONDecodeError                6
+   ALMOST_LOCALLY_SOLVED          3
+
+Selected candidates per grid (bulk cases):
+   GRID                       BUSES  FAMILY     SOLVED CAND.   FEASIBLE   FEAS%
+   pglib_opf_case24_ieee_rts     24  ieee_rts       25,000     15,843    63.4%
+   pglib_opf_case30_ieee         30  ieee           25,000      3,127    12.5%
+   pglib_opf_case73_ieee_rts     73  ieee_rts       25,000          0     0.0%
+   pglib_opf_case162_ieee_dtc   162  ieee_dtc       25,000      1,129     4.5%
+   pglib_opf_case300_ieee       300  ieee           25,000          0     0.0%
+   pglib_opf_case500_goc        500  goc            25,000     15,670    62.7%
+   pglib_opf_case2000_goc      2000  goc            25,000     17,411    69.6%
+   pglib_opf_case10000_goc    10000  goc             5,000      4,480    89.6%
+
+Probe grids (1 sample each -- smoke/validation):
+   activsg200                    (feasible)
+   memphis2026                   (feasible)
+   epigrids_florida_5658         (infeasible)
+   pglib_opf_case13659_pegase    (infeasible)
+   pglib_opf_case4661_sdet       (infeasible)
+   pglib_opf_case6470_rte        (infeasible)
+   -> a single instance per grid to validate parser/solver plumbing across
+      families (ACTIVSg, EPIGRIDS, synthetic, PEGASE, SDET, RTE).
+
+Topology coverage (6 configurations):
+   TOPOLOGY                                      CANDIDATES
+   topology_000001_single_line_switching             39,378
+   topology_000004_single_line_switching             34,779
+   topology_000003_maintenance_configuration         34,471
+   topology_000000_baseline                          27,067
+   topology_000005_double_line_switching             26,814
+   topology_000002_double_line_switching             17,497
+
+NOTABLE:
+   case73_ieee_rts and case300_ieee produced 0% feasible. INVALID_MODEL
+   (75,003 rows) is unique to v1 -- a chunk of instances failed model
+   construction (likely aggressive topology/contingency combinations that
+   disconnected the network), a failure mode not seen in the pilot.
+
+
+================================================================================
+COMPARISON AT A GLANCE
+================================================================================
+                        PILOT (ultrascale_150m)      VALIDATION (ultrascale_v1)
+   Distinct grids       3 (ieee 14/57/118)           8 bulk + 6 probes (14 total)
+   Grid families        ieee                         ieee, ieee_rts, ieee_dtc, goc
+   Bus range            14 - 118                     24 - 10,000
+   Selection            full-budget (all 5.6M)       capped at 25k/grid
+   Topologies           6                            6
+   Solved candidates    5,271,602                    180,006
+   Raw sample rows      16,835,806                   539,461
+   Feasible fraction    36.5%                        32.1%
+   Archive (raw + meta) 81 G + 1.9 G                 20 G + 78 M
+
+The pilot went DEEP on 3 small IEEE grids (many millions of instances each);
+v1 went BROAD across grid families and sizes (up to 10k buses) with a per-grid
+cap plus cross-family smoke probes.
+================================================================================

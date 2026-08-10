@@ -120,8 +120,9 @@ def main() -> None:
 
     done_ids = _loaded_sample_ids(runs_root) if args.resume else set()
 
-    # One open handle for the whole shard instead of reopening per sample.
+    # Reuse one Julia process and one output handle for the whole shard.
     sink = SampleSink(runs_root, args.solver_id)
+    solver = adapter.persistent_ac_opf_session(options={"timeout_s": args.timeout_s})
 
     for cand in candidates:
         case_id = str(cand.get("case_id"))
@@ -154,7 +155,7 @@ def main() -> None:
             case_data = apply_operating_point(case_data, op_params)
             case_data = apply_contingency(case_data, cand.get("contingency"))
 
-            result = adapter.solve_ac_opf(case_data, options={"timeout_s": args.timeout_s})
+            result = solver.solve_ac_opf(case_data)
             samples_path, run_id = sink.append(cand, case_data, result)
             result["_run_id"] = run_id
 
@@ -236,6 +237,7 @@ def main() -> None:
             if not args.continue_on_error:
                 break
 
+    solver.close()
     sink.close()
 
     append_parquet_rows(campaign_root / "diversity_ledger.parquet", diversity_rows)
