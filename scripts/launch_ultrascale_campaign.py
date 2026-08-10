@@ -45,6 +45,7 @@ def parse_args() -> argparse.Namespace:
 
     p.add_argument("--solver-id", default="powermodels_ac_opf_ipopt_campaign")
     p.add_argument("--timeout-s", type=int, default=1800)
+    p.add_argument("--execution-policy", default="", help="Optional per-case enable/timeout YAML policy.")
     p.add_argument("--runs-root", default="data/outputs/runs")
 
     p.add_argument("--shard-count", type=int, default=0, help="0 means use Slurm ntasks.")
@@ -129,6 +130,7 @@ def _build_export_payload(args: argparse.Namespace, round_index: int, seed: int,
         "SEED": str(seed),
         "SOLVER_ID": args.solver_id,
         "TIMEOUT_S": str(args.timeout_s),
+        "EXECUTION_POLICY": args.execution_policy,
         "RUNS_ROOT": args.runs_root,
         "MAX_CANDIDATES": str(args.max_candidates),
         "RUN_BOOTSTRAP": "1",

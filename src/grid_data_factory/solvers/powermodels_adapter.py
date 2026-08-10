@@ -65,9 +65,12 @@ class PersistentPowerModelsSession:
         self._stderr.seek(0)
         return self._stderr.read()
 
-    def solve_ac_opf(self, case: dict) -> dict:
+    def solve_ac_opf(self, case: dict, timeout_s: float | None = None) -> dict:
         start_t = time.perf_counter()
         exec_ctx = collect_execution_context()
+        request_timeout_s = self.timeout_s if timeout_s is None else float(timeout_s)
+        if request_timeout_s <= 0:
+            raise ValueError("timeout_s must be > 0")
 
         def finalize(result: dict) -> dict:
             out = dict(result)
@@ -93,7 +96,7 @@ class PersistentPowerModelsSession:
         try:
             self.process.stdin.write(json.dumps(request) + "\n")
             self.process.stdin.flush()
-            deadline = time.monotonic() + self.timeout_s
+            deadline = time.monotonic() + request_timeout_s
             while True:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:

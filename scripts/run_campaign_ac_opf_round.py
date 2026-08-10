@@ -10,6 +10,7 @@ from typing import Any
 try:
     from grid_data_factory.boundaries.security_margin import classify_security_margin_band, compute_security_margin
     from grid_data_factory.campaigns.ledgers import append_parquet_rows
+    from grid_data_factory.campaigns.execution_policy import load_execution_policy, settings_for_case
     from grid_data_factory.campaigns.round_runner import (
         _append_sample,
         _build_margins,
@@ -40,6 +41,7 @@ except ModuleNotFoundError:
     sys.path.insert(0, str(_repo_root / "src"))
     from grid_data_factory.boundaries.security_margin import classify_security_margin_band, compute_security_margin
     from grid_data_factory.campaigns.ledgers import append_parquet_rows
+    from grid_data_factory.campaigns.execution_policy import load_execution_policy, settings_for_case
     from grid_data_factory.campaigns.round_runner import (
         _append_sample,
         _build_margins,
@@ -78,6 +80,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--runs-root", default="data/outputs/runs")
     p.add_argument("--solver-id", default="powermodels_ac_opf_ipopt_campaign")
     p.add_argument("--timeout-s", type=float, default=1200.0)
+    p.add_argument("--execution-policy", default="", help="Optional per-case enable/timeout YAML policy.")
     p.add_argument("--max-candidates", type=int, default=0)
     p.add_argument("--continue-on-error", action="store_true")
     p.add_argument(
@@ -108,6 +111,8 @@ def main() -> None:
 
     adapter = PowerModelsAdapter(repo_root=repo_root)
     bands = _load_bands(repo_root, args.config)
+    policy_path = (repo_root / args.execution_policy).resolve() if args.execution_policy else None
+    execution_policy = load_execution_policy(policy_path)
 
     existing_diversity = _read_existing_diversity(campaign_root)
     active_ledger_rows = []
@@ -140,6 +145,20 @@ def main() -> None:
                     }
                 )
                 continue
+            case_settings = settings_for_case(execution_policy, case_id, args.timeout_s)
+            if not case_settings.enabled:
+                skipped_rows.append(
+                    {
+                        "candidate_id": cand.get("candidate_id"),
+                        "case_id": case_id,
+                        "grid_family": case_family,
+                        "dataset": case_dataset,
+                        "reason": "execution_policy_disabled",
+                        "execution_tier": case_settings.tier,
+                        "policy_reason": case_settings.reason,
+                    }
+                )
+                continue
             case_file = _resolve_case_file(repo_root, case_id)
             case_data = parse_matpower_case(case_file, case_id)
             case_data = apply_topology(case_data, cand.get("switched_off_branches"), cand.get("reinforced_branches"))
@@ -155,7 +174,7 @@ def main() -> None:
             case_data = apply_operating_point(case_data, op_params)
             case_data = apply_contingency(case_data, cand.get("contingency"))
 
-            result = solver.solve_ac_opf(case_data)
+            result = solver.solve_ac_opf(case_data, timeout_s=case_settings.timeout_s)
             samples_path, run_id = sink.append(cand, case_data, result)
             result["_run_id"] = run_id
 
@@ -223,6 +242,8 @@ def main() -> None:
                     "gpu_type": ((result.get("runtime_metadata") or {}).get("execution_context") or {}).get("gpu_type"),
                     "security_margin": sec_margin,
                     "security_margin_band": sec_band,
+                    "execution_tier": case_settings.tier,
+                    "configured_timeout_s": case_settings.timeout_s,
                 }
             )
         except Exception as exc:  # noqa: BLE001
@@ -259,6 +280,7 @@ def main() -> None:
         "failed_count": len(failed_rows),
         "skipped_count": len(skipped_rows),
         "resume": bool(args.resume),
+        "execution_policy": str(policy_path) if policy_path else None,
         "failure_fraction": round(failure_fraction, 6),
         "max_failure_fraction": args.max_failure_fraction,
         "solved": solved_rows,

@@ -38,6 +38,7 @@ from grid_data_factory.boundaries.security_margin import (  # noqa: E402
     compute_security_margin,
 )
 from grid_data_factory.campaigns.ledgers import append_parquet_rows  # noqa: E402
+from grid_data_factory.campaigns.execution_policy import load_execution_policy, settings_for_case  # noqa: E402
 from grid_data_factory.constraints.active_sets import build_active_constraint_signature  # noqa: E402
 from grid_data_factory.constraints.coverage_ledger import update_active_constraint_ledger  # noqa: E402
 from grid_data_factory.contingencies.apply import apply_contingency  # noqa: E402
@@ -65,6 +66,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--runs-root", default="data/outputs/runs")
     p.add_argument("--solver-id", default="exago_ac_opf_hiopsparsegpu_campaign")
     p.add_argument("--timeout-s", type=float, default=1800.0)
+    p.add_argument("--execution-policy", default="", help="Optional per-case enable/timeout YAML policy.")
     p.add_argument("--max-candidates", type=int, default=0)
     p.add_argument("--continue-on-error", action="store_true")
     p.add_argument(
@@ -181,6 +183,9 @@ def main() -> None:
     if args.max_candidates > 0:
         candidates = candidates[: args.max_candidates]
 
+    policy_path = (repo_root / args.execution_policy).resolve() if args.execution_policy else None
+    execution_policy = load_execution_policy(policy_path)
+
     bands = base._load_bands(repo_root, args.config)
     existing_diversity = base._read_existing_diversity(campaign_root)
     active_ledger_rows: list[dict[str, Any]] = []
@@ -209,6 +214,19 @@ def main() -> None:
                     skipped_rows.append({"candidate_id": cand.get("candidate_id"), "grid_family": case_family, "dataset": case_dataset})
                     continue
 
+                case_settings = settings_for_case(execution_policy, case_id, args.timeout_s)
+                if not case_settings.enabled:
+                    skipped_rows.append({
+                        "candidate_id": cand.get("candidate_id"),
+                        "case_id": case_id,
+                        "grid_family": case_family,
+                        "dataset": case_dataset,
+                        "reason": "execution_policy_disabled",
+                        "execution_tier": case_settings.tier,
+                        "policy_reason": case_settings.reason,
+                    })
+                    continue
+
                 case_file = base._resolve_case_file(repo_root, case_id)
                 case_data = parse_matpower_case(case_file, case_id)
                 case_data = apply_topology(case_data, cand.get("switched_off_branches"), cand.get("reinforced_branches"))
@@ -223,7 +241,7 @@ def main() -> None:
 
                 tag = base._normalize(str(cand.get("candidate_id", "cand"))) or "cand"
                 result = _solve_candidate_exago(
-                    exago_root, opflow_bin, case_data, args.solver_mode, args.timeout_s, tmp_dir, tag,
+                    exago_root, opflow_bin, case_data, args.solver_mode, case_settings.timeout_s, tmp_dir, tag,
                 )
 
                 final_dir, run_id = base._append_sample(repo_root, runs_root, cand, case_data, result, args.solver_id)
@@ -286,6 +304,8 @@ def main() -> None:
                     "gpu_type": exec_ctx.get("gpu_type"),
                     "solver_used": result.get("solver_used"),
                     "fallback_used": result.get("fallback_used"),
+                    "execution_tier": case_settings.tier,
+                    "configured_timeout_s": case_settings.timeout_s,
                     "security_margin": sec_margin,
                     "security_margin_band": sec_band,
                 })
@@ -321,6 +341,7 @@ def main() -> None:
         "failed_count": len(failed_rows),
         "skipped_count": len(skipped_rows),
         "resume": bool(args.resume),
+        "execution_policy": str(policy_path) if policy_path else None,
         "failure_fraction": round(failure_fraction, 6),
         "max_failure_fraction": args.max_failure_fraction,
         "solved": solved_rows,
