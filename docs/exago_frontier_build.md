@@ -82,6 +82,11 @@ explicit package paths.
 
 The validated compiler and target settings are ROCm 6.3.1
 `amdclang`/`amdclang++`, CMake's HIP compiler, and `gfx90a`.
+HiOp 1.1.1 defaults its separate legacy `GPU_TARGETS` cache variable to
+`gfx908`; the build driver overrides both `GPU_TARGETS` and
+`CMAKE_HIP_ARCHITECTURES` to `gfx90a`. Omitting that override embeds incompatible
+`gfx908` code objects in `libhiop.a` and causes `HIPassert: invalid device
+function` during ExaGO model creation on Frontier's MI250X GPUs.
 
 ## Clean rebuild
 
