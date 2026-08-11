@@ -12,10 +12,20 @@ This page lists external solver and data repositories needed to reproduce simula
 
 ## ExaGO
 
-- Repository: https://github.com/ORNL/ExaGO
+- Frontier repository: https://github.com/allaffa/ExaGO
 - Local clone path: `external/ExaGO`
-- Workspace clone commit: `545a8deb6fa35552f0ee402ca83672fe1255f61a`
+- Frontier commit: `8b3a06fd2eee0e0b9dd6aaf2f67ff507cb500959`
+- Upstream fork point: https://github.com/ORNL/ExaGO/commit/545a8deb6fa35552f0ee402ca83672fe1255f61a
 - Use for: OPFLOW/SCOPFLOW workflows, large-scale HPC workloads.
+
+## Ginkgo and HiOp for Frontier
+
+- Ginkgo fork: https://github.com/allaffa/ginkgo
+- Ginkgo Frontier commit: `fcce3847eaf8ebd019871d13a485b616b43591e8`
+- Ginkgo upstream fork point: https://github.com/ginkgo-project/ginkgo/commit/e234eab1bd7afe85dd594638e291a2caf464bfb1
+- HiOp repository: https://github.com/LLNL/hiop
+- HiOp revision: `d8762e05150b2040a27f69d8bf6603f22190a869` (`v1.1.1`)
+- Build details: [ExaGO GPU Build on Frontier](exago_frontier_build.md)
 
 ## MATPOWER (format and reference only)
 
@@ -98,6 +108,8 @@ Current workflow note:
 ## Expected local organization
 
 - `external/ExaGO`
+- `external/Ginkgo`
+- `external/HiOp`
 - `external/pglib-opf`
 - `external/RTS-GMLC`
 - `external/tamu/`
