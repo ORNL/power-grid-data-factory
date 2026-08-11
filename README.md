@@ -130,9 +130,14 @@ Exactly one marker file must exist per finalized attempt:
 
 ## External solver sources
 
-- ExaGO cloned under `external/ExaGO`
-- Remote: `https://github.com/ORNL/ExaGO`
-- Current commit: `545a8deb6fa35552f0ee402ca83672fe1255f61a`
+- Frontier ExaGO: `https://github.com/allaffa/ExaGO`, commit
+  `8b3a06fd2eee0e0b9dd6aaf2f67ff507cb500959` (forked from ORNL commit
+  `545a8deb6fa35552f0ee402ca83672fe1255f61a`).
+- Frontier Ginkgo: `https://github.com/allaffa/ginkgo`, commit
+  `fcce3847eaf8ebd019871d13a485b616b43591e8` (forked from upstream commit
+  `e234eab1bd7afe85dd594638e291a2caf464bfb1`).
+- The exact module stack, changes, and clean build procedure are documented in
+  [ExaGO GPU Build on Frontier](docs/exago_frontier_build.md).
 
 ## GO Challenge source provenance
 
