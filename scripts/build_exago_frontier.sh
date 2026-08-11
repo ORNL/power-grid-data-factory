@@ -107,6 +107,7 @@ run cmake -S "$GINKGO_SRC" -B "$GINKGO_SRC/build" \
     -DCMAKE_C_COMPILER=/opt/rocm-6.3.1/llvm/bin/amdclang \
     -DCMAKE_CXX_COMPILER=/opt/rocm-6.3.1/llvm/bin/amdclang++ \
     -DCMAKE_HIP_COMPILER=/opt/rocm-6.3.1/llvm/bin/clang++ \
+    -DCMAKE_HIP_ARCHITECTURES=gfx90a \
     -DAMDGPU_TARGETS=gfx90a \
     -DGINKGO_HIP_AMDGPU=gfx90a \
     -DGINKGO_BUILD_HIP=ON \
@@ -129,7 +130,9 @@ run cmake -S "$HIOP_SRC" -B "$HIOP_BUILD" \
     -DCMAKE_C_COMPILER=/opt/rocm-6.3.1/llvm/bin/amdclang \
     -DCMAKE_CXX_COMPILER=/opt/rocm-6.3.1/llvm/bin/amdclang++ \
     -DCMAKE_HIP_COMPILER=/opt/rocm-6.3.1/llvm/bin/clang++ \
+    -DCMAKE_HIP_ARCHITECTURES=gfx90a \
     -DAMDGPU_TARGETS=gfx90a \
+    -DGPU_TARGETS=gfx90a \
     -DGinkgo_DIR="$GINKGO_SRC/install/lib64/cmake/Ginkgo" \
     -DHIOP_GINKGO_DIR="$GINKGO_SRC/install" \
     -DHIOP_BUILD_SHARED=OFF \
@@ -154,6 +157,7 @@ run cmake -S "$EXAGO_SRC" -B "$EXAGO_SRC/build-frontier" \
     -DCMAKE_C_COMPILER=/opt/rocm-6.3.1/llvm/bin/amdclang \
     -DCMAKE_CXX_COMPILER=/opt/rocm-6.3.1/llvm/bin/amdclang++ \
     -DCMAKE_HIP_COMPILER=/opt/rocm-6.3.1/llvm/bin/clang++ \
+    -DCMAKE_HIP_ARCHITECTURES=gfx90a \
     -DAMDGPU_TARGETS=gfx90a \
     -DGinkgo_DIR="$GINKGO_SRC/install/lib64/cmake/Ginkgo" \
     -DHiOp_DIR="$HIOP_SRC/install/share/hiop/cmake"
