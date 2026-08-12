@@ -10,9 +10,9 @@ reproducible build inputs.
 
 | Component | Upstream fork point | Frontier source | Built revision |
 | --- | --- | --- | --- |
-| ExaGO | [`ORNL/ExaGO@545a8deb`](https://github.com/ORNL/ExaGO/commit/545a8deb6fa35552f0ee402ca83672fe1255f61a) | [`allaffa/ExaGO`, branch `frontier-ginkgo-hiop-config`](https://github.com/allaffa/ExaGO/tree/frontier-ginkgo-hiop-config) | `8b3a06fd2eee0e0b9dd6aaf2f67ff507cb500959` |
+| ExaGO | [`ORNL/ExaGO@545a8deb`](https://github.com/ORNL/ExaGO/commit/545a8deb6fa35552f0ee402ca83672fe1255f61a) | [`allaffa/ExaGO`, branch `frontier-ginkgo-hiop-config`](https://github.com/allaffa/ExaGO/tree/frontier-ginkgo-hiop-config) | `ef9a781a5e32603c1a93e1be5dab5fea3838af67` |
 | Ginkgo | [`ginkgo-project/ginkgo@e234eab1`](https://github.com/ginkgo-project/ginkgo/commit/e234eab1bd7afe85dd594638e291a2caf464bfb1) | [`allaffa/ginkgo`, branch `frontier-rocm-build-fixes`](https://github.com/allaffa/ginkgo/tree/frontier-rocm-build-fixes) | `fcce3847eaf8ebd019871d13a485b616b43591e8` |
-| HiOp | [`LLNL/hiop` tag `v1.1.1`](https://github.com/LLNL/hiop/tree/v1.1.1) | upstream, unchanged | `d8762e05150b2040a27f69d8bf6603f22190a869` |
+| HiOp | [`LLNL/hiop` tag `v1.1.1`](https://github.com/LLNL/hiop/tree/v1.1.1) | [`allaffa/hiop`, branch `frontier-ginkgo-hip-v1.1.1`](https://github.com/allaffa/hiop/tree/frontier-ginkgo-hip-v1.1.1) | `71ab56e8dd52adeb4aef3b1ef15b42f549d0d2e1` |
 
 The fork points above are the direct parents of the Frontier fix commits. They
 are not the current tips of the upstream `develop` branches.
@@ -39,15 +39,33 @@ The complete build changes are preserved in the fork's `CMakeLists.txt`,
 
 ### ExaGO
 
-Commit `8b3a06fd` configures both HiOp sparse solver paths explicitly:
+Commits `8b3a06fd` and `ef9a781a` configure both HiOp sparse solver paths
+explicitly:
 
-- `opflow_hiopsparse.cpp` uses hybrid compute with Ginkgo on the HIP executor;
-- `opflow_hiopsparsegpu.cpp` uses GPU/device compute with Ginkgo on the HIP
-  executor.
+- both paths select Ginkgo on the HIP executor;
+- the GPU path retains `mem_space=device` for device-resident model data;
+- both paths select `compute_mode=cpu` because HiOp 1.1.1 constructs Ginkgo
+  only in its CPU KKT factory branch. Ginkgo still performs sparse
+  factorization and solves through its HIP executor.
 
 This avoids automatic selection of a host-oriented sparse solver and ensures
 that the campaign's `HIOPSPARSEGPU` path uses the locally built Ginkgo/GLU
 backend.
+
+### HiOp
+
+Commit `92e18bbe` makes the HiOp 1.1.1 Ginkgo adapter compatible with
+device-resident KKT data:
+
+- stages sparse triplets through the RAJA matrix's registered host mirror
+  before Ginkgo CSR preprocessing and updates;
+- stages device RHS and solution vectors through `hiopVectorPar` using HiOp's
+  backend-independent host/device copy interfaces.
+
+Commit `71ab56e8` creates the Ginkgo HIP executor with device reset disabled.
+HiOp and Ginkgo share the process-wide HIP device with Umpire; allowing the
+Ginkgo executor to call `hipDeviceReset()` during destruction invalidated
+HiOp's remaining device allocations and caused later `hipFree` calls to abort.
 
 ## Frontier environment
 
@@ -102,7 +120,8 @@ build, and install command. The clean target deletes only generated build and
 install directories, then builds in dependency order:
 
 1. the Ginkgo fork with HIP, the reference executor, and bundled GLU;
-2. HiOp `v1.1.1` with sparse, HIP, Ginkgo, MAGMA, MPI, RAJA, and CoinHSL;
+2. the HiOp `v1.1.1` fork with sparse, HIP, Ginkgo, MAGMA, MPI, RAJA, and
+  CoinHSL;
 3. the ExaGO fork with its Frontier cache and explicit local HiOp/Ginkgo paths.
 
 If a source checkout is absent, the script clones it. If an existing checkout
@@ -147,6 +166,10 @@ test -f external/Ginkgo/install/lib64/cmake/Ginkgo/GinkgoConfig.cmake
 test -d external/HiOp/install/share/hiop/cmake
 test -x external/ExaGO/install/bin/opflow
 ```
+
+Frontier job `5239783` validated the pinned stack on `case118.m`: OPFLOW used
+`HIOPSPARSEGPU` with `PBPOLRAJAHIOPSPARSE`, reported objective `129659.90`,
+exited normally, and produced no Umpire or `hipFree` error.
 
 Do not run MPI-linked solves directly inside a multi-rank campaign step; the
 inherited MPI environment can produce incorrect initialization or termination.

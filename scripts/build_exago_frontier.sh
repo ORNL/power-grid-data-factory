@@ -6,7 +6,7 @@ EXTERNAL_DIR=${EXTERNAL_DIR:-"${ROOT_DIR}/external"}
 PARALLEL=${PARALLEL:-12}
 
 EXAGO_URL=https://github.com/allaffa/ExaGO.git
-EXAGO_COMMIT=8b3a06fd2eee0e0b9dd6aaf2f67ff507cb500959
+EXAGO_COMMIT=ef9a781a5e32603c1a93e1be5dab5fea3838af67
 GINKGO_URL=https://github.com/allaffa/ginkgo.git
 GINKGO_COMMIT=fcce3847eaf8ebd019871d13a485b616b43591e8
 HIOP_URL=https://github.com/allaffa/hiop.git
