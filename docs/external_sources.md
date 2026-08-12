@@ -14,7 +14,7 @@ This page lists external solver and data repositories needed to reproduce simula
 
 - Frontier repository: https://github.com/allaffa/ExaGO
 - Local clone path: `external/ExaGO`
-- Frontier commit: `8b3a06fd2eee0e0b9dd6aaf2f67ff507cb500959`
+- Frontier commit: `ef9a781a5e32603c1a93e1be5dab5fea3838af67`
 - Upstream fork point: https://github.com/ORNL/ExaGO/commit/545a8deb6fa35552f0ee402ca83672fe1255f61a
 - Use for: OPFLOW/SCOPFLOW workflows, large-scale HPC workloads.
 
@@ -23,8 +23,9 @@ This page lists external solver and data repositories needed to reproduce simula
 - Ginkgo fork: https://github.com/allaffa/ginkgo
 - Ginkgo Frontier commit: `fcce3847eaf8ebd019871d13a485b616b43591e8`
 - Ginkgo upstream fork point: https://github.com/ginkgo-project/ginkgo/commit/e234eab1bd7afe85dd594638e291a2caf464bfb1
-- HiOp repository: https://github.com/LLNL/hiop
-- HiOp revision: `d8762e05150b2040a27f69d8bf6603f22190a869` (`v1.1.1`)
+- HiOp fork: https://github.com/allaffa/hiop
+- HiOp Frontier commit: `71ab56e8dd52adeb4aef3b1ef15b42f549d0d2e1`
+- HiOp upstream fork point: https://github.com/LLNL/hiop/commit/d8762e05150b2040a27f69d8bf6603f22190a869 (`v1.1.1`)
 - Build details: [ExaGO GPU Build on Frontier](exago_frontier_build.md)
 
 ## MATPOWER (format and reference only)
