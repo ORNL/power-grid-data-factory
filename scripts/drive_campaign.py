@@ -60,6 +60,10 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     p.add_argument("--dry-run", action="store_true", help="Print the submission plan without calling sbatch.")
+    p.add_argument("--account", "-A", default="", help="Slurm account passed to sbatch as -A (empty keeps the template header value).")
+    p.add_argument("--qos", "-q", default="", help="Slurm QOS passed to sbatch as -q, e.g. 'debug' for higher scheduling priority (empty keeps the template default).")
+    p.add_argument("--after", default="", help="Seed job id; the first submitted round depends (afterany by default) on it. Avoids colliding with an already-running job.")
+    p.add_argument("--emit-plan", default="", help="If set, write the final submission summary JSON to this path (machine-readable for supervisors).")
     p.add_argument("--nodes", type=int, default=0, help="Override sbatch node count (0 keeps the template header value).")
     p.add_argument("--ntasks-per-node", type=int, default=0, help="Override sbatch tasks per node (0 keeps the header value).")
     p.add_argument("--cpus-per-task", type=int, default=0, help="Override sbatch cpus per task (0 keeps the header value).")
@@ -139,9 +143,11 @@ def build_resource_flags(nodes: int, ntasks_per_node: int, cpus_per_task: int, t
     return flags
 
 
-def submit_round(repo_root: Path, sbatch_path: Path, env: dict[str, str], dependency: str | None, dry_run: bool, resource_flags: list[str] | None = None, dependency_type: str = "afterany") -> str:
+def submit_round(repo_root: Path, sbatch_path: Path, env: dict[str, str], dependency: str | None, dry_run: bool, resource_flags: list[str] | None = None, dependency_type: str = "afterany", account: str = "", qos: str = "") -> str:
     resource_flags = resource_flags or []
-    cmd = ["sbatch", "--parsable", *resource_flags]
+    account_flags = ["-A", account] if account else []
+    qos_flags = ["-q", qos] if qos else []
+    cmd = ["sbatch", "--parsable", *account_flags, *qos_flags, *resource_flags]
     if dependency:
         cmd.append(f"--dependency={dependency_type}:{dependency}")
     cmd.append(str(sbatch_path))
@@ -149,7 +155,9 @@ def submit_round(repo_root: Path, sbatch_path: Path, env: dict[str, str], depend
     if dry_run:
         dep = f" ({dependency_type}:{dependency})" if dependency else ""
         res = f" {resource_flags}" if resource_flags else ""
-        print(f"[dry-run] sbatch{dep}{res} {sbatch_path}  overrides={overrides}")
+        acct = f" -A {account}" if account else ""
+        q = f" -q {qos}" if qos else ""
+        print(f"[dry-run] sbatch{acct}{q}{dep}{res} {sbatch_path}  overrides={overrides}")
         return f"DRYRUN_R{env['ROUND_INDEX']}"
     proc = subprocess.run(cmd, env=env, cwd=str(repo_root), capture_output=True, text=True, check=False)
     if proc.returncode != 0:
@@ -181,22 +189,28 @@ def main() -> None:
 
     start = first_incomplete_round(repo_root, args.campaign_id, args.rounds)
     if start is None:
-        print(json.dumps({"campaign_id": args.campaign_id, "rounds": args.rounds, "status": "all_rounds_complete"}, indent=2))
+        done = {"campaign_id": args.campaign_id, "rounds": args.rounds, "status": "all_rounds_complete"}
+        if args.emit_plan:
+            Path(args.emit_plan).write_text(json.dumps(done, indent=2), encoding="utf-8")
+        print(json.dumps(done, indent=2))
         return
 
     completed = [r for r in range(args.rounds) if round_complete(repo_root, args.campaign_id, r)]
     print(f"campaign={args.campaign_id} rounds={args.rounds} completed={completed} furthest_incomplete={start}")
 
     targets = range(start, args.rounds) if args.chain else [start]
-    prev_job: str | None = None
+    prev_job: str | None = args.after or None
     submitted: list[dict[str, object]] = []
     for r in targets:
         env = build_submit_env(dict(os.environ), args.campaign_id, r, budgets[r], resume=True, extra_env=extra_env)
-        job_id = submit_round(repo_root, sbatch_path, env, dependency=prev_job, dry_run=args.dry_run, resource_flags=resource_flags, dependency_type=args.dependency_type)
+        job_id = submit_round(repo_root, sbatch_path, env, dependency=prev_job, dry_run=args.dry_run, resource_flags=resource_flags, dependency_type=args.dependency_type, account=args.account, qos=args.qos)
         submitted.append({"round_index": r, "budget": budgets[r], "job_id": job_id, "dependency": prev_job})
         prev_job = job_id
 
-    print(json.dumps({"campaign_id": args.campaign_id, "furthest_incomplete_round": start, "submitted": submitted}, indent=2))
+    summary = {"campaign_id": args.campaign_id, "furthest_incomplete_round": start, "status": "submitted", "submitted": submitted}
+    if args.emit_plan:
+        Path(args.emit_plan).write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    print(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":
