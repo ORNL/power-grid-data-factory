@@ -55,6 +55,42 @@ Fallback note:
 
 - JSONL is an accepted fallback when parquet dependencies are unavailable in environment.
 
+## Sample Record Contract
+
+Per-shard solve records:
+
+- `<runs_root>/ac_opf/samples.jsonl`
+
+Written by both campaign map workers ([run_campaign_ac_opf_round.py](../scripts/run_campaign_ac_opf_round.py),
+[run_campaign_exago_ac_opf_round.py](../scripts/run_campaign_exago_ac_opf_round.py))
+through the shared `round_runner._sample_record`. Current `schema_version` is `1.1`.
+
+Every solved candidate is persisted regardless of outcome, so the corpus stays
+comprehensive of both feasible and infeasible operating configurations.
+
+Core fields:
+
+- schema_version, run_id, candidate_id, task, case_id, topology_id, operating_point_id, contingency_set_id, solver_id
+- success: boolean (true only for a converged/optimal solve)
+- termination_status: raw backend status string (e.g. `LOCALLY_SOLVED`, `LOCALLY_INFEASIBLE`, `timeout`, `nonconverged`)
+- feasibility_label: normalized label for feasibility-vs-infeasibility classification — one of `feasible`, `infeasible`, `indeterminate`, `error`
+- objective, solve_time, wallclock_seconds
+- inputs: `{resolved_case, candidate}` (full parametrization retained as classification features)
+- result: lean solver result (stdout/stderr stripped; ExaGO bus records carry `mult_Pmis`/`mult_Qmis` duals)
+- runtime_metadata
+
+Label semantics (`classify_feasibility`):
+
+- `feasible` — `success == true`, or a solved/optimal status.
+- `infeasible` — proven-infeasible status (contains `INFEASIBLE`, excluding the ambiguous `DUAL_INFEASIBLE`/`INFEASIBLE_OR_UNBOUNDED`).
+- `indeterminate` — solver gave up without proving infeasibility (timeouts, iteration/limit, ambiguous statuses).
+- `error` — model/software/numerical fault (`INVALID_MODEL`, exceptions, `NUMERICAL_ERROR`, ...).
+
+Binary feasibility classifiers should train on the `feasible` vs `infeasible`
+subset and treat `indeterminate`/`error` as excluded/unlabeled. ExaGO reports a
+generic `nonconverged` status, which maps to `indeterminate` unless the adapter
+surfaces a proven-infeasibility signal.
+
 ## Run Registry Contract
 
 Run registry files:

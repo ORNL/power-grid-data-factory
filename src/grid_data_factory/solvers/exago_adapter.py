@@ -73,10 +73,16 @@ def _parse_exago_solution(stdout_text: str, case_data: dict[str, Any]) -> dict[s
         if len(toks) < 7 or not toks[0].isdigit():
             continue
         bus_idx = toks[0]
-        bus_sol[bus_idx] = {
+        # stdout summary columns:
+        #   Bus Pd Pdloss Qd Qdloss Vm Va mult_Pmis mult_Qmis ...
+        entry = {
             "vm": float(toks[5]),
             "va": float(toks[6]),
         }
+        if len(toks) >= 9:
+            entry["mult_Pmis"] = float(toks[7])
+            entry["mult_Qmis"] = float(toks[8])
+        bus_sol[bus_idx] = entry
 
     branch_sol: dict[str, dict[str, float]] = {}
     branch_rows = _extract_section(stdout_text, "From       To       Status")
@@ -145,6 +151,12 @@ def _parse_exago_json_export(export_path: Path, case_data: dict[str, Any]) -> di
                 bus_sol[bid] = {
                     "vm": float(b.get("VM", 1.0)),
                     "va": float(b.get("VA", 0.0)),
+                    # ExaGO JSON emits the power-balance duals as LAM_P/LAM_Q
+                    # (bus->mult_pmis / bus->mult_qmis). Capture them under the
+                    # same names the MATPOWER (.m) export uses so the JSON-based
+                    # campaign returns the same duals as the single-case path.
+                    "mult_Pmis": float(b.get("LAM_P", 0.0)),
+                    "mult_Qmis": float(b.get("LAM_Q", 0.0)),
                 }
                 gens = b.get("gen") or []
                 if gens:
@@ -205,11 +217,35 @@ def _launch_command(cmd: list[str]) -> list[str]:
     ``PGDF_EXAGO_SRUN_PREFIX`` (e.g. ``srun --overlap --exact -N1 -n1 -c7
     --gpus-per-task=1 --gpu-bind=closest``); login-node / serial callers leave
     it unset and opflow runs directly.
+
+    opflow is also wrapped in a shell that zeroes the core-dump limit and
+    disables the ROCr GPU core dump: a GPU/IPOPT abort on an infeasible case
+    otherwise writes a ~1.6 GB ``core`` (plus ``gpucore.*``) file into the CWD,
+    which would exhaust shared-filesystem quota across a large campaign. With
+    this guard the crash fails cleanly and the caller falls back to IPOPT.
     """
+    guarded = [
+        "bash",
+        "-c",
+        'ulimit -c 0; export HSA_ENABLE_COREDUMP=0; exec "$@"',
+        "exago-opflow",
+        *cmd,
+    ]
     prefix = os.environ.get("PGDF_EXAGO_SRUN_PREFIX", "").strip()
     if not prefix:
-        return cmd
-    return shlex.split(prefix) + cmd
+        return guarded
+    return shlex.split(prefix) + guarded
+
+
+def exago_verbose_enabled() -> bool:
+    """Whether ``PGDF_EXAGO_VERBOSE`` requests maximum ExaGO verbosity."""
+    return os.environ.get("PGDF_EXAGO_VERBOSE", "").strip().lower() not in (
+        "",
+        "0",
+        "false",
+        "no",
+        "off",
+    )
 
 
 def run_exago_case(
@@ -236,6 +272,9 @@ def run_exago_case(
         "-print_output",
         "1",
     ]
+    if exago_verbose_enabled():
+        # Same maximum-verbosity flags the single-case smoke test uses.
+        cmd += ["-hiop_verbosity_level", "12", "-log_view", "-options_left", "no"]
     export_json_path = None
     if export_base is not None:
         cmd.extend(["-opflow_output_format", "JSON", "-save_output", str(export_base)])

@@ -65,6 +65,10 @@ Implemented workflow command:
   - ExaGO GPU variant of the campaign map worker: same transforms, ledgers, resume, and reporting as `run_campaign_ac_opf_round.py`, but solves each candidate with ExaGO `opflow`.
   - Serializes each transformed case back to a MATPOWER `.m` netfile (`write_matpower_case`) so ExaGO solves the identical reduced network PowerModels sees.
   - `--solver-mode` selects `gpu_then_ipopt` (default), `gpu_only`, or `ipopt_only`; GPU uses `HIOPSPARSEGPU`/`PBPOLRAJAHIOPSPARSE` with IPOPT fallback.
+  - Captures the power-balance duals (`mult_Pmis`/`mult_Qmis`) on every bus from the ExaGO JSON export (`LAM_P`/`LAM_Q`) or the stdout summary fallback, matching the single-case and PowerModels paths.
+  - Records a normalized `feasibility_label` (`feasible`/`infeasible`/`indeterminate`/`error`) on each sample and round-report row; both feasible and infeasible solves are persisted (see [Schema Contracts](schema_contracts.md)).
+  - `opflow` is launched under a `ulimit -c 0` / `HSA_ENABLE_COREDUMP=0` guard so a GPU or IPOPT abort on an infeasible case fails cleanly instead of writing a multi-GB `core`/`gpucore.*` file; the worker then falls back to IPOPT.
+  - Environment: set `PGDF_EXAGO_VERBOSE=1` for maximum ExaGO/HiOp verbosity, which also writes one per-shard `solver_verbose.log` (each attempt's stdout/stderr) next to `samples.jsonl`; set `PGDF_EXAGO_SRUN_PREFIX` to launch each `opflow` as its own singleton Slurm step.
   - Requires a Python env with `pyarrow` for Parquet ledgers (see [Setup](setup.md#frontier-exago-campaign-runtime-environment)); driven by `configs/slurm/frontier_exago_acopf_mapreduce_8n_2h.sbatch`.
 - `scripts/register_load_snapshots.py`
   - Discovers per-scenario MATPOWER snapshot files for a case and registers them as reference load operating points.

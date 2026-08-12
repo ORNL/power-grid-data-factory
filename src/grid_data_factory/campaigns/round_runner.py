@@ -277,7 +277,89 @@ def _write_attempt(
 # truncated trailing line, which readers skip; resume is by candidate id.
 # ---------------------------------------------------------------------------
 
-SAMPLE_SCHEMA_VERSION = "1.0"
+SAMPLE_SCHEMA_VERSION = "1.1"
+
+# Normalized feasibility labels for downstream feasibility-vs-infeasibility
+# classification. Every solved candidate is persisted regardless of outcome, so
+# the dataset stays comprehensive of both feasible and infeasible operating
+# configurations. These labels collapse solver-specific ``termination_status``
+# strings (PowerModels/Ipopt, ExaGO/HiOp, ...) onto a stable target that keeps
+# proven infeasibility distinct from timeouts and model/solver errors.
+FEASIBILITY_FEASIBLE = "feasible"
+FEASIBILITY_INFEASIBLE = "infeasible"
+FEASIBILITY_INDETERMINATE = "indeterminate"
+FEASIBILITY_ERROR = "error"
+
+_FEASIBLE_STATUSES = frozenset(
+    {
+        "LOCALLY_SOLVED",
+        "OPTIMAL",
+        "ALMOST_LOCALLY_SOLVED",
+        "ALMOST_OPTIMAL",
+        "GLOBALLY_SOLVED",
+    }
+)
+# Contain "INFEASIBLE" but do NOT indicate a proven-infeasible configuration
+# (typically unbounded/degenerate models); treat as indeterminate.
+_AMBIGUOUS_INFEASIBLE_STATUSES = frozenset({"DUAL_INFEASIBLE", "INFEASIBLE_OR_UNBOUNDED"})
+# Solver gave up without proving infeasibility.
+_INDETERMINATE_STATUSES = frozenset(
+    {
+        "TIMEOUT",
+        "TIME_LIMIT",
+        "ITERATION_LIMIT",
+        "NODE_LIMIT",
+        "SOLUTION_LIMIT",
+        "MEMORY_LIMIT",
+        "OBJECTIVE_LIMIT",
+        "NORM_LIMIT",
+        "SLOW_PROGRESS",
+        "INTERRUPTED",
+        "OPTIMIZE_NOT_CALLED",
+        "UNKNOWN",
+    }
+)
+# Model could not be built/solved due to a software, model, or numerical fault.
+_ERROR_STATUSES = frozenset(
+    {
+        "EXCEPTION",
+        "SERVER_EXCEPTION",
+        "PROCESS_ERROR",
+        "NOT_IMPLEMENTED",
+        "INVALID_MODEL",
+        "INVALID_OPTION",
+        "NUMERICAL_ERROR",
+        "OTHER_ERROR",
+    }
+)
+
+
+def classify_feasibility(result: dict[str, Any]) -> str:
+    """Map a solver result onto a normalized feasibility label.
+
+    Returns one of ``feasible`` / ``infeasible`` / ``indeterminate`` / ``error``.
+    A successful solve is always ``feasible``. For unsuccessful solves the raw
+    ``termination_status`` decides: proven-infeasible statuses become
+    ``infeasible``, solver give-ups (timeouts, iteration/limit) become
+    ``indeterminate``, and model/software faults become ``error``. Binary
+    feasibility classifiers should train on the ``feasible`` vs ``infeasible``
+    subset and treat ``indeterminate``/``error`` as excluded/unlabeled.
+    """
+    if bool(result.get("success", False)):
+        return FEASIBILITY_FEASIBLE
+    status = str(result.get("termination_status", "unknown")).strip()
+    upper = status.upper()
+    if upper in _FEASIBLE_STATUSES:
+        return FEASIBILITY_FEASIBLE
+    if upper in _AMBIGUOUS_INFEASIBLE_STATUSES:
+        return FEASIBILITY_INDETERMINATE
+    if "INFEASIBLE" in upper:
+        return FEASIBILITY_INFEASIBLE
+    if upper in _INDETERMINATE_STATUSES:
+        return FEASIBILITY_INDETERMINATE
+    if upper in _ERROR_STATUSES:
+        return FEASIBILITY_ERROR
+    return FEASIBILITY_INDETERMINATE
 
 
 def _shard_samples_path(runs_root: Path) -> Path:
@@ -313,6 +395,7 @@ def _sample_record(
         "solver_id": solver_id,
         "success": bool(result.get("success", False)),
         "termination_status": str(result.get("termination_status", "unknown")),
+        "feasibility_label": classify_feasibility(result),
         "objective": result.get("objective"),
         "solve_time": result.get("solve_time", result.get("runtime")),
         "wallclock_seconds": wallclock_seconds,
