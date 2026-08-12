@@ -22,6 +22,7 @@ try:
         _read_jsonl,
         _resolve_case_file,
         _write_shard_manifest,
+        classify_feasibility,
         SampleSink,
     )
     from grid_data_factory.constraints.active_sets import build_active_constraint_signature
@@ -53,6 +54,7 @@ except ModuleNotFoundError:
         _read_jsonl,
         _resolve_case_file,
         _write_shard_manifest,
+        classify_feasibility,
         SampleSink,
     )
     from grid_data_factory.constraints.active_sets import build_active_constraint_signature
@@ -234,6 +236,7 @@ def main() -> None:
                     "topology_class": cand.get("topology_class", "baseline"),
                     "success": bool(result.get("success", False)),
                     "termination_status": result.get("termination_status"),
+                    "feasibility_label": classify_feasibility(result),
                     "objective": result.get("objective"),
                     "runtime": result.get("solve_time", result.get("runtime")),
                     "wallclock_seconds": (result.get("runtime_metadata") or {}).get("wallclock_seconds"),

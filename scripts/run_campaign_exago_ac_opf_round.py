@@ -31,7 +31,7 @@ if str(_REPO_ROOT / "src") not in sys.path:
 # Single source of truth for the ledger / attempt / descriptor contract.
 from grid_data_factory.campaigns import round_runner as base  # noqa: E402
 
-from grid_data_factory.solvers.exago_adapter import resolve_opflow_bin, run_exago_case  # noqa: E402
+from grid_data_factory.solvers.exago_adapter import resolve_opflow_bin, run_exago_case, exago_verbose_enabled  # noqa: E402
 
 from grid_data_factory.boundaries.security_margin import (  # noqa: E402
     classify_security_margin_band,
@@ -94,6 +94,38 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def _append_solver_log(
+    log_path: Path | None,
+    candidate_tag: str,
+    solver: str,
+    model: str,
+    res: dict[str, Any],
+) -> None:
+    """Append one attempt's full stdout/stderr to the shared per-shard log.
+
+    Only active when ``PGDF_EXAGO_VERBOSE`` is set. One file per shard keeps the
+    Lustre inode/MDS cost flat regardless of candidate count.
+    """
+    if log_path is None:
+        return
+    try:
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write("=" * 80 + "\n")
+            fh.write(
+                f"candidate={candidate_tag} solver={solver} model={model} "
+                f"status={res.get('termination_status')} exit={res.get('exit_code')}\n"
+            )
+            fh.write("=" * 80 + "\n")
+            fh.write("[stdout]\n")
+            fh.write((res.get("stdout") or "") + "\n")
+            err = res.get("stderr") or ""
+            if err.strip():
+                fh.write("[stderr]\n")
+                fh.write(err + "\n")
+    except OSError:
+        pass
+
+
 def _solve_candidate_exago(
     exago_root: Path,
     opflow_bin: Path,
@@ -102,6 +134,7 @@ def _solve_candidate_exago(
     timeout_s: float,
     tmp_dir: Path,
     tag: str,
+    log_path: Path | None = None,
 ) -> dict[str, Any]:
     """Write the transformed case to a temp .m file and solve with ExaGO.
 
@@ -123,6 +156,7 @@ def _solve_candidate_exago(
         gpu["solver_used"] = GPU_SOLVER
         gpu["opflow_model_used"] = GPU_MODEL
         gpu["fallback_used"] = False
+        _append_solver_log(log_path, tag, GPU_SOLVER, GPU_MODEL, gpu)
         attempts.append({
             "solver": GPU_SOLVER,
             "model": GPU_MODEL,
@@ -141,6 +175,7 @@ def _solve_candidate_exago(
         cpu["solver_used"] = CPU_SOLVER
         cpu["opflow_model_used"] = CPU_MODEL
         cpu["fallback_used"] = solver_mode == "gpu_then_ipopt"
+        _append_solver_log(log_path, tag, CPU_SOLVER, CPU_MODEL, cpu)
         attempts.append({
             "solver": CPU_SOLVER,
             "model": CPU_MODEL,
@@ -201,6 +236,12 @@ def main() -> None:
     tmp_root = (paths.tmp_dir(repo_root) / "exago_campaign").resolve()
     tmp_root.mkdir(parents=True, exist_ok=True)
 
+    # One shared verbose solver log per shard, only when PGDF_EXAGO_VERBOSE is set.
+    verbose_log: Path | None = None
+    if exago_verbose_enabled():
+        verbose_log = base._shard_samples_path(runs_root).parent / "solver_verbose.log"
+        verbose_log.parent.mkdir(parents=True, exist_ok=True)
+
     with tempfile.TemporaryDirectory(dir=str(tmp_root), prefix=f"{args.campaign_id}_") as tmp_dir_str:
         tmp_dir = Path(tmp_dir_str)
         for cand in candidates:
@@ -242,6 +283,7 @@ def main() -> None:
                 tag = base._normalize(str(cand.get("candidate_id", "cand"))) or "cand"
                 result = _solve_candidate_exago(
                     exago_root, opflow_bin, case_data, args.solver_mode, case_settings.timeout_s, tmp_dir, tag,
+                    log_path=verbose_log,
                 )
 
                 final_dir, run_id = base._append_sample(repo_root, runs_root, cand, case_data, result, args.solver_id)
@@ -296,6 +338,7 @@ def main() -> None:
                     "topology_class": cand.get("topology_class", "baseline"),
                     "success": bool(result.get("success", False)),
                     "termination_status": result.get("termination_status"),
+                    "feasibility_label": base.classify_feasibility(result),
                     "objective": result.get("objective"),
                     "runtime": result.get("solve_time", result.get("runtime")),
                     "wallclock_seconds": runtime_meta.get("wallclock_seconds"),
