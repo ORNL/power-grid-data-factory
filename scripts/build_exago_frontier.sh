@@ -9,8 +9,8 @@ EXAGO_URL=https://github.com/allaffa/ExaGO.git
 EXAGO_COMMIT=8b3a06fd2eee0e0b9dd6aaf2f67ff507cb500959
 GINKGO_URL=https://github.com/allaffa/ginkgo.git
 GINKGO_COMMIT=fcce3847eaf8ebd019871d13a485b616b43591e8
-HIOP_URL=https://github.com/LLNL/hiop.git
-HIOP_COMMIT=d8762e05150b2040a27f69d8bf6603f22190a869
+HIOP_URL=https://github.com/allaffa/hiop.git
+HIOP_COMMIT=71ab56e8dd52adeb4aef3b1ef15b42f549d0d2e1
 
 clean=0
 dry_run=0
