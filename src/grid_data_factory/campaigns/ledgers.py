@@ -74,6 +74,14 @@ def create_campaign_layout(campaign_root: Path, campaign_config: dict[str, Any])
             _fallback_jsonl_path(p).touch(exist_ok=True)
 
 
+def _append_jsonl_fallback(path: Path, rows: list[dict[str, Any]]) -> None:
+    fallback = _fallback_jsonl_path(path)
+    fallback.parent.mkdir(parents=True, exist_ok=True)
+    with fallback.open("a", encoding="utf-8") as fh:
+        for row in rows:
+            fh.write(json.dumps(row, ensure_ascii=True, default=str) + "\n")
+
+
 def append_parquet_rows(path: Path, rows: list[dict[str, Any]]) -> None:
     pd = _require_pandas()
 
@@ -81,21 +89,23 @@ def append_parquet_rows(path: Path, rows: list[dict[str, Any]]) -> None:
         return
 
     if pd is None:
-        fallback = _fallback_jsonl_path(path)
-        fallback.parent.mkdir(parents=True, exist_ok=True)
-        with fallback.open("a", encoding="utf-8") as fh:
-            for row in rows:
-                fh.write(json.dumps(row, ensure_ascii=True) + "\n")
+        _append_jsonl_fallback(path, rows)
         return
 
-    new_df = pd.DataFrame(rows)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
-        old_df = pd.read_parquet(path)
-        out_df = pd.concat([old_df, new_df], ignore_index=True)
-    else:
-        out_df = new_df
-    out_df.to_parquet(path, index=False)
+    try:
+        new_df = pd.DataFrame(rows)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            old_df = pd.read_parquet(path)
+            out_df = pd.concat([old_df, new_df], ignore_index=True)
+        else:
+            out_df = new_df
+        out_df.to_parquet(path, index=False)
+    except Exception:  # noqa: BLE001
+        # Parquet serialization failed (e.g. a uint64 perturbation_seed exceeds
+        # int64, or an object column pyarrow cannot cast). Never crash a run for
+        # a ledger write: use the JSONL safety net, which the reducer also reads.
+        _append_jsonl_fallback(path, rows)
 
 
 def write_round_summary(campaign_root: Path, round_index: int, summary: dict[str, Any]) -> Path:

@@ -115,6 +115,43 @@ Additional map/reduce overrides:
 - `SCORE_KEY` (default: `novelty_score`)
 - `RESUME` (default: `0`; set `1` to resume an interrupted round)
 
+### Frontier ExaGO: PowerModels Left-Out 3B Cases
+
+The 12 grids quarantined from the active PowerModels run have an independent
+ExaGO portfolio in `configs/case_portfolio_exago_left_out_3b.txt`. From a
+Frontier login node, submit a bounded 256-candidate pilot with:
+
+```bash
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+configs/slurm/submit_frontier_exago_left_out_3b.sh
+```
+
+The first invocation stream-filters the immutable 3B round-0 candidate file into
+`data/outputs/campaigns/ultrascale_3b_exago_left_out/source_candidates.jsonl`.
+It then submits 8 nodes / 64 GPUs using one candidate per each of 256 shards.
+The pilot uses campaign `ultrascale_3b_exago_left_out_pilot` and runs tree
+`data/outputs/runs_3b_exago_left_out_pilot`, isolated from both production
+collections.
+
+After inspecting the pilot, start the complete filtered portfolio in its own
+campaign (do not set `RESUME=1` on its first submission):
+
+```bash
+MAX_CANDIDATES=0 \
+	configs/slurm/submit_frontier_exago_left_out_3b.sh
+```
+
+After a two-hour Frontier walltime expiration, resume the full campaign with:
+
+```bash
+MAX_CANDIDATES=0 RESUME=1 \
+	configs/slurm/submit_frontier_exago_left_out_3b.sh
+```
+
+The full campaign uses `ultrascale_3b_exago_left_out` and
+`data/outputs/runs_3b_exago_left_out`. Existing shards and completed candidate
+IDs are reused. Set `DRY_RUN=1` to print the `sbatch` command without submitting.
+
 Reducer output report:
 
 - `data/campaigns/<campaign_id>/round_summaries/round_<idx>_mapreduce_reduce_report.json`

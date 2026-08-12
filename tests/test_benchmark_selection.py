@@ -9,6 +9,7 @@ from _bootstrap import REPO_ROOT  # noqa: F401
 
 from grid_data_factory.campaigns.benchmark_selection import (
     candidate_identity,
+    load_candidate_ids_by_status,
     load_completed_candidate_ids,
     select_unfinished_candidates,
 )
@@ -53,6 +54,23 @@ class BenchmarkSelectionTests(unittest.TestCase):
         selected_ids = {json.loads(line)["candidate_id"] for lines in first.values() for line in lines}
         self.assertFalse(selected_ids & {"case-a::3", "case-b::8"})
         self.assertEqual(stats["completed_records_skipped"], 2)
+        self.assertEqual(stats["malformed_records"], 0)
+
+    def test_loads_exact_timeout_ids_for_requested_cases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "runs" / "shard" / "ac_opf" / "samples.jsonl"
+            path.parent.mkdir(parents=True)
+            rows = [
+                {"candidate_id": "a::1", "case_id": "a", "termination_status": "timeout"},
+                {"candidate_id": "a::2", "case_id": "a", "termination_status": "LOCALLY_SOLVED"},
+                {"candidate_id": "b::1", "case_id": "b", "termination_status": "timeout"},
+            ]
+            path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+            selected, stats = load_candidate_ids_by_status(path.parents[2], {"timeout"}, {"a"})
+
+        self.assertEqual(selected, {"a": {"a::1"}})
+        self.assertEqual(stats["matched_records"], 1)
         self.assertEqual(stats["malformed_records"], 0)
 
 
