@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shlex
 import subprocess
 import time
 from pathlib import Path
@@ -191,6 +193,25 @@ def _parse_exago_json_export(export_path: Path, case_data: dict[str, Any]) -> di
     }
 
 
+def _launch_command(cmd: list[str]) -> list[str]:
+    """Optionally wrap the opflow command in a single-task srun step.
+
+    opflow is MPI-linked (PETSc). When it is spawned as a subprocess *inside* a
+    multi-task srun step (the campaign map stage), it inherits that step's MPI
+    world size (>1) via slurmstepd/cray-mpich, and IPOPT then aborts with
+    "IPOPT solver does not support execution in parallel" while the GPU solver
+    hangs. Environment scrubbing does not help. The reliable fix is to launch
+    each opflow as its own single-task step. Callers that run under Slurm set
+    ``PGDF_EXAGO_SRUN_PREFIX`` (e.g. ``srun --overlap --exact -N1 -n1 -c7
+    --gpus-per-task=1 --gpu-bind=closest``); login-node / serial callers leave
+    it unset and opflow runs directly.
+    """
+    prefix = os.environ.get("PGDF_EXAGO_SRUN_PREFIX", "").strip()
+    if not prefix:
+        return cmd
+    return shlex.split(prefix) + cmd
+
+
 def run_exago_case(
     exago_root: Path,
     opflow_bin: Path,
@@ -223,7 +244,7 @@ def run_exago_case(
         cmd.extend(["-hiop_compute_mode", "CPU"])
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, cwd=exago_root, timeout=timeout_s)
+        proc = subprocess.run(_launch_command(cmd), capture_output=True, text=True, cwd=exago_root, timeout=timeout_s)
     except subprocess.TimeoutExpired as exc:
         elapsed = round(time.perf_counter() - start_t, 6)
         return {

@@ -5,7 +5,7 @@ import unittest
 
 from _bootstrap import REPO_ROOT, case_available
 
-from grid_data_factory.parsers.matpower import parse_matpower_case
+from grid_data_factory.parsers.matpower import parse_matpower_case, write_matpower_case
 from grid_data_factory.scenarios.operating_points import apply_operating_point, region_for_bus
 from grid_data_factory.sources.registry import resolve_case_file
 
@@ -102,6 +102,59 @@ class TestOperatingPoints(unittest.TestCase):
             out = apply_operating_point(base, {"_load_snapshot_map": loads})
             total = sum(l["pd"] for l in out["loads"])
             self.assertAlmostEqual(total, snap["total_pd"], places=2)
+
+    def test_write_roundtrip_preserves_supported_admittance_and_load_axes(self):
+        case = {
+            "case_id": "toy_roundtrip",
+            "base_mva": 100.0,
+            "buses": [{"bus_id": "1", "type": 3, "gs": 0.0, "bs": 2.0}, {"bus_id": "2", "type": 1, "gs": 0.0, "bs": 0.0}],
+            "generators": [{"gen_id": "gen_000001", "bus_id": "1", "pmin": 0.0, "pmax": 100.0, "qmin": -50.0, "qmax": 50.0, "cost": [0.0, 10.0, 0.0]}],
+            "loads": [{"load_id": "load_000001", "bus_id": "2", "pd": 50.0, "qd": 20.0}],
+            "branches": [{"branch_id": "branch_000001", "from": "1", "to": "2", "r": 0.01, "x": 0.1, "b": 0.05, "rate_a": 100.0}],
+        }
+        params = {
+            "global_load_scale": 2.0,
+            "bus_shunt_susceptance_sigma": 0.25,
+            "line_resistance_sigma": 0.15,
+            "line_reactance_sigma": 0.15,
+            "line_charging_sigma": 0.20,
+            "branch_rating_scale": 0.5,
+            "perturbation_seed": 7,
+        }
+
+        out = apply_operating_point(case, params)
+        tmp = REPO_ROOT / "tests" / "_tmp_roundtrip_case.m"
+        try:
+            write_matpower_case(out, tmp, case_name="toy_roundtrip")
+            parsed = parse_matpower_case(tmp, "toy_roundtrip")
+            self.assertAlmostEqual(parsed["loads"][0]["pd"], 100.0)
+            self.assertAlmostEqual(parsed["loads"][0]["qd"], 40.0)
+            self.assertAlmostEqual(parsed["buses"][0]["bs"], out["buses"][0]["bs"])
+            self.assertAlmostEqual(parsed["buses"][0]["gs"], 0.0)
+            self.assertAlmostEqual(parsed["branches"][0]["r"], out["branches"][0]["r"])
+            self.assertAlmostEqual(parsed["branches"][0]["x"], out["branches"][0]["x"])
+            self.assertAlmostEqual(parsed["branches"][0]["b"], out["branches"][0]["b"])
+            self.assertAlmostEqual(parsed["branches"][0]["rate_a"], 50.0)
+        finally:
+            tmp.unlink(missing_ok=True)
+
+    def test_shunt_and_gs_limits_are_explicit_and_documented(self):
+        case = {
+            "case_id": "toy_shunt",
+            "base_mva": 100.0,
+            "buses": [
+                {"bus_id": "1", "type": 3, "gs": 2.0, "bs": 0.0},
+                {"bus_id": "2", "type": 1, "gs": 0.0, "bs": 1.5},
+            ],
+            "generators": [{"gen_id": "gen_000001", "bus_id": "1", "pmin": 0.0, "pmax": 100.0, "qmin": -50.0, "qmax": 50.0, "cost": [0.0, 10.0, 0.0]}],
+            "loads": [{"load_id": "load_000001", "bus_id": "2", "pd": 10.0, "qd": 2.0}],
+            "branches": [{"branch_id": "branch_000001", "from": "1", "to": "2", "r": 0.01, "x": 0.1, "b": 0.0, "rate_a": 100.0}],
+        }
+        out = apply_operating_point(case, {"bus_shunt_susceptance_sigma": 0.5, "perturbation_seed": 123})
+        self.assertEqual(out["buses"][0]["gs"], 2.0)
+        self.assertEqual(out["buses"][0]["bs"], 0.0)
+        self.assertNotEqual(out["buses"][1]["bs"], 1.5)
+        self.assertGreater(out["buses"][1]["bs"], 0.0)
 
 
 if __name__ == "__main__":

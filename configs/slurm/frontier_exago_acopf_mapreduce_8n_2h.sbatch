@@ -47,11 +47,11 @@ PGDF_VENV=${PGDF_VENV-$ROOT/.venv}
 
 # ----- ExaGO Frontier runtime environment (ROCm + spack deps for opflow) ------
 export SRCDIR=$ROOT/external/ExaGO
-if [[ -f "$SRCDIR/buildsystem/clang-hip/frontier/frontierExago.sh" ]]; then
+if [[ -f "$SRCDIR/buildsystem/clang-hip/frontierVariables.sh" ]]; then
   # base.sh references unset vars (e.g. EXTRA_CMAKE_ARGS); relax -e/-u to source.
   set +eu
   # shellcheck disable=SC1091
-  source "$SRCDIR/buildsystem/clang-hip/frontier/frontierExago.sh"
+  source "$SRCDIR/buildsystem/clang-hip/frontierVariables.sh"
   set -eu
 fi
 # Activate the campaign virtualenv (must follow the module env so it wins PATH).
@@ -65,7 +65,7 @@ elif [[ -n "${PGDF_VENV:-}" ]]; then
 fi
 
 export PGDF_EXAGO_BUILD_PROFILE=${PGDF_EXAGO_BUILD_PROFILE:-frontier}
-export PGDF_EXAGO_OPFLOW_BIN=${PGDF_EXAGO_OPFLOW_BIN:-$ROOT/external/ExaGO/builds/frontier/install/bin/opflow}
+export PGDF_EXAGO_OPFLOW_BIN=${PGDF_EXAGO_OPFLOW_BIN:-$ROOT/external/ExaGO/install/bin/opflow}
 
 # 45 PGLib large grid topologies (>1000 buses).
 LARGE_CASES_DEFAULT="epigrids_florida_5658 epigrids_texas_7336 epigrids_midwest_10192 epigrids_western_20758 epigrids_eastern_78484 pglib_opf_case2000_goc pglib_opf_case10000_goc pglib_opf_case4661_sdet pglib_opf_case6470_rte pglib_opf_case13659_pegase pglib_opf_case1354_pegase pglib_opf_case1803_snem pglib_opf_case1888_rte pglib_opf_case1951_rte pglib_opf_case2312_goc pglib_opf_case2383wp_k pglib_opf_case2736sp_k pglib_opf_case2737sop_k pglib_opf_case2742_goc pglib_opf_case2746wop_k pglib_opf_case2746wp_k pglib_opf_case2848_rte pglib_opf_case2853_sdet pglib_opf_case2868_rte pglib_opf_case2869_pegase pglib_opf_case3012wp_k pglib_opf_case3022_goc pglib_opf_case3120sp_k pglib_opf_case3375wp_k pglib_opf_case3970_goc pglib_opf_case4020_goc pglib_opf_case4601_goc pglib_opf_case4619_goc pglib_opf_case4837_goc pglib_opf_case4917_goc pglib_opf_case6468_rte pglib_opf_case6495_rte pglib_opf_case6515_rte pglib_opf_case8387_pegase pglib_opf_case9241_pegase pglib_opf_case9591_goc pglib_opf_case10480_goc pglib_opf_case19402_goc pglib_opf_case24464_goc pglib_opf_case30000_goc"
@@ -105,7 +105,8 @@ BOOTSTRAP_WORKERS=${BOOTSTRAP_WORKERS:-16}
 
 printf -v ROUND_PAD "%03d" "$ROUND_INDEX"
 CAMPAIGN_ROOT="$ROOT/data/outputs/campaigns/$CAMPAIGN_ID"
-SELECTED_JSONL="$CAMPAIGN_ROOT/round_summaries/round_${ROUND_PAD}_selected_candidates.jsonl"
+SELECTED_JSONL_DEFAULT="$CAMPAIGN_ROOT/round_summaries/round_${ROUND_PAD}_selected_candidates.jsonl"
+SELECTED_JSONL=${SELECTED_JSONL_OVERRIDE:-$SELECTED_JSONL_DEFAULT}
 SHARD_DIR="$CAMPAIGN_ROOT/round_summaries/round_${ROUND_PAD}_shards"
 SHARD_PREFIX="selected"
 SHARD_IDS_FILE="$SHARD_DIR/shard_campaign_ids.txt"
@@ -128,6 +129,7 @@ echo "[$(date -u +%FT%TZ)] config=$CONFIG budget=$BUDGET per_case=$PER_CASE seed
 echo "[$(date -u +%FT%TZ)] contingencies=simultaneous+cascade seq_cascade_per_op=$SEQ_CASCADE_PER_OP seq_max_len=$SEQ_MAX_LEN"
 echo "[$(date -u +%FT%TZ)] solver_id=$SOLVER_ID solver_mode=$SOLVER_MODE timeout_s=$TIMEOUT_S shard_count=$SHARD_COUNT"
 echo "[$(date -u +%FT%TZ)] execution_policy=${EXECUTION_POLICY:-none}"
+echo "[$(date -u +%FT%TZ)] selected_jsonl=$SELECTED_JSONL"
 echo "[$(date -u +%FT%TZ)] opflow_bin=$PGDF_EXAGO_OPFLOW_BIN"
 echo "[$(date -u +%FT%TZ)] coverage_keys=$COVERAGE_KEYS min_per_bucket=$MIN_PER_BUCKET enforce=$ENFORCE_COVERAGE backfill=$BACKFILL_FROM_POOL"
 
@@ -174,6 +176,7 @@ SHARD_ARGS=(
   --min-per-bucket "$MIN_PER_BUCKET"
   --max-backfill-additions "$MAX_BACKFILL_ADDITIONS"
   --score-key "$SCORE_KEY"
+  --stream
 )
 if [[ "$ENFORCE_COVERAGE" == "1" ]]; then
   SHARD_ARGS+=(--enforce-coverage)
@@ -209,102 +212,104 @@ if [[ ! -s "$SHARD_IDS_FILE" ]]; then
   exit 2
 fi
 
-echo "[$(date -u +%FT%TZ)] Starting GPU map stage with srun tasks=${SLURM_NTASKS} (1 rank per GCD)"
+echo "[$(date -u +%FT%TZ)] Starting GPU map stage: coordinator in sbatch body launches one srun -n1 opflow step per solve"
 
-srun --nodes="${SLURM_JOB_NUM_NODES}" --ntasks="${SLURM_NTASKS}" \
-     --cpus-per-task="${SLURM_CPUS_PER_TASK:-7}" \
-     --gpus-per-task=1 --gpu-bind=closest \
-     bash -c '
-set -euo pipefail
-ROOT="'$ROOT'"
-PYBIN="'$PYBIN'"
-CAMPAIGN_ID="'$CAMPAIGN_ID'"
-ROUND_INDEX="'$ROUND_INDEX'"
-ROUND_PAD="'$ROUND_PAD'"
-CONFIG="'$CONFIG'"
-SHARD_DIR="'$SHARD_DIR'"
-SHARD_PREFIX="'$SHARD_PREFIX'"
-MAP_SCRIPT="'$MAP_SCRIPT'"
-SOLVER_ID="'$SOLVER_ID'"
-SOLVER_MODE="'$SOLVER_MODE'"
-TIMEOUT_S="'$TIMEOUT_S'"
-RUNS_ROOT="'$RUNS_ROOT'"
-MAX_CANDIDATES="'$MAX_CANDIDATES'"
-CONTINUE_ON_ERROR="'$CONTINUE_ON_ERROR'"
-MAX_FAILURE_FRACTION="'$MAX_FAILURE_FRACTION'"
-QUEUE_FILE="'$QUEUE_FILE'"
-INDEX_FILE="'$INDEX_FILE'"
-LOCK_DIR="'$LOCK_DIR'"
-DONE_DIR="'$DONE_DIR'"
-RESUMING="'$RESUMING'"
+# opflow is MPI-linked (PETSc). If it is spawned as a subprocess inside a
+# multi-task srun step it inherits that step's MPI world size (>1); IPOPT then
+# aborts ("IPOPT solver does not support execution in parallel") and the GPU
+# solver hangs. Environment scrubbing does not help. The fix (validated on
+# Frontier) is to launch every opflow as its OWN single-task step. The map
+# worker reads PGDF_EXAGO_SRUN_PREFIX (in exago_adapter) and wraps each opflow
+# call in an overlapping single-task step bound to one GCD, so every solve is a
+# clean singleton MPI process.
+export PGDF_EXAGO_SRUN_PREFIX="srun --overlap --exact -N1 -n1 --cpus-per-task=${SLURM_CPUS_PER_TASK:-7} --gpus-per-task=1 --gpu-bind=closest"
+
+# Concurrent map workers == concurrent opflow steps. Default saturates every GCD
+# in the allocation (nodes x 8). Each worker pulls shards dynamically and solves
+# that shard's candidates one at a time (one srun -n1 opflow per candidate).
+MAP_CONCURRENCY=${MAP_CONCURRENCY:-$(( SLURM_JOB_NUM_NODES * 8 ))}
 TOTAL_SHARDS=$(wc -l < "$QUEUE_FILE")
+echo "[$(date -u +%FT%TZ)] map_concurrency=$MAP_CONCURRENCY total_shards=$TOTAL_SHARDS srun_prefix='$PGDF_EXAGO_SRUN_PREFIX'"
 
-TASK_ID=${SLURM_PROCID:-0}
-
-echo "[$(date -u +%FT%TZ)] task=$TASK_ID host=$(hostname) rocr=${ROCR_VISIBLE_DEVICES:-unset} dynamic shard pickup total_shards=$TOTAL_SHARDS"
-while true; do
-  while ! mkdir "$LOCK_DIR" 2>/dev/null; do
-    sleep 0.05
-  done
-
-  next_idx=$(cat "$INDEX_FILE")
-  if (( next_idx >= TOTAL_SHARDS )); then
+map_worker() {
+  local TASK_ID="$1"
+  echo "[$(date -u +%FT%TZ)] worker=$TASK_ID host=$(hostname) started dynamic shard pickup total_shards=$TOTAL_SHARDS"
+  while true; do
+    while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+      sleep 0.05
+    done
+    next_idx=$(cat "$INDEX_FILE")
+    if (( next_idx >= TOTAL_SHARDS )); then
+      rmdir "$LOCK_DIR"
+      break
+    fi
+    echo $((next_idx + 1)) > "$INDEX_FILE"
     rmdir "$LOCK_DIR"
-    break
-  fi
 
-  echo $((next_idx + 1)) > "$INDEX_FILE"
-  rmdir "$LOCK_DIR"
+    shard_number=$(sed -n "$((next_idx + 1))p" "$QUEUE_FILE")
+    if [[ -z "${shard_number:-}" ]]; then
+      continue
+    fi
 
-  shard_number=$(sed -n "$((next_idx + 1))p" "$QUEUE_FILE")
-  if [[ -z "${shard_number:-}" ]]; then
-    continue
-  fi
+    SHARD_FILE="$SHARD_DIR/${SHARD_PREFIX}_${shard_number}.jsonl"
+    if [[ ! -s "$SHARD_FILE" ]]; then
+      continue
+    fi
 
-  SHARD_FILE="$SHARD_DIR/${SHARD_PREFIX}_${shard_number}.jsonl"
-  if [[ ! -s "$SHARD_FILE" ]]; then
-    continue
-  fi
+    if [[ "$RESUMING" == "1" && -f "$DONE_DIR/$shard_number" ]]; then
+      echo "[$(date -u +%FT%TZ)] worker=$TASK_ID shard_number=$shard_number already complete (resume) skipping"
+      continue
+    fi
 
-  if [[ "$RESUMING" == "1" && -f "$DONE_DIR/$shard_number" ]]; then
-    echo "[$(date -u +%FT%TZ)] task=$TASK_ID shard_number=$shard_number already complete (resume) skipping"
-    continue
-  fi
+    SHARD_CAMPAIGN_ID="${CAMPAIGN_ID}__r${ROUND_PAD}__s${shard_number}"
+    SHARD_RUNS_ROOT="${RUNS_ROOT}/mapreduce_round_${ROUND_PAD}/shard_${shard_number}"
 
-  SHARD_CAMPAIGN_ID="${CAMPAIGN_ID}__r${ROUND_PAD}__s${shard_number}"
-  SHARD_RUNS_ROOT="${RUNS_ROOT}/mapreduce_round_${ROUND_PAD}/shard_${shard_number}"
+    ARGS=(
+      --campaign-id "$SHARD_CAMPAIGN_ID"
+      --round-index "$ROUND_INDEX"
+      --selected-candidates-jsonl "$SHARD_FILE"
+      --config "$CONFIG"
+      --runs-root "$SHARD_RUNS_ROOT"
+      --solver-id "$SOLVER_ID"
+      --solver-mode "$SOLVER_MODE"
+      --timeout-s "$TIMEOUT_S"
+      --max-failure-fraction "$MAX_FAILURE_FRACTION"
+    )
+    if [[ -n "$EXECUTION_POLICY" ]]; then
+      ARGS+=(--execution-policy "$EXECUTION_POLICY")
+    fi
+    if [[ "$MAX_CANDIDATES" != "0" ]]; then
+      ARGS+=(--max-candidates "$MAX_CANDIDATES")
+    fi
+    if [[ "$CONTINUE_ON_ERROR" == "1" ]]; then
+      ARGS+=(--continue-on-error)
+    fi
+    if [[ "$RESUMING" == "1" ]]; then
+      ARGS+=(--resume)
+    fi
 
-  ARGS=(
-    --campaign-id "$SHARD_CAMPAIGN_ID"
-    --round-index "$ROUND_INDEX"
-    --selected-candidates-jsonl "$SHARD_FILE"
-    --config "$CONFIG"
-    --runs-root "$SHARD_RUNS_ROOT"
-    --solver-id "$SOLVER_ID"
-    --solver-mode "$SOLVER_MODE"
-    --timeout-s "$TIMEOUT_S"
-    --max-failure-fraction "$MAX_FAILURE_FRACTION"
-  )
+    echo "[$(date -u +%FT%TZ)] worker=$TASK_ID shard_number=$shard_number shard_campaign_id=$SHARD_CAMPAIGN_ID"
+    if PYTHONPATH="$ROOT/src" "$PYBIN" "$MAP_SCRIPT" "${ARGS[@]}"; then
+      touch "$DONE_DIR/$shard_number"
+    else
+      echo "[$(date -u +%FT%TZ)] worker=$TASK_ID shard_number=$shard_number MAP_SCRIPT failed (rc=$?); leaving unmarked for resume" >&2
+    fi
+  done
+  echo "[$(date -u +%FT%TZ)] worker=$TASK_ID drained queue; exiting"
+}
 
-  if [[ -n "'$EXECUTION_POLICY'" ]]; then
-    ARGS+=(--execution-policy "'$EXECUTION_POLICY'")
-  fi
-
-  if [[ "$MAX_CANDIDATES" != "0" ]]; then
-    ARGS+=(--max-candidates "$MAX_CANDIDATES")
-  fi
-  if [[ "$CONTINUE_ON_ERROR" == "1" ]]; then
-    ARGS+=(--continue-on-error)
-  fi
-  if [[ "$RESUMING" == "1" ]]; then
-    ARGS+=(--resume)
-  fi
-
-  echo "[$(date -u +%FT%TZ)] task=$TASK_ID shard_number=$shard_number shard_campaign_id=$SHARD_CAMPAIGN_ID"
-  PYTHONPATH="$ROOT/src" "$PYBIN" "$MAP_SCRIPT" "${ARGS[@]}"
-  touch "$DONE_DIR/$shard_number"
+map_pids=()
+for ((w=0; w<MAP_CONCURRENCY; w++)); do
+  map_worker "$w" &
+  map_pids+=($!)
 done
-'
+map_rc=0
+for p in "${map_pids[@]}"; do
+  wait "$p" || map_rc=$?
+done
+if (( map_rc != 0 )); then
+  echo "[$(date -u +%FT%TZ)] WARNING: at least one map worker exited non-zero (rc=$map_rc)" >&2
+fi
 
 echo "[$(date -u +%FT%TZ)] Map stage complete. Starting deterministic reduce stage"
 

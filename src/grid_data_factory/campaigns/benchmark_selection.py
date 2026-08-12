@@ -11,6 +11,7 @@ from typing import Callable, Iterator
 
 _CANDIDATE_ID_RE = re.compile(r'"candidate_id"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"')
 _CASE_ID_RE = re.compile(r'"case_id"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"')
+_STATUS_RE = re.compile(r'"termination_status"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"')
 
 
 def _field_value(pattern: re.Pattern[str], line: str) -> str | None:
@@ -65,6 +66,38 @@ def load_completed_candidate_ids(
         "records_seen": records_seen,
         "malformed_records": malformed_records,
         "bytes_read": bytes_read,
+    }
+
+
+def load_candidate_ids_by_status(
+    runs_tree: Path,
+    statuses: set[str],
+    case_ids: set[str] | None = None,
+) -> tuple[dict[str, set[str]], dict[str, int]]:
+    selected: dict[str, set[str]] = {}
+    files_scanned = records_seen = malformed_records = matched_records = 0
+    for path in sorted(runs_tree.glob("**/samples.jsonl")):
+        files_scanned += 1
+        with path.open("r", encoding="utf-8", errors="replace") as stream:
+            for line in stream:
+                if not line.strip():
+                    continue
+                records_seen += 1
+                prefix = line[:16384]
+                identity = candidate_identity(prefix)
+                status = _field_value(_STATUS_RE, prefix)
+                if identity is None or status is None:
+                    malformed_records += 1
+                    continue
+                candidate_id, case_id = identity
+                if status in statuses and (case_ids is None or case_id in case_ids):
+                    selected.setdefault(case_id, set()).add(candidate_id)
+                    matched_records += 1
+    return selected, {
+        "files_scanned": files_scanned,
+        "records_seen": records_seen,
+        "malformed_records": malformed_records,
+        "matched_records": matched_records,
     }
 
 

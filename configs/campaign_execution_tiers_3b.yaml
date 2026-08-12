@@ -2,22 +2,71 @@ schema_version: "1.0"
 
 defaults:
   enabled: true
-  timeout_s: 300
-  tier: benchmark_required
+  timeout_s: 120
+  tier: fast_production
 
 cases:
-  pglib_opf_case13659_pegase:
-    enabled: false
+  pglib_opf_case10000_goc:
     timeout_s: 300
-    tier: quarantine_timeout
-    reason: Dominated by 1800-second timeouts in the cancelled round-0 run.
+    tier: slow_production
+    reason: Benchmark success rate 100% with 122-second p95 wall time.
+  pglib_opf_case4661_sdet:
+    timeout_s: 600
+    tier: slow_production
+    reason: Benchmark success rate 70%; all five 300-second timeouts terminated within 519 seconds at the 7200-second follow-up.
+
+  activsg10k:
+    enabled: false
+    tier: quarantine_invalid_model
+    reason: INVALID_MODEL for 20 of 20 benchmark candidates.
+  epigrids_florida_5658:
+    enabled: false
+    tier: quarantine_invalid_model
+    reason: INVALID_MODEL for 20 of 20 benchmark candidates and 99.8% of sampled partial outputs.
+  epigrids_midwest_10192:
+    enabled: false
+    tier: quarantine_invalid_model
+    reason: INVALID_MODEL for 20 of 20 benchmark candidates and 100% of sampled partial outputs.
+  epigrids_texas_7336:
+    enabled: false
+    tier: quarantine_invalid_model
+    reason: INVALID_MODEL for 20 of 20 benchmark candidates and 100% of sampled partial outputs.
   epigrids_western_20758:
     enabled: false
-    timeout_s: 120
     tier: quarantine_invalid_model
-    reason: Dominated by INVALID_MODEL results in the cancelled round-0 run.
+    reason: INVALID_MODEL for 20 of 20 benchmark candidates and 100% of sampled partial outputs.
+  pglib_opf_case73_ieee_rts:
+    enabled: false
+    tier: quarantine_invalid_model
+    reason: INVALID_MODEL for 20 of 20 benchmark candidates and 100% of sampled partial outputs.
+
+  activsg25k:
+    enabled: false
+    timeout_s: 7200
+    tier: quarantine_no_solutions
+    reason: No solutions in 20 exact-candidate retries; termination required up to 5798 seconds.
+  activsg70k:
+    enabled: false
+    timeout_s: 7200
+    tier: quarantine_low_yield
+    reason: Only 4 of 20 exact-candidate retries solved and 16 still timed out at 7200 seconds.
+  activsg82k:
+    enabled: false
+    timeout_s: 7200
+    tier: quarantine_timeout
+    reason: All 20 exact-candidate retries still timed out at 7200 seconds.
   epigrids_eastern_78484:
     enabled: false
-    timeout_s: 300
-    tier: benchmark_required
-    reason: Benchmark before enabling the largest grid in the portfolio.
+    timeout_s: 7200
+    tier: quarantine_timeout
+    reason: All 20 exact-candidate retries still timed out at 7200 seconds.
+  pglib_opf_case13659_pegase:
+    enabled: false
+    timeout_s: 7200
+    tier: quarantine_timeout
+    reason: No solutions in 18 exact-candidate retries; 16 still timed out at 7200 seconds.
+  pglib_opf_case6470_rte:
+    enabled: false
+    timeout_s: 1800
+    tier: quarantine_no_solutions
+    reason: All 20 exact-candidate retries terminated infeasible within 1681 seconds; collect separately if infeasible outcomes are needed.
