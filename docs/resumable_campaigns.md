@@ -227,20 +227,34 @@ per job:
   per-shard `samples.jsonl` sink even if their `CAMPAIGN_ID`s differ.
 
 [scripts/submit_exago_frontier_parallel_campaigns.sh](../scripts/submit_exago_frontier_parallel_campaigns.sh)
-partitions the case list round-robin into `NUM_GROUPS` groups and launches one
-hardened supervisor chain per group, each with its own `CAMPAIGN_ID` and
-`RUNS_ROOT` (both ride `--export=ALL` through the supervisor to every round job).
-The final pool is the union of the per-group runs-roots.
+partitions the case list round-robin into `NUM_GROUPS` disjoint groups and
+launches one hardened supervisor chain per group, each with its own `CAMPAIGN_ID`
+(`<base>_gNN`) and `RUNS_ROOT` (both ride `--export=ALL` through the supervisor to
+every round job). All per-group runs-roots nest under one umbrella directory
+`data/outputs/runs/<BASE_CAMPAIGN_ID>/gNN`, so the groups still form **one logical
+campaign**. The reduce step never merges `samples.jsonl` (it only aggregates
+per-round ledgers) — downstream consumers glob the samples directly — so the
+complete dataset is a single glob over the umbrella:
+
+```
+data/outputs/runs/<BASE_CAMPAIGN_ID>/**/ac_opf/samples.jsonl
+```
+
+Because the case groups are disjoint, no case is solved twice, so the union has
+no cross-group duplicates.
 
 ```bash
 cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
-NUM_GROUPS=4 DRY_RUN=1 scripts/submit_exago_frontier_parallel_campaigns.sh  # preview
-NUM_GROUPS=4 scripts/submit_exago_frontier_parallel_campaigns.sh            # launch
+NUM_GROUPS=20 DRY_RUN=1 scripts/submit_exago_frontier_parallel_campaigns.sh  # preview
+NUM_GROUPS=20 scripts/submit_exago_frontier_parallel_campaigns.sh            # launch
 ```
 
 Each group keeps ~2 jobs queued at once (a round job plus its supervisor), so
 `NUM_GROUPS` groups use ~`2 * NUM_GROUPS` submit slots; keep that within the
-account's per-user submit/run limits and do not use `QOS=debug` for the chain.
+account's per-user submit cap (`sacctmgr show assoc user=<you> format=Account,MaxSubmit`;
+100 on LRN070/LRN087) and do not use `QOS=debug` for the chain. A fan-out campaign
+is fully isolated from any single-campaign chain already running under the default
+`data/outputs/runs`, so both can run concurrently.
 
 ### Options
 
