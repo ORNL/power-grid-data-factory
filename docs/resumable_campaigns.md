@@ -172,12 +172,47 @@ the furthest incomplete round with `RESUME=1`, then requeues itself using a
 
 This keeps the campaign alive across logout/relogin cycles and allows it to
 advance from one 2 h window to the next without re-running completed shards or
-finalized solve attempts. The launcher in
+finalized solve attempts. A single supervisor *cycle* runs on one node for a few
+minutes: it submits the round job, then submits the next supervisor cycle bound
+`afterany` to that round job, and exits. The scheduler owns the lifecycle, so the
+chain survives logout and can be monitored from any login node with `squeue`,
+`sacct`, and the logs under `data/scratch/logs/`.
+
+The launcher is
 [scripts/submit_exago_frontier_campaign.sh](../scripts/submit_exago_frontier_campaign.sh)
-and the supervisor script in
-[configs/slurm/exago_frontier_campaign_supervisor.sbatch](../configs/slurm/exago_frontier_campaign_supervisor.sbatch)
-implement this pattern; the `debug` QoS is useful when the campaign must regain
-priority quickly while staying within the QoS walltime rules.
+and the supervisor is
+[configs/slurm/exago_frontier_campaign_supervisor.sbatch](../configs/slurm/exago_frontier_campaign_supervisor.sbatch).
+
+```bash
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+# Start the chain now (partition-default QOS):
+scripts/submit_exago_frontier_campaign.sh
+# Seed the chain to WAIT for an already-running round job first:
+AFTER=<running_round_jobid> scripts/submit_exago_frontier_campaign.sh
+```
+
+Two failure modes were hit in practice and are now designed out:
+
+- **Fail-safe requeue.** The supervisor must never exit before the chain is
+  created *and* must never requeue itself when no round job was actually
+  submitted. It now checks that `drive_campaign.py` succeeded, that the plan JSON
+  is valid, that `status == "submitted"`, and that a numeric round job id was
+  returned before it resubmits the next cycle. Any other outcome logs a reason
+  and stops cleanly, so a transient error cannot silently spin the chain.
+
+- **QOS submit limit → default to the partition QOS.** The chain intentionally
+  keeps a round job *and* the next supervisor cycle queued at the same time. The
+  `debug` QOS has a small per-user submit cap, so reusing it for the chain hits
+  `QOSMaxSubmitJobPerUserLimit` and the cycle fails before it can submit the next
+  round. The launcher and supervisor therefore default to the partition QOS
+  (`batch`/`normal`); `QOS=debug` is only appropriate for a single short,
+  standalone run, not the self-resubmitting chain.
+
+- **Avoid colliding with a running round.** `drive_campaign.py` resubmits the
+  furthest incomplete round regardless of whether a job for it is already in the
+  queue. When a round job is already running, seed the first supervisor cycle
+  with `AFTER=<jobid>` so it waits (`afterany`) for that job to end before acting,
+  instead of submitting a duplicate round on the same shared campaign paths.
 
 ### Options
 
