@@ -29,6 +29,14 @@ class PersistentPowerModelsSession:
         env.setdefault("OPENBLAS_NUM_THREADS", "1")
         env.setdefault("JULIA_NUM_THREADS", "1")
         env.setdefault("JULIA_PKG_PRECOMPILE_AUTO", "0")
+        # If the project has a local CoinHSL install, expose it so Ipopt can dlopen
+        # libcoinhsl.so for MA27/MA57 without requiring the user to set LD_LIBRARY_PATH.
+        coinhsl_lib = Path(self.adapter.julia_project_dir).parent.parent / "external" / "coinhsl" / "lib"
+        if not coinhsl_lib.is_dir() and self.adapter.repo_root is not None:
+            coinhsl_lib = Path(self.adapter.repo_root) / "external" / "coinhsl" / "lib"
+        if coinhsl_lib.is_dir():
+            existing = env.get("LD_LIBRARY_PATH", "")
+            env["LD_LIBRARY_PATH"] = f"{coinhsl_lib}:{existing}" if existing else str(coinhsl_lib)
         return env
 
     def _start(self) -> None:
