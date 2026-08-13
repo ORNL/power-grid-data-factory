@@ -163,6 +163,22 @@ whose reduce marker is missing or not `ok` — and resubmits it with `RESUME=1`.
 Because rounds run in sequence, that is the round currently in progress, so a
 single invocation transparently resumes an interrupted campaign.
 
+### Frontier supervisor pattern
+
+On Frontier, long campaigns should not rely on a login-shell process staying
+attached. The safe pattern is a scheduler-managed supervisor job that submits
+the furthest incomplete round with `RESUME=1`, then requeues itself using a
+`--dependency=afterany:<round_job>` relationship.
+
+This keeps the campaign alive across logout/relogin cycles and allows it to
+advance from one 2 h window to the next without re-running completed shards or
+finalized solve attempts. The launcher in
+[scripts/submit_exago_frontier_campaign.sh](../scripts/submit_exago_frontier_campaign.sh)
+and the supervisor script in
+[configs/slurm/exago_frontier_campaign_supervisor.sbatch](../configs/slurm/exago_frontier_campaign_supervisor.sbatch)
+implement this pattern; the `debug` QoS is useful when the campaign must regain
+priority quickly while staying within the QoS walltime rules.
+
 ### Options
 
 | Flag | Purpose |
