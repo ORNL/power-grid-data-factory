@@ -12,7 +12,13 @@
 #                     that share RUNS_ROOT collide on the per-shard samples.jsonl
 #                     sink even if their CAMPAIGN_IDs differ.
 # Give every group its own CAMPAIGN_ID and RUNS_ROOT and the groups are fully
-# independent; the final pool is the union of the per-group RUNS_ROOTs.
+# independent. All per-group RUNS_ROOTs nest under one umbrella directory
+# (data/outputs/runs/<BASE_CAMPAIGN_ID>/g<NN>) so the whole run is ONE logical
+# campaign: the framework never merges samples.jsonl itself -- consumers glob
+# them -- so the complete dataset is simply
+#   data/outputs/runs/<BASE_CAMPAIGN_ID>/**/ac_opf/samples.jsonl
+# Because the case groups are disjoint, no case is ever solved twice, so the
+# union has no cross-group duplicates.
 #
 # Cases are partitioned round-robin across GROUPS, so the groups are disjoint.
 # Each group is launched through scripts/submit_exago_frontier_campaign.sh, so it
@@ -79,7 +85,7 @@ echo "fan-out groups=$NUM_GROUPS base_campaign=$BASE_CAMPAIGN_ID account=$ACCOUN
 for ((g=0; g<NUM_GROUPS; g++)); do
   gid=$(printf "%02d" "$g")
   campaign_id="${BASE_CAMPAIGN_ID}_g${gid}"
-  runs_root="data/outputs/runs/${campaign_id}"
+  runs_root="data/outputs/runs/${BASE_CAMPAIGN_ID}/g${gid}"
   group_cases=$(echo "${GROUP_CASES[$g]}" | xargs)  # trim leading space
   echo "--- group $gid campaign_id=$campaign_id runs_root=$runs_root"
   echo "    cases: $group_cases"
@@ -94,3 +100,6 @@ for ((g=0; g<NUM_GROUPS; g++)); do
   DRY_RUN="$DRY_RUN" \
     bash "$LAUNCHER"
 done
+
+echo "consume the whole campaign as one dataset via glob:"
+echo "  data/outputs/runs/${BASE_CAMPAIGN_ID}/**/ac_opf/samples.jsonl"
