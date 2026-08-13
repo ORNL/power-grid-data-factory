@@ -194,12 +194,15 @@ function solve_request(case_data, payload)
 
     try
         pm_data = to_powermodels_data(case_data)
-        optimizer = optimizer_with_attributes(
-            Ipopt.Optimizer,
+        solver_attrs = Pair{String,Any}[
             "print_level" => 0,
             "sb" => "yes",
             "tol" => 1e-8,
-        )
+        ]
+        let ls = strip(get(ENV, "IPOPT_LINEAR_SOLVER", ""))
+            !isempty(ls) && push!(solver_attrs, "linear_solver" => ls)
+        end
+        optimizer = optimizer_with_attributes(Ipopt.Optimizer, solver_attrs...)
         # Enable dual variables (nodal-balance duals ~ LMPs, branch/bound multipliers).
         pm_out = solve_opf(
             pm_data, ACPPowerModel, optimizer;
