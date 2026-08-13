@@ -26,9 +26,11 @@ SUPERVISOR="$ROOT/configs/slurm/exago_frontier_campaign_supervisor.sbatch"
 export CAMPAIGN_ID=${CAMPAIGN_ID:-exago_frontier_large_grids}
 export ROUNDS=${ROUNDS:-5}
 export ACCOUNT=${ACCOUNT:-LRN087}
-# Slurm QOS for higher scheduling priority; 'debug' schedules fastest (<=2h, limited nodes).
-# Set QOS= (empty) to use the partition default (batch/normal) for long or many-node runs.
-export QOS=${QOS:-debug}
+# Slurm QOS. Default is the partition default (batch/normal). The self-resubmitting
+# chain keeps a round job AND the next supervisor cycle queued simultaneously,
+# which exceeds the 'debug' QOS per-user submit limit (QOSMaxSubmitJobPerUserLimit).
+# Set QOS=debug only for a single short, standalone run.
+export QOS=${QOS-}
 export ROUND_SBATCH=${ROUND_SBATCH:-configs/slurm/frontier_exago_acopf_mapreduce_8n_2h.sbatch}
 export CONFIG=${CONFIG:-configs/campaign_default.yaml}
 export BUDGET=${BUDGET:-600}

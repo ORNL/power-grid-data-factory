@@ -38,8 +38,11 @@ PYBIN=${PYBIN:-python3.11}
 CAMPAIGN_ID=${CAMPAIGN_ID:-exago_frontier_large_grids}
 ROUNDS=${ROUNDS:-5}
 ACCOUNT=${ACCOUNT:-LRN087}
-# Slurm QOS for higher scheduling priority; 'debug' schedules fastest (<=2h, limited nodes).
-QOS=${QOS:-debug}
+# Slurm QOS. Default is the partition default (batch/normal): the supervisor keeps
+# a round job AND the next supervisor cycle queued at once, which exceeds the
+# 'debug' QOS per-user submit limit (QOSMaxSubmitJobPerUserLimit). Opt into debug
+# only for a single short run, not for the self-resubmitting chain.
+QOS=${QOS-}
 ROUND_SBATCH=${ROUND_SBATCH:-configs/slurm/frontier_exago_acopf_mapreduce_8n_2h.sbatch}
 CONFIG=${CONFIG:-configs/campaign_default.yaml}
 BUDGET=${BUDGET:-600}
@@ -84,7 +87,7 @@ if [[ -n "${QOS:-}" ]]; then
 fi
 
 # 1. Submit the furthest incomplete round (RESUME=1) and capture the plan.
-PYTHONPATH="$ROOT/src" "$PYBIN" "$DRIVE_SCRIPT" \
+if ! PYTHONPATH="$ROOT/src" "$PYBIN" "$DRIVE_SCRIPT" \
   --campaign-id "$CAMPAIGN_ID" \
   --rounds "$ROUNDS" \
   --sbatch "$ROUND_SBATCH" \
@@ -95,32 +98,48 @@ PYTHONPATH="$ROOT/src" "$PYBIN" "$DRIVE_SCRIPT" \
   --emit-plan "$PLAN_FILE" \
   "${DRIVE_QOS[@]}" \
   "${DRIVE_RES[@]}" \
-  "${DRIVE_EXTRA[@]}"
-
-if [[ ! -s "$PLAN_FILE" ]]; then
-  echo "[$(date -u +%FT%TZ)] drive_campaign produced no plan file ($PLAN_FILE); stopping." >&2
+  "${DRIVE_EXTRA[@]}"; then
+  echo "[$(date -u +%FT%TZ)] drive_campaign failed; not resubmitting supervisor." >&2
   exit 1
 fi
 
-STATUS=$("$PYBIN" -c "import json,sys; print(json.load(open('$PLAN_FILE')).get('status',''))")
+if [[ ! -s "$PLAN_FILE" ]]; then
+  echo "[$(date -u +%FT%TZ)] drive_campaign produced no plan file ($PLAN_FILE); stopping without requeue." >&2
+  exit 1
+fi
+
+STATUS=$("$PYBIN" -c "import json,sys; p=json.load(open('$PLAN_FILE')); print(str(p.get('status','')).strip())" 2>/dev/null || true)
+if [[ -z "$STATUS" ]]; then
+  echo "[$(date -u +%FT%TZ)] invalid/empty plan JSON in $PLAN_FILE; stopping without requeue." >&2
+  exit 1
+fi
+
 if [[ "$STATUS" == "all_rounds_complete" ]]; then
   echo "[$(date -u +%FT%TZ)] all $ROUNDS rounds complete for $CAMPAIGN_ID; supervisor stopping."
   exit 0
 fi
 
-ROUND_JOB=$("$PYBIN" -c "import json; p=json.load(open('$PLAN_FILE')); s=p.get('submitted') or [{}]; print(s[0].get('job_id',''))")
-if [[ -z "$ROUND_JOB" ]]; then
-  echo "[$(date -u +%FT%TZ)] no round job id in plan; stopping." >&2
+if [[ "$STATUS" != "submitted" ]]; then
+  echo "[$(date -u +%FT%TZ)] plan status was '$STATUS' instead of 'submitted'; stopping without requeue." >&2
+  exit 1
+fi
+
+ROUND_JOB=$("$PYBIN" -c "import json; p=json.load(open('$PLAN_FILE')); s=p.get('submitted') or []; print((s[0].get('job_id','')) if s else '')" 2>/dev/null || true)
+if [[ -z "$ROUND_JOB" || ! "$ROUND_JOB" =~ ^[0-9]+$ ]]; then
+  echo "[$(date -u +%FT%TZ)] no valid round job id in plan; stopping without requeue." >&2
   exit 1
 fi
 
 echo "[$(date -u +%FT%TZ)] submitted round job $ROUND_JOB; resubmitting supervisor afterany:$ROUND_JOB (cycle $((CYCLE+1)))"
 
 # 2. Resubmit this supervisor to run once the round job ends (completed or timed out).
-sbatch -A "$ACCOUNT" \
+if ! sbatch -A "$ACCOUNT" \
   ${QOS:+-q "$QOS"} \
   --dependency="afterany:$ROUND_JOB" \
   --export=ALL,CYCLE=$((CYCLE + 1)) \
-  "$SUPERVISOR_SCRIPT"
+  "$SUPERVISOR_SCRIPT"; then
+  echo "[$(date -u +%FT%TZ)] failed to resubmit supervisor after round job $ROUND_JOB." >&2
+  exit 1
+fi
 
 echo "[$(date -u +%FT%TZ)] supervisor cycle=$CYCLE done"
