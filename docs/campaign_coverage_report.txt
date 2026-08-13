@@ -1,9 +1,15 @@
 ================================================================================
 POWER-GRID AC-OPF DATASET -- CAMPAIGN COVERAGE REPORT
-Generated: 2026-08-09
-Source: reconstructed directly from the archives (reduce reports + convergence
-        summaries inside the meta tarballs), after the source campaign dirs were
-        deleted -- confirming the archives are self-describing.
+Generated: 2026-08-13  (updated from 2026-08-09 version)
+Source: live aggregation across 8,666 per-shard execution reports under
+        data/outputs/campaigns/ultrascale_3b__r000__s*/round_summaries/
+        round_000_ac_execution_report.json
+        Slurm status at time of update:
+          3431512  pgdf_mr_resume1   RUNNING  ~14 h  64 nodes
+          3431513  pgdf_mr_resume2   PENDING  (dependency on resume1)
+          3431514  pgdf_mr_resume3   PENDING  (dependency on resume2)
+        The campaign is continuing from where it left off via a 3-job
+        dependency chain (resume1 → resume2 → resume3).
 ================================================================================
 
 
@@ -154,20 +160,136 @@ NOTABLE:
 
 
 ================================================================================
+CAMPAIGN 3 -- ULTRASCALE 3B (ultrascale_3b, data/outputs/campaigns/)
+================================================================================
+Status as of 2026-08-13: IN PROGRESS -- 8,666 / 8,192 shards with reports;
+3 Slurm jobs chained (1 running + 2 pending) continuing from last checkpoint.
+
+NOTE: total shards with reports (8,666) slightly exceeds the 8,192-shard
+map-reduce allocation because a small number of shards were re-run or retried
+across different resume jobs; duplicates are counted independently in the
+execution reports but the ledger deduplication handles them at reduce time.
+
+Input candidates selected : 12,135,352
+Solved candidates          :  5,999,178  (49.4% of input processed so far)
+Failed (process errors)    :        102
+Skipped (resume/carry-over):  6,136,072  (budget not yet exhausted or deferred)
+
+Termination-status histogram (all 5,999,178 solved rows):
+   LOCALLY_SOLVED         3,367,341   56.1%
+   LOCALLY_INFEASIBLE     2,469,655   41.2%
+   timeout                   97,724    1.6%
+   ITERATION_LIMIT           39,670    0.7%
+   ALMOST_LOCALLY_SOLVED     23,272    0.4%
+   process_error                563
+   nonconverged                 505
+   converged                    244
+   INVALID_MODEL                120
+   OTHER_ERROR                   84
+
+Feasible fraction : 3,390,613 / 5,999,178 = 56.5%
+  (LOCALLY_SOLVED + ALMOST_LOCALLY_SOLVED counted as feasible)
+
+Per-grid solved candidates (live, from execution reports):
+   GRID                                         BUSES  SOLVED     FEASIBLE  FEAS%
+   -----------------------------------------------------------------------  -----
+
+   --- Bulk grids (significant sample size) ---
+   pglib_opf_case118_ieee                         118    591,124    386,443  65.4%
+   pglib_opf_case162_ieee_dtc                     162    569,806     78,484  13.8%
+   epigrids_new_england_250                       250    639,852    370,292  57.9%
+   pglib_opf_case300_ieee                         300    334,110          0   0.0%
+   epigrids_florida_5658 (*)                    5,658         55          0   0.0%
+   pglib_opf_case57_ieee                           57    233,817      5,817   2.5%
+   pglib_opf_case14_ieee                           14     80,086     32,596  40.7%
+   pglib_opf_case24_ieee_rts                       24    147,432    119,312  80.9%
+   pglib_opf_case30_ieee                           30    133,461     46,630  34.9%
+   pglib_opf_case73_ieee_rts                       73        277          0   0.0%
+   activsg200                                     200    401,623    388,935  96.8%
+   activsg500                                     500    132,764    114,234  86.0%
+   activsg2000                                  2,000    357,284          0   0.0%
+   activsg10k                                  10,000         20          0   0.0%
+   activsg25k                                  25,000         40          0   0.0%
+   activsg70k                                  70,000         41          4   9.8%
+   activsg82k                                  82,000         41          0   0.0%
+   pglib_opf_case500_goc                          500    279,146    238,377  85.4%
+   pglib_opf_case2000_goc                       2,000    444,043    428,604  96.5%
+   pglib_opf_case10000_goc                     10,000    321,012    317,938  99.0%
+   memphis2026                                    ~2k    317,479    189,019  59.5%
+   pglib_opf_case4661_sdet                      4,661    436,359    255,361  58.5%
+   epigrids_wisconsin_1664                      1,664    578,669    418,565  72.3%
+
+   --- Probe / low-count grids (smoke runs only) ---
+   pglib_opf_case13659_pegase                  13,659         54          2   3.7%
+   epigrids_eastern_78484 (*)                  78,484         84          0   0.0%
+   epigrids_midwest_10192 (*)                  10,192         28          0   0.0%
+   epigrids_texas_7336 (*)                      7,336         55          0   0.0%
+   epigrids_western_20758 (*)                  20,758         57          0   0.0%
+   pglib_opf_case1354_pegase                    1,354         13          0   0.0%
+   pglib_opf_case1803_snem                      1,803         36          0   0.0%
+   pglib_opf_case1888_rte                       1,888          6          0   0.0%
+   pglib_opf_case2312_goc                       2,312         19          0   0.0%
+   pglib_opf_case2736sp_k                       2,736          1          0     --
+   pglib_opf_case2737sop_k                      2,737          6          0   0.0%
+   pglib_opf_case2746wop_k                      2,746          1          0     --
+   pglib_opf_case2746wp_k                       2,746          1          0     --
+   pglib_opf_case2848_rte                       2,848         14          0   0.0%
+   pglib_opf_case2853_sdet                      2,853         35          0   0.0%
+   pglib_opf_case2869_pegase                    2,869         27          0   0.0%
+   pglib_opf_case30000_goc                     30,000          4          0     --
+   pglib_opf_case3022_goc                       3,022         36          0   0.0%
+   pglib_opf_case3120sp_k                       3,120          1          0     --
+   pglib_opf_case3375wp_k                       3,375          6          0   0.0%
+   pglib_opf_case4837_goc                       4,837          1          0     --
+   pglib_opf_case4917_goc                       4,917         36          0   0.0%
+   pglib_opf_case6468_rte                       6,468          2          0     --
+   pglib_opf_case6470_rte                       6,470         41          0   0.0%
+   pglib_opf_case6495_rte                       6,495          3          0     --
+   pglib_opf_case8387_pegase                    8,387         38          0   0.0%
+   pglib_opf_case9241_pegase                    9,241         32          0   0.0%
+   -----------------------------------------------------------------------  -----
+   TOTAL (all grids)                                   5,999,178  3,390,613  56.5%
+
+(*) EPIGRIDS grids with only probe-level coverage. The MATPOWER files ARE
+    present in the workspace at external/pglib-opf/:
+      pglib_opf_case5658_epigrids.m   (Florida)
+      pglib_opf_case7336_epigrids.m   (Texas)
+      pglib_opf_case10192_epigrids.m  (Midwest)
+      pglib_opf_case20758_epigrids.m  (Western)
+    These were in the pglib-opf bundle, not in data/inputs/manual_sources/,
+    so the pipeline did not resolve them as full-campaign sources. The low
+    solved count (28-84 rows) reflects smoke-only execution. To expand these
+    grids to full campaign coverage, register them as canonical cases pointing
+    to external/pglib-opf/ and re-run the candidate selection + solve pipeline.
+
+NOTABLE:
+  - pglib_opf_case300_ieee: 334,110 solved, 0% feasible -- consistent with
+    the 0% seen in the prior validation campaign; likely a structural
+    infeasibility in the sampling envelope for this grid.
+  - activsg2000, activsg10k+: 0% feasible at current solve count; these are
+    large grids that may need tighter operating-point ranges.
+  - pglib_opf_case10000_goc: 99.0% feasible -- highest feasibility rate in
+    the campaign; well-conditioned large grid.
+  - activsg200 / activsg500 / pglib_opf_case2000_goc: all above 85% feasible
+    -- strong performance on medium-large ACTIVSg and GOC grids.
+  - timeout rate is 1.6% overall (97,724 rows); worth revisiting with MA57
+    once the HSL stack is in place.
+
+
+================================================================================
 COMPARISON AT A GLANCE
 ================================================================================
-                        PILOT (ultrascale_150m)      VALIDATION (ultrascale_v1)
-   Distinct grids       3 (ieee 14/57/118)           8 bulk + 6 probes (14 total)
-   Grid families        ieee                         ieee, ieee_rts, ieee_dtc, goc
-   Bus range            14 - 118                     24 - 10,000
-   Selection            full-budget (all 5.6M)       capped at 25k/grid
-   Topologies           6                            6
-   Solved candidates    5,271,602                    180,006
-   Raw sample rows      16,835,806                   539,461
-   Feasible fraction    36.5%                        32.1%
-   Archive (raw + meta) 81 G + 1.9 G                 20 G + 78 M
+                  PILOT (ultrascale_150m)  VALID. (ultrascale_v1)  3B CAMPAIGN (in progress)
+   Grids          3 (ieee 14/57/118)       8 bulk + 6 probes       ~50 grids across 8 families
+   Bus range      14 - 118                 24 - 10,000             14 - 82,000
+   Selection      full-budget              capped at 25k/grid      portfolio-budget per grid
+   Solved cands   5,271,602                180,006                 5,999,178  (partial)
+   Feasible frac  36.5%                    32.1%                   56.5%
+   Archive size   81 G + 1.9 G             20 G + 78 M             in progress
 
-The pilot went DEEP on 3 small IEEE grids (many millions of instances each);
-v1 went BROAD across grid families and sizes (up to 10k buses) with a per-grid
-cap plus cross-family smoke probes.
+The 3B campaign goes WIDE across grid families (ieee, ieee_rts, ieee_dtc, goc,
+ACTIVSg, EPIGRIDS, memphis, PEGASE, SDET, RTE) and DEEP on the grids where
+candidates are available, with portfolio-budget selection across 6 acquisition
+queues.
 ================================================================================
+
