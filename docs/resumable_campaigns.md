@@ -214,6 +214,34 @@ Two failure modes were hit in practice and are now designed out:
   with `AFTER=<jobid>` so it waits (`afterany`) for that job to end before acting,
   instead of submitting a duplicate round on the same shared campaign paths.
 
+### Concurrent per-case campaigns (fan-out)
+
+To fill the pool faster, run several campaigns at once, each restricted to a
+disjoint subset of cases. Concurrent jobs are safe only when **two** keys differ
+per job:
+
+- `CAMPAIGN_ID` — keys all campaign bookkeeping (selected candidates, shard dir,
+  queue, reduce markers, ledgers) via `campaign_root()`.
+- `RUNS_ROOT` — the per-shard runs-root is `RUNS_ROOT/mapreduce_round_NNN/shard_NNNNN`,
+  keyed by round+shard **only**. Two jobs sharing `RUNS_ROOT` collide on the
+  per-shard `samples.jsonl` sink even if their `CAMPAIGN_ID`s differ.
+
+[scripts/submit_exago_frontier_parallel_campaigns.sh](../scripts/submit_exago_frontier_parallel_campaigns.sh)
+partitions the case list round-robin into `NUM_GROUPS` groups and launches one
+hardened supervisor chain per group, each with its own `CAMPAIGN_ID` and
+`RUNS_ROOT` (both ride `--export=ALL` through the supervisor to every round job).
+The final pool is the union of the per-group runs-roots.
+
+```bash
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+NUM_GROUPS=4 DRY_RUN=1 scripts/submit_exago_frontier_parallel_campaigns.sh  # preview
+NUM_GROUPS=4 scripts/submit_exago_frontier_parallel_campaigns.sh            # launch
+```
+
+Each group keeps ~2 jobs queued at once (a round job plus its supervisor), so
+`NUM_GROUPS` groups use ~`2 * NUM_GROUPS` submit slots; keep that within the
+account's per-user submit/run limits and do not use `QOS=debug` for the chain.
+
 ### Options
 
 | Flag | Purpose |
