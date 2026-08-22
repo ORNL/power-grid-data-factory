@@ -162,8 +162,14 @@ NOTABLE:
 ================================================================================
 CAMPAIGN 3 -- ULTRASCALE 3B (ultrascale_3b, data/outputs/campaigns/)
 ================================================================================
-Status as of 2026-08-13: IN PROGRESS -- 8,666 / 8,192 shards with reports;
-3 Slurm jobs chained (1 running + 2 pending) continuing from last checkpoint.
+Status as of 2026-08-13: PARTIAL LIVE SNAPSHOT -- 8,666 / 8,192 shards with
+reports; 3 Slurm jobs chained (1 running + 2 pending) continuing from the last
+checkpoint.
+
+IMPORTANT: these counts are for the WORK COMPLETED SO FAR, not the final total
+for the 3B campaign. The run was already well into the multi-million solve
+range before the remaining resume jobs finished. This is a live checkpoint of
+progress, not a final campaign summary.
 
 NOTE: total shards with reports (8,666) slightly exceeds the 8,192-shard
 map-reduce allocation because a small number of shards were re-run or retried

@@ -71,6 +71,34 @@ def _read_ledger_rows(campaign_root: Path, ledger_name: str) -> list[dict[str, A
     return []
 
 
+def _iter_ledger_rows(shard_root: Path, ledger_name: str):
+    """Yield ledger rows one at a time without loading the full file into memory."""
+    parquet_path = shard_root / ledger_name
+    fallback_path = parquet_path.with_suffix(parquet_path.suffix + ".jsonl")
+    if fallback_path.exists():
+        with fallback_path.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    yield json.loads(line)
+        return
+    try:
+        import pandas as pd  # type: ignore
+        if parquet_path.exists():
+            for row in pd.read_parquet(parquet_path).to_dict(orient="records"):
+                yield row
+    except Exception:
+        return
+
+
+def _stream_append_row(path: Path, row: dict[str, Any]) -> None:
+    """Append a single row to the JSONL fallback without reading the existing file."""
+    fallback = path.with_suffix(path.suffix + ".jsonl")
+    fallback.parent.mkdir(parents=True, exist_ok=True)
+    with fallback.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, ensure_ascii=True, default=str) + "\n")
+
+
 def _stable_sort(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     def _key(row: dict[str, Any]) -> tuple[str, str, str, str]:
         return (
@@ -151,38 +179,66 @@ def main() -> None:
     shard_ids = [line.strip() for line in ids_file.read_text(encoding="utf-8").splitlines() if line.strip()]
     shard_ids = sorted(shard_ids)
 
-    all_diversity: list[dict[str, Any]] = []
-    all_active: list[dict[str, Any]] = []
-    all_boundary: list[dict[str, Any]] = []
-    all_contingency: list[dict[str, Any]] = []
-    solved: list[dict[str, Any]] = []
-    failed: list[dict[str, Any]] = []
+    # Streaming dedup key-sets — only keys in memory, not full row dicts.
+    seen_diversity: set[tuple[str, str]] = set()
+    seen_boundary: set[tuple[str, str]] = set()
+    seen_contingency: set[tuple[str, ...]] = set()
+    # active_constraint is aggregated (summed) rather than deduped; only the
+    # aggregation dict (unique family×component pairs) lives in memory.
+    active_agg: dict[tuple[str, str], dict[str, Any]] = {}
+    solved_count = 0
+    failed_count = 0
+    diversity_count = 0
+    boundary_count = 0
+    contingency_count = 0
     missing_reports: list[str] = []
 
     for shard_id in shard_ids:
         shard_root = paths.campaigns_root(repo_root) / shard_id
-        all_diversity.extend(_read_ledger_rows(shard_root, "diversity_ledger.parquet"))
-        all_active.extend(_read_ledger_rows(shard_root, "active_constraint_ledger.parquet"))
-        all_boundary.extend(_read_ledger_rows(shard_root, "security_boundary_ledger.parquet"))
-        all_contingency.extend(_read_ledger_rows(shard_root, "contingency_portfolio.parquet"))
+
+        for row in _iter_ledger_rows(shard_root, "diversity_ledger.parquet"):
+            k = (str(row.get("candidate_id", "")), str(row.get("run_id", "")))
+            if k not in seen_diversity:
+                seen_diversity.add(k)
+                _stream_append_row(campaign_root / "diversity_ledger.parquet", row)
+                diversity_count += 1
+
+        for row in _iter_ledger_rows(shard_root, "active_constraint_ledger.parquet"):
+            key = (str(row.get("constraint_family", "unknown")), str(row.get("component_id", "unknown")))
+            if key not in active_agg:
+                active_agg[key] = {"constraint_family": key[0], "component_id": key[1],
+                                   "active_count": 0, "near_active_count": 0, "last_discovery_round": -1}
+            active_agg[key]["active_count"] += int(row.get("active_count", 0))
+            active_agg[key]["near_active_count"] += int(row.get("near_active_count", 0))
+            active_agg[key]["last_discovery_round"] = max(
+                int(active_agg[key]["last_discovery_round"]), int(row.get("last_discovery_round", -1))
+            )
+
+        for row in _iter_ledger_rows(shard_root, "security_boundary_ledger.parquet"):
+            k = (str(row.get("stress_trajectory_id", "")), str(row.get("base_operating_point", "")))
+            if k not in seen_boundary:
+                seen_boundary.add(k)
+                _stream_append_row(campaign_root / "security_boundary_ledger.parquet", row)
+                boundary_count += 1
+
+        for row in _iter_ledger_rows(shard_root, "contingency_portfolio.parquet"):
+            k = (str(row.get("candidate_id", "")),)
+            if k not in seen_contingency:
+                seen_contingency.add(k)
+                _stream_append_row(campaign_root / "contingency_portfolio.parquet", row)
+                contingency_count += 1
 
         report_path = shard_root / "round_summaries" / f"round_{round_pad}_ac_execution_report.json"
         if report_path.exists():
             report = _read_json(report_path)
-            solved.extend(list(report.get("solved", [])))
-            failed.extend(list(report.get("failed", [])))
+            solved_count += len(report.get("solved", []))
+            failed_count += len(report.get("failed", []))
         else:
             missing_reports.append(str(report_path))
 
-    all_diversity = _dedup_by_key(_stable_sort(all_diversity), ("candidate_id", "run_id"))
-    all_boundary = _dedup_by_key(_stable_sort(all_boundary), ("stress_trajectory_id", "base_operating_point"))
-    all_contingency = _dedup_by_key(_stable_sort(all_contingency), ("candidate_id",))
-    all_active = _aggregate_active_constraint(all_active)
-
-    append_parquet_rows(campaign_root / "diversity_ledger.parquet", all_diversity)
-    append_parquet_rows(campaign_root / "active_constraint_ledger.parquet", all_active)
-    append_parquet_rows(campaign_root / "security_boundary_ledger.parquet", all_boundary)
-    append_parquet_rows(campaign_root / "contingency_portfolio.parquet", all_contingency)
+    # Write the aggregated active-constraint ledger (small: unique family×component pairs).
+    active_rows = sorted(active_agg.values(), key=lambda r: (r["constraint_family"], r["component_id"]))
+    append_parquet_rows(campaign_root / "active_constraint_ledger.parquet", active_rows)
 
     summary = {
         "ok": len(missing_reports) == 0,
@@ -191,15 +247,14 @@ def main() -> None:
         "mode": "map_reduce_shard_merge",
         "shard_campaign_ids": shard_ids,
         "merged_counts": {
-            "diversity": len(all_diversity),
-            "active_constraint": len(all_active),
-            "security_boundary": len(all_boundary),
-            "contingency_portfolio": len(all_contingency),
-            "solved": len(solved),
-            "failed": len(failed),
+            "diversity": diversity_count,
+            "active_constraint": len(active_rows),
+            "security_boundary": boundary_count,
+            "contingency_portfolio": contingency_count,
+            "solved": solved_count,
+            "failed": failed_count,
         },
-        "solved": _stable_sort(solved),
-        "failed": _stable_sort(failed),
+        # solved/failed full entries are in per-shard execution reports; omitted here to avoid OOM.
         "missing_shard_reports": missing_reports,
         "updated_ledgers": [
             str(campaign_root / "diversity_ledger.parquet"),
