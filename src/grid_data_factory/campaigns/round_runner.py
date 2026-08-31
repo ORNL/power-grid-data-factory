@@ -369,7 +369,9 @@ def _shard_samples_path(runs_root: Path) -> Path:
 def _lean_result(result: dict[str, Any]) -> dict[str, Any]:
     trimmed = dict(result)
     trimmed.pop("stdout", None)
-    trimmed.pop("stderr", None)
+    # keep stderr for process_error so crash messages are recoverable
+    if result.get("termination_status") != "process_error":
+        trimmed.pop("stderr", None)
     return trimmed
 
 
