@@ -35,7 +35,7 @@ export ROUND_SBATCH=${ROUND_SBATCH:-configs/slurm/frontier_exago_acopf_mapreduce
 export CONFIG=${CONFIG:-configs/campaign_default.yaml}
 export BUDGET=${BUDGET:-600}
 export DEP_TYPE=${DEP_TYPE:-afterany}
-export MAX_CYCLES=${MAX_CYCLES:-50}
+export MAX_CYCLES=${MAX_CYCLES:-500}
 # Optional round-job resource overrides (0/empty keeps the round sbatch header).
 export ROUND_NODES=${ROUND_NODES:-0}
 export ROUND_TIME=${ROUND_TIME:-}
