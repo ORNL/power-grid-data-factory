@@ -1,0 +1,17 @@
+packages:
+  gcc:
+    externals:
+    - spec: gcc@9.3.0
+      prefix: /sw/andes/gcc/9.3.0
+      extra_attributes:
+        compilers:
+          c: /sw/andes/gcc/9.3.0/bin/gcc
+          cxx: /sw/andes/gcc/9.3.0/bin/g++
+          fortran: /sw/andes/gcc/9.3.0/bin/gfortran
+    - spec: gcc@8.5.0
+      prefix: /usr
+      extra_attributes:
+        compilers:
+          c: /usr/bin/gcc
+          cxx: /usr/bin/g++
+          fortran: /usr/bin/gfortran

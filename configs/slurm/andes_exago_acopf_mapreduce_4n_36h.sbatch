@@ -48,24 +48,20 @@ PGDF_VENV=${PGDF_VENV-$ROOT/.venv}
 # linked against OpenMPI 5.0.5 from /sw/andes/spack-envs/sw-25.04/.
 module load openmpi 2>/dev/null || true
 
-# IPOPT library: the binary was built with IPOPT from the user spack install.
-# If that /tmp path is gone, set IPOPT_LIB_DIR to where libipopt.so.3 lives
-# (e.g. from `module load ipopt` or a persistent spack prefix).
-IPOPT_LIB_DIR=${IPOPT_LIB_DIR:-}
-if [[ -z "$IPOPT_LIB_DIR" ]]; then
-  # Try the original spack /tmp build path (only valid on Andes compute nodes
-  # where the spack install was performed; likely absent after node reuse).
-  _tmp_ipopt=/tmp/mlupopa/spack-install/linux-zen2/ipopt-3.14.14-z2ayx5wqcfaqtc444w22rlygqerfhr42/lib
-  if [[ -d "$_tmp_ipopt" ]]; then
-    IPOPT_LIB_DIR="$_tmp_ipopt"
-  fi
-fi
-if [[ -n "$IPOPT_LIB_DIR" ]]; then
+# OpenBLAS: needed transitively by libipopt.so.3.
+module load openblas 2>/dev/null || true
+
+# IPOPT library: spack-installed persistently. Installed 2026-08-31 with:
+#   spack install openmpi@5.0.5 && spack install netlib-scalapack &&
+#   spack install mumps@5.7.3  && spack install ipopt@3.14.14
+_spack_ipopt=/autofs/nccs-svm1_home2/mlupopa/spack-packages/linux-rhel8-zen2/gcc-9.3.0/ipopt-3.14.14-ovpy35gemn7o5az725b5cn5i6663pv5l/lib
+IPOPT_LIB_DIR=${IPOPT_LIB_DIR:-$_spack_ipopt}
+if [[ -d "$IPOPT_LIB_DIR" ]]; then
   export LD_LIBRARY_PATH="${IPOPT_LIB_DIR}:${LD_LIBRARY_PATH:-}"
 else
-  echo "[warn] IPOPT_LIB_DIR not set and /tmp spack path absent." \
+  echo "[warn] IPOPT_LIB_DIR not found: $IPOPT_LIB_DIR" \
        "If opflow fails with 'libipopt.so.3 => not found'," \
-       "set IPOPT_LIB_DIR to the directory containing libipopt.so.3." >&2
+       "override IPOPT_LIB_DIR to the directory containing libipopt.so.3." >&2
 fi
 
 # Activate the campaign virtualenv (must follow module setup so it wins PATH).
