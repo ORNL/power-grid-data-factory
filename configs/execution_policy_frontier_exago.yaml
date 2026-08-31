@@ -1,0 +1,22 @@
+schema_version: "1.0"
+
+# Execution policy for the Frontier GPU ExaGO large-grid campaign.
+#
+# activsg70k and activsg82k consistently time out or nonconverge within the
+# 1800s per-candidate wall budget on Frontier, producing only 'indeterminate'
+# samples that are useless for feasibility classification. Disabling them here
+# avoids burning ~1800s of GPU time per candidate with zero dataset yield.
+# Run these two cases on Andes (36h CPU, PowerModels.jl) instead.
+
+defaults:
+  enabled: true
+  timeout_s: 1800
+  tier: default
+
+cases:
+  activsg70k:
+    enabled: false
+    tier: andes_only
+  activsg82k:
+    enabled: false
+    tier: andes_only
