@@ -357,6 +357,13 @@ def classify_feasibility(result: dict[str, Any]) -> str:
         return FEASIBILITY_INFEASIBLE
     if upper in _INDETERMINATE_STATUSES:
         return FEASIBILITY_INDETERMINATE
+    if upper == "INVALID_MODEL":
+        # PowerModels returns INVALID_MODEL + FEASIBLE_POINT when a contingency
+        # disconnects the network (islanding). That is physically infeasible.
+        raw = result.get("raw_result") or {}
+        if str(raw.get("primal_status", "")).upper() == "FEASIBLE_POINT":
+            return FEASIBILITY_INFEASIBLE
+        return FEASIBILITY_ERROR
     if upper in _ERROR_STATUSES:
         return FEASIBILITY_ERROR
     return FEASIBILITY_INDETERMINATE
