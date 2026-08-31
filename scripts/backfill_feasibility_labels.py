@@ -127,7 +127,10 @@ def main() -> None:
             total_records += records
             total_updated += updated
             if updated:
-                rel = path.relative_to(ROOT)
+                try:
+                    rel = path.relative_to(ROOT)
+                except ValueError:
+                    rel = path
                 print(f"  {'(dry) ' if args.dry_run else ''}updated {updated}/{records}  {rel}")
 
     print(f"\n{'[dry-run] ' if args.dry_run else ''}files scanned: {total_files}  "
