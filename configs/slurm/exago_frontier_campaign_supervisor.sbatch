@@ -54,7 +54,7 @@ ROUND_TIME=${ROUND_TIME:-}
 ROUND_EXTRA_ENV=${ROUND_EXTRA_ENV:-}
 # Runaway guard: stop after this many supervisor cycles.
 CYCLE=${CYCLE:-1}
-MAX_CYCLES=${MAX_CYCLES:-50}
+MAX_CYCLES=${MAX_CYCLES:-500}
 
 mkdir -p "$ROOT/data/scratch/logs"
 PLAN_DIR="$ROOT/data/outputs/campaigns/$CAMPAIGN_ID/round_summaries"
