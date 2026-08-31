@@ -1,0 +1,5 @@
+config:
+  install_tree:
+    root: /autofs/nccs-svm1_home2/mlupopa/spack-packages
+  source_cache: /autofs/nccs-svm1_home2/mlupopa/spack-cache/source
+  misc_cache: /autofs/nccs-svm1_home2/mlupopa/spack-cache/misc

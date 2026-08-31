@@ -42,8 +42,8 @@ PYTHONPATH=src python3.11 scripts/configure_exago_build.py \
   --define EXAGO_ENABLE_PYTHON=OFF \
   --define EXAGO_ENABLE_OMP=ON \
   --define EXAGO_PETSC_MIN_VERSION=3.22.1 \
-  --define IPOPT_DIR=/tmp/mlupopa/spack-install/linux-zen2/ipopt-3.14.14-z2ayx5wqcfaqtc444w22rlygqerfhr42 \
-  --define OpenBLAS_DIR=/tmp/mlupopa/spack-install/linux-zen2/openblas-0.3.30-kganzs2hof2ugi7kg5bimgn7ugvbwj52 \
+  --define IPOPT_DIR=$(spack find -p ipopt | awk '/ipopt/{print $2}') \
+  --define OpenBLAS_DIR=$(spack find -p openblas | awk '/openblas/{print $2}') \
   --define CMAKE_EXE_LINKER_FLAGS=-lgomp \
   --define CMAKE_SHARED_LINKER_FLAGS=-lgomp
 
@@ -80,4 +80,6 @@ Expected key lines:
 
 - Do not use `buildsystem/clang-hip/cache.cmake` on Andes CPU workflow.
 - Keep this flow isolated from Frontier GPU builds.
-- If local Spack paths change, update `IPOPT_DIR` and `OpenBLAS_DIR` accordingly.
+- If spack paths change after a reinstall, re-run `spack find -p ipopt openblas`
+  and update `IPOPT_DIR` / `OpenBLAS_DIR` in the cmake configure step.
+- Spack setup (persistent install root, packages.yaml fix): see `machines/andes/README.md`.
