@@ -502,6 +502,84 @@ PYTHONPATH=src python3.11 scripts/drive_campaign.py …
 4. Verify progress by inspecting the reduce markers under
    `data/campaigns/<campaign_id>/round_summaries/`.
 
+## Manual round advancement
+
+Use this when the automated supervisor is not running and you want to step
+through rounds by hand, or when a round's map finished but the reduce never ran
+(e.g. the job hit wall-clock after the last shard completed).
+
+### 1. Check map completion
+
+```bash
+CAMPAIGN_ID=ultrascale_3b
+ROUND=002          # zero-padded
+QUEUE=data/outputs/campaigns/$CAMPAIGN_ID/round_summaries/round_${ROUND}_shards/queue
+
+echo "shards total: $(wc -l < $QUEUE/shards.txt)"
+echo "shards done:  $(ls $QUEUE/done | wc -l)"
+echo "next_index:   $(cat $QUEUE/next_index.txt)"
+```
+
+The map is complete when `shards done == shards total` and `next_index` equals that number.
+
+### 2. Check whether the reduce already ran
+
+```bash
+MARKER=data/outputs/campaigns/$CAMPAIGN_ID/round_summaries/round_${ROUND}_mapreduce_reduce_report.json
+[[ -f "$MARKER" ]] && python3.11 -c "import json,sys; d=json.load(open('$MARKER')); print('ok:', d.get('ok'), '  solved:', d.get('solved_count'), '  failed:', d.get('failed_count'))" || echo "marker missing — reduce has not run"
+```
+
+### 3. Run the reduce
+
+```bash
+ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+cd $ROOT
+
+CAMPAIGN_ID=ultrascale_3b
+ROUND_INDEX=2     # integer
+
+printf -v ROUND_PAD "%03d" $ROUND_INDEX
+SHARD_IDS_FILE=data/outputs/campaigns/$CAMPAIGN_ID/round_summaries/round_${ROUND_PAD}_shards/queue/shard_campaign_ids.txt
+
+PYTHONPATH=src /usr/bin/python3.11 scripts/reduce_campaign_shards.py \
+  --campaign-id  "$CAMPAIGN_ID" \
+  --round-index  $ROUND_INDEX \
+  --config       configs/campaign_default.yaml \
+  --shard-campaign-ids-file "$SHARD_IDS_FILE"
+```
+
+Add `--force` to re-run a reduce that already has a marker (e.g. after fixing a
+bug; the ledger append is idempotent with dedup).
+
+### 4. Verify success
+
+```bash
+python3.11 -c "
+import json, sys
+d = json.load(open('data/outputs/campaigns/$CAMPAIGN_ID/round_summaries/round_${ROUND_PAD}_mapreduce_reduce_report.json'))
+print('ok:', d.get('ok'))
+print('solved:', d.get('solved_count'), '  failed:', d.get('failed_count'))
+print('missing_reports:', d.get('missing_reports', []))
+"
+```
+
+`ok` is `true` only when no shard reports are missing. If `missing_reports` is
+non-empty, re-run the missing shards (set `RESUME=1` and submit the round job
+again), then re-run the reduce.
+
+### 5. Submit the next round
+
+```bash
+PYTHONPATH=src /usr/bin/python3.11 scripts/drive_campaign.py \
+  --campaign-id "$CAMPAIGN_ID" \
+  --rounds <total_rounds> \
+  --sbatch configs/slurm/andes_powermodels_acopf_mapreduce_10n_36h.sbatch
+```
+
+`drive_campaign.py` detects the completed reduce marker and advances to the next
+incomplete round automatically. Add `--chain` to queue all remaining rounds
+at once.
+
 ## Validation
 
 Run the full test suite (Python 3.11; `pytest` is not installed):
