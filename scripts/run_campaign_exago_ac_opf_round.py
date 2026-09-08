@@ -9,7 +9,12 @@ PowerModels worker so the reduce/drive stages need no changes.
 Per candidate the GPU sparse solver is tried first
 (-opflow_solver HIOPSPARSEGPU -opflow_model PBPOLRAJAHIOPSPARSE); on any
 failure/non-convergence it falls back to the CPU interior-point solver
-(-opflow_solver IPOPT -opflow_model POWER_BALANCE_POLAR).
+(-opflow_solver IPOPT -opflow_model POWER_BALANCE_POLAR). If that CPU attempt
+also fails (including timeout), one more retry is made with a
+POWER_BALANCE_CARTESIAN formulation and a relaxed convergence tolerance,
+using half of the remaining timeout budget -- a different formulation and
+looser tolerance sometimes converges where the default polar attempt could
+not. Every attempt is recorded in the returned ``solver_attempts`` list.
 """
 from __future__ import annotations
 
@@ -55,6 +60,13 @@ GPU_SOLVER = "HIOPSPARSEGPU"
 GPU_MODEL = "PBPOLRAJAHIOPSPARSE"
 CPU_SOLVER = "IPOPT"
 CPU_MODEL = "POWER_BALANCE_POLAR"
+# Retry formulation/tolerance used when the primary CPU attempt (above) fails
+# or times out. A different formulation plus a looser tolerance gives IPOPT a
+# second, meaningfully different chance to converge instead of just failing.
+CPU_MODEL_FALLBACK = "POWER_BALANCE_CARTESIAN"
+CPU_FALLBACK_TOLERANCE = 1e-4
+CPU_FALLBACK_TIMEOUT_FRACTION = 0.5
+CPU_FALLBACK_MIN_TIMEOUT_S = 900.0
 
 
 def parse_args() -> argparse.Namespace:
@@ -184,6 +196,31 @@ def _solve_candidate_exago(
             "exit_code": cpu.get("exit_code"),
         })
         result = cpu
+
+        if not bool(cpu.get("success")):
+            # Primary polar-formulation IPOPT attempt failed/timed out. Retry
+            # once with the cartesian formulation and a relaxed tolerance
+            # before giving up on the candidate. Bounded to half of timeout_s
+            # (floor CPU_FALLBACK_MIN_TIMEOUT_S) so a total failure costs at
+            # most ~1.5x timeout_s instead of silently doubling it.
+            retry_timeout_s = max(timeout_s * CPU_FALLBACK_TIMEOUT_FRACTION, CPU_FALLBACK_MIN_TIMEOUT_S)
+            cpu_retry = run_exago_case(
+                exago_root, opflow_bin, str(tmp_m), CPU_SOLVER, CPU_MODEL_FALLBACK, retry_timeout_s,
+                export_base=tmp_dir / f"{tag}_ipopt_retry",
+                opflow_tolerance=CPU_FALLBACK_TOLERANCE,
+            )
+            cpu_retry["solver_used"] = CPU_SOLVER
+            cpu_retry["opflow_model_used"] = CPU_MODEL_FALLBACK
+            cpu_retry["fallback_used"] = True
+            _append_solver_log(log_path, tag, CPU_SOLVER, CPU_MODEL_FALLBACK, cpu_retry)
+            attempts.append({
+                "solver": CPU_SOLVER,
+                "model": CPU_MODEL_FALLBACK,
+                "success": bool(cpu_retry.get("success")),
+                "termination_status": cpu_retry.get("termination_status"),
+                "exit_code": cpu_retry.get("exit_code"),
+            })
+            result = cpu_retry
 
     result["solver_attempts"] = attempts
     try:

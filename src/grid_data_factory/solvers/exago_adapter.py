@@ -256,6 +256,7 @@ def run_exago_case(
     opflow_model: str,
     timeout_s: float,
     export_base: Path | None = None,
+    opflow_tolerance: float | None = None,
 ) -> dict[str, Any]:
     start_t = time.perf_counter()
     exec_ctx = collect_execution_context()
@@ -275,6 +276,10 @@ def run_exago_case(
     if exago_verbose_enabled():
         # Same maximum-verbosity flags the single-case smoke test uses.
         cmd += ["-hiop_verbosity_level", "12", "-log_view", "-options_left", "no"]
+    if opflow_tolerance is not None:
+        # Used by fallback/retry attempts that relax convergence tolerance
+        # (e.g. after a stricter-tolerance attempt timed out).
+        cmd.extend(["-opflow_tolerance", str(opflow_tolerance)])
     export_json_path = None
     if export_base is not None:
         cmd.extend(["-opflow_output_format", "JSON", "-save_output", str(export_base)])

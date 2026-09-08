@@ -1,0 +1,35 @@
+# Per-case timeout overrides for the Andes CPU ExaGO IPOPT AC-OPF campaign
+# (configs/slurm/andes_exago_acopf_mapreduce_4n_36h.sbatch), which only ever
+# solves activsg70k and activsg82k -- the two largest cases in the dataset
+# (70,000 and 82,000 buses respectively; too large for the Frontier GPU
+# campaign, see configs/execution_policy_frontier_exago.yaml).
+#
+# Evidence: every observed activsg70k IPOPT/POWER_BALANCE_POLAR attempt at the
+# old flat timeout_s=7200 (2h) hit termination_status=timeout at ~7200.1s with
+# zero convergence across 16 parallel shards. activsg82k has ~17% more buses
+# and gets a proportionally larger budget. IPOPT itself only runs serially per
+# candidate (no MPI parallelism), so the per-solve budget is independent of
+# node/task count.
+#
+# The worker also retries once with a POWER_BALANCE_CARTESIAN formulation and
+# a relaxed tolerance if the primary POWER_BALANCE_POLAR attempt fails (see
+# CPU_MODEL_FALLBACK in scripts/run_campaign_exago_ac_opf_round.py); that retry
+# uses half of the timeout_s configured here, so worst-case wall time per
+# candidate is ~1.5x the value below.
+
+defaults:
+  enabled: true
+  timeout_s: 10800
+  tier: andes_large_grid
+
+cases:
+  activsg70k:
+    enabled: true
+    timeout_s: 10800
+    tier: andes_large_grid
+    reason: "70000-bus network; IPOPT/MUMPS factorization needs more than the old 7200s cap."
+  activsg82k:
+    enabled: true
+    timeout_s: 14400
+    tier: andes_large_grid
+    reason: "82000-bus network, the largest case in the dataset; budgeted above activsg70k."
