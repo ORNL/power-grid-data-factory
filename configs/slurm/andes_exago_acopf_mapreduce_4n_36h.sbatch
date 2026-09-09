@@ -13,16 +13,16 @@
 # Andes CPU ExaGO IPOPT AC-OPF map/reduce campaign round.
 #
 # Targets activsg70k and activsg82k only -- cases too large for Frontier GPU.
-# Uses IPOPT (CPU) instead of HiOp (GPU). Per-case timeout_s (3 h for
-# activsg70k, 4 h for activsg82k) comes from EXECUTION_POLICY below; a flat
-# 7200s (2 h) cap was observed to time out on every attempt for both cases.
+# Uses IPOPT (CPU) instead of HiOp (GPU). Per-case timeout_s (10h for both
+# cases) comes from EXECUTION_POLICY below; flat 7200s (2h) and 10800s/14400s
+# (3h/4h) caps were each observed to still time out some candidates.
 # On timeout/non-convergence the worker retries once with a
 # POWER_BALANCE_CARTESIAN formulation and a relaxed tolerance (see
 # CPU_MODEL_FALLBACK in scripts/run_campaign_exago_ac_opf_round.py), using
 # half of the configured timeout_s, so worst case is ~1.5x per candidate.
 #
 # 4 nodes x 4 tasks/node = 16 parallel IPOPT solvers.
-# Max throughput at 3 h per solve: 16 workers * (36 h / 3 h) = 192 solves/round.
+# Max throughput at 10 h per solve: 16 workers * (36 h / 10 h) = 57 solves/round.
 #
 # Submit from an Andes login node:
 #   CAMPAIGN_ID=exago_andes_activsg_g00 \
@@ -93,8 +93,8 @@ SEED=${SEED:-7}
 SOLVER_ID=${SOLVER_ID:-exago_ac_opf_ipopt_campaign}
 SOLVER_MODE=${SOLVER_MODE:-ipopt_only}
 # Fallback timeout for any case not covered by EXECUTION_POLICY below.
-# IPOPT on 70k-82k bus networks is slow; 3 h gives MUMPS time to factor.
-TIMEOUT_S=${TIMEOUT_S:-10800}
+# IPOPT on 70k-82k bus networks is slow; 10 h gives MUMPS time to factor.
+TIMEOUT_S=${TIMEOUT_S:-36000}
 EXECUTION_POLICY=${EXECUTION_POLICY:-configs/execution_policy_andes_exago_large_cases.yaml}
 RUNS_ROOT=${RUNS_ROOT:-data/outputs/runs}
 MAX_CANDIDATES=${MAX_CANDIDATES:-0}
