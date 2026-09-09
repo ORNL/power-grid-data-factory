@@ -6,30 +6,32 @@
 #
 # Evidence: every observed activsg70k IPOPT/POWER_BALANCE_POLAR attempt at the
 # old flat timeout_s=7200 (2h) hit termination_status=timeout at ~7200.1s with
-# zero convergence across 16 parallel shards. activsg82k has ~17% more buses
-# and gets a proportionally larger budget. IPOPT itself only runs serially per
-# candidate (no MPI parallelism), so the per-solve budget is independent of
-# node/task count.
+# zero convergence across 16 parallel shards. A first bump to 10800s (3h)
+# let several candidates converge at 8090-9455s, but others still timed out
+# at the 10800s cap -- raised further to 36000s (10h) to give MUMPS/IPOPT
+# more room on the hardest operating points. IPOPT itself only runs serially
+# per candidate (no MPI parallelism), so the per-solve budget is independent
+# of node/task count.
 #
 # The worker also retries once with a POWER_BALANCE_CARTESIAN formulation and
 # a relaxed tolerance if the primary POWER_BALANCE_POLAR attempt fails (see
 # CPU_MODEL_FALLBACK in scripts/run_campaign_exago_ac_opf_round.py); that retry
 # uses half of the timeout_s configured here, so worst-case wall time per
-# candidate is ~1.5x the value below.
+# candidate is ~1.5x the value below (54000s / 15h at 36000s).
 
 defaults:
   enabled: true
-  timeout_s: 10800
+  timeout_s: 36000
   tier: andes_large_grid
 
 cases:
   activsg70k:
     enabled: true
-    timeout_s: 10800
+    timeout_s: 36000
     tier: andes_large_grid
-    reason: "70000-bus network; IPOPT/MUMPS factorization needs more than the old 7200s cap."
+    reason: "70000-bus network; IPOPT/MUMPS factorization needs more than the old 7200s/10800s caps."
   activsg82k:
     enabled: true
-    timeout_s: 14400
+    timeout_s: 36000
     tier: andes_large_grid
-    reason: "82000-bus network, the largest case in the dataset; budgeted above activsg70k."
+    reason: "82000-bus network, the largest case in the dataset."
