@@ -258,6 +258,9 @@ def run_exago_case(
     export_base: Path | None = None,
     opflow_tolerance: float | None = None,
     opflow_initialization: str | None = None,
+    checkpoint_save_path: Path | None = None,
+    checkpoint_save_freq: int | None = None,
+    checkpoint_load_path: Path | None = None,
 ) -> dict[str, Any]:
     start_t = time.perf_counter()
     exec_ctx = collect_execution_context()
@@ -286,6 +289,16 @@ def run_exago_case(
         # ExaGO's default MIDPOINT guess; used to give retry attempts a
         # meaningfully better starting point than the failed first try.
         cmd.extend(["-opflow_initialization", opflow_initialization])
+    if opflow_solver == "IPOPT":
+        # Checkpoint/warm-restart flags: IPOPT-only (read inside
+        # OPFLOWSolverSetUp_IPOPT); harmless no-ops for other solvers, but
+        # gated on solver name for clarity since they only apply to IPOPT.
+        if checkpoint_save_path is not None:
+            cmd.extend(["-opflow_ipopt_checkpoint_save", str(checkpoint_save_path)])
+            if checkpoint_save_freq is not None:
+                cmd.extend(["-opflow_ipopt_checkpoint_save_freq", str(checkpoint_save_freq)])
+        if checkpoint_load_path is not None:
+            cmd.extend(["-opflow_ipopt_checkpoint_load", str(checkpoint_load_path)])
     export_json_path = None
     if export_base is not None:
         cmd.extend(["-opflow_output_format", "JSON", "-save_output", str(export_base)])

@@ -72,6 +72,14 @@ CPU_FALLBACK_MIN_TIMEOUT_S = 900.0
 # MIDPOINT, so this gives the retry a materially different, usually better
 # starting point at zero extra engineering cost (no ExaGO rebuild needed).
 CPU_FALLBACK_INITIALIZATION = "ACPF"
+# IPOPT checkpoint/warm-restart (requires the checkpoint-patched opflow
+# build -- see external/ExaGO-andes-cpu-latest/src/opflow/solver/ipopt).
+# The primary CPU IPOPT attempt periodically dumps its iterate; if that
+# attempt fails/times out but left a checkpoint behind, one resume attempt
+# on the same formulation is tried before falling back to CPU_MODEL_FALLBACK.
+CPU_CHECKPOINT_SAVE_FREQ = 25
+CPU_CHECKPOINT_RESUME_TIMEOUT_FRACTION = 0.25
+CPU_CHECKPOINT_RESUME_MIN_TIMEOUT_S = 300.0
 
 
 def parse_args() -> argparse.Namespace:
@@ -185,9 +193,12 @@ def _solve_candidate_exago(
             result = gpu
 
     if result is None:
+        checkpoint_path = tmp_dir / f"{tag}_ipopt_primary.ckpt"
         cpu = run_exago_case(
             exago_root, opflow_bin, str(tmp_m), CPU_SOLVER, CPU_MODEL, timeout_s,
             export_base=tmp_dir / f"{tag}_ipopt",
+            checkpoint_save_path=checkpoint_path,
+            checkpoint_save_freq=CPU_CHECKPOINT_SAVE_FREQ,
         )
         cpu["solver_used"] = CPU_SOLVER
         cpu["opflow_model_used"] = CPU_MODEL
@@ -202,12 +213,47 @@ def _solve_candidate_exago(
         })
         result = cpu
 
-        if not bool(cpu.get("success")):
-            # Primary polar-formulation IPOPT attempt failed/timed out. Retry
-            # once with the cartesian formulation and a relaxed tolerance
-            # before giving up on the candidate. Bounded to half of timeout_s
-            # (floor CPU_FALLBACK_MIN_TIMEOUT_S) so a total failure costs at
-            # most ~1.5x timeout_s instead of silently doubling it.
+        if not bool(cpu.get("success")) and checkpoint_path.exists() and checkpoint_path.stat().st_size > 0:
+            # The primary attempt left behind an IPOPT checkpoint (it ran
+            # long enough to hit at least one save interval before
+            # timing out/failing). Try resuming the *same* polar
+            # formulation from that checkpoint before falling back to a
+            # different formulation below -- checkpoints are formulation-
+            # specific (x/z/lambda layout depends on POLAR vs CARTESIAN),
+            # so a resume must stay on CPU_MODEL, not CPU_MODEL_FALLBACK.
+            resume_timeout_s = max(timeout_s * CPU_CHECKPOINT_RESUME_TIMEOUT_FRACTION, CPU_CHECKPOINT_RESUME_MIN_TIMEOUT_S)
+            cpu_resume = run_exago_case(
+                exago_root, opflow_bin, str(tmp_m), CPU_SOLVER, CPU_MODEL, resume_timeout_s,
+                export_base=tmp_dir / f"{tag}_ipopt_resume",
+                checkpoint_load_path=checkpoint_path,
+            )
+            cpu_resume["solver_used"] = CPU_SOLVER
+            cpu_resume["opflow_model_used"] = CPU_MODEL
+            cpu_resume["fallback_used"] = True
+            cpu_resume["checkpoint_resumed"] = True
+            _append_solver_log(log_path, tag, CPU_SOLVER, f"{CPU_MODEL}+checkpoint", cpu_resume)
+            attempts.append({
+                "solver": CPU_SOLVER,
+                "model": f"{CPU_MODEL}+checkpoint",
+                "success": bool(cpu_resume.get("success")),
+                "termination_status": cpu_resume.get("termination_status"),
+                "exit_code": cpu_resume.get("exit_code"),
+            })
+            if bool(cpu_resume.get("success")):
+                result = cpu_resume
+
+        try:
+            checkpoint_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+        if not bool(result.get("success")):
+            # Primary polar-formulation IPOPT attempt (and any checkpoint
+            # resume) failed/timed out. Retry once with the cartesian
+            # formulation and a relaxed tolerance before giving up on the
+            # candidate. Bounded to half of timeout_s (floor
+            # CPU_FALLBACK_MIN_TIMEOUT_S) so a total failure costs at most
+            # ~1.5x timeout_s instead of silently doubling it.
             retry_timeout_s = max(timeout_s * CPU_FALLBACK_TIMEOUT_FRACTION, CPU_FALLBACK_MIN_TIMEOUT_S)
             cpu_retry = run_exago_case(
                 exago_root, opflow_bin, str(tmp_m), CPU_SOLVER, CPU_MODEL_FALLBACK, retry_timeout_s,
