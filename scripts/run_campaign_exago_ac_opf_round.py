@@ -67,6 +67,11 @@ CPU_MODEL_FALLBACK = "POWER_BALANCE_CARTESIAN"
 CPU_FALLBACK_TOLERANCE = 1e-4
 CPU_FALLBACK_TIMEOUT_FRACTION = 0.5
 CPU_FALLBACK_MIN_TIMEOUT_S = 900.0
+# Seed the retry from an AC-power-flow-feasible point instead of ExaGO's
+# default MIDPOINT guess. The primary attempt already failed/timed out from
+# MIDPOINT, so this gives the retry a materially different, usually better
+# starting point at zero extra engineering cost (no ExaGO rebuild needed).
+CPU_FALLBACK_INITIALIZATION = "ACPF"
 
 
 def parse_args() -> argparse.Namespace:
@@ -208,6 +213,7 @@ def _solve_candidate_exago(
                 exago_root, opflow_bin, str(tmp_m), CPU_SOLVER, CPU_MODEL_FALLBACK, retry_timeout_s,
                 export_base=tmp_dir / f"{tag}_ipopt_retry",
                 opflow_tolerance=CPU_FALLBACK_TOLERANCE,
+                opflow_initialization=CPU_FALLBACK_INITIALIZATION,
             )
             cpu_retry["solver_used"] = CPU_SOLVER
             cpu_retry["opflow_model_used"] = CPU_MODEL_FALLBACK

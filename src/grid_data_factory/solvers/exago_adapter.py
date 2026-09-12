@@ -257,6 +257,7 @@ def run_exago_case(
     timeout_s: float,
     export_base: Path | None = None,
     opflow_tolerance: float | None = None,
+    opflow_initialization: str | None = None,
 ) -> dict[str, Any]:
     start_t = time.perf_counter()
     exec_ctx = collect_execution_context()
@@ -280,6 +281,11 @@ def run_exago_case(
         # Used by fallback/retry attempts that relax convergence tolerance
         # (e.g. after a stricter-tolerance attempt timed out).
         cmd.extend(["-opflow_tolerance", str(opflow_tolerance)])
+    if opflow_initialization:
+        # ACPF/DCOPF seed IPOPT from a power-flow-feasible point instead of
+        # ExaGO's default MIDPOINT guess; used to give retry attempts a
+        # meaningfully better starting point than the failed first try.
+        cmd.extend(["-opflow_initialization", opflow_initialization])
     export_json_path = None
     if export_base is not None:
         cmd.extend(["-opflow_output_format", "JSON", "-save_output", str(export_base)])
