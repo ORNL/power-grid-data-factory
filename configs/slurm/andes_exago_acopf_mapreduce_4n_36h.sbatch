@@ -46,10 +46,13 @@ SHARD_SCRIPT=$ROOT/scripts/shard_selected_candidates.py
 MAP_SCRIPT=$ROOT/scripts/run_campaign_exago_ac_opf_round.py
 REDUCE_SCRIPT=$ROOT/scripts/reduce_campaign_shards.py
 
-PYBIN=${PYBIN:-python3.11}
+PYBIN=${PYBIN:-python}
 PGDF_VENV=${PGDF_VENV-$ROOT/.venv}
 
 # ----- Andes CPU ExaGO runtime environment -----------------------------------
+# Load the interpreter used to build the campaign virtualenv.
+module load python/.3.11-anaconda3 2>/dev/null || true
+
 # Load OpenMPI so mpiexec/srun finds the right libmpi. The opflow binary was
 # linked against OpenMPI 5.0.5 from /sw/andes/spack-envs/sw-25.04/.
 module load openmpi 2>/dev/null || true
@@ -74,7 +77,18 @@ fi
 if [[ -n "${PGDF_VENV:-}" && -f "${PGDF_VENV}/bin/activate" ]]; then
   # shellcheck disable=SC1091
   source "${PGDF_VENV}/bin/activate"
+  PYBIN="${PGDF_VENV}/bin/python"
 fi
+
+if ! command -v "$PYBIN" >/dev/null 2>&1; then
+  echo "Python interpreter not found: $PYBIN" >&2
+  exit 2
+fi
+if ! PYTHONPATH="$ROOT/src" "$PYBIN" -c 'import grid_data_factory, pydantic, yaml, pandas, pyarrow' >/dev/null 2>&1; then
+  echo "Python preflight failed for $PYBIN: required campaign packages are unavailable" >&2
+  exit 2
+fi
+echo "[$(date -u +%FT%TZ)] python=$($PYBIN -c 'import sys; print(sys.executable)') version=$($PYBIN -c 'import platform; print(platform.python_version())')"
 
 # ExaGO Andes CPU build: IPOPT only, no HiOp/ROCm.
 export PGDF_EXAGO_OPFLOW_BIN=${PGDF_EXAGO_OPFLOW_BIN:-$ROOT/external/ExaGO-andes-cpu-latest/builds/andes-cpu-latest/install/bin/opflow}

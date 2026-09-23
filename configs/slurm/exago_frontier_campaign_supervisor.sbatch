@@ -32,7 +32,23 @@ set -euo pipefail
 ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 SUPERVISOR_SCRIPT="$ROOT/configs/slurm/exago_frontier_campaign_supervisor.sbatch"
 DRIVE_SCRIPT="$ROOT/scripts/drive_campaign.py"
-PYBIN=${PYBIN:-python3.11}
+if [[ -z "${PYBIN:-}" ]]; then
+  if [[ -x "$ROOT/.venv/bin/python" ]]; then
+    PYBIN="$ROOT/.venv/bin/python"
+  else
+    PYBIN=python3.11
+  fi
+fi
+
+if ! command -v "$PYBIN" >/dev/null 2>&1; then
+  echo "Python interpreter not found: $PYBIN" >&2
+  exit 2
+fi
+if ! PYTHONPATH="$ROOT/src" "$PYBIN" -c 'import grid_data_factory, pydantic, yaml' >/dev/null 2>&1; then
+  echo "Python preflight failed for $PYBIN: required campaign packages are unavailable" >&2
+  exit 2
+fi
+echo "[$(date -u +%FT%TZ)] python=$($PYBIN -c 'import sys; print(sys.executable)') version=$($PYBIN -c 'import platform; print(platform.python_version())')"
 
 # ----- campaign parameters (overridable via the launcher's --export list) -----
 CAMPAIGN_ID=${CAMPAIGN_ID:-exago_frontier_large_grids}

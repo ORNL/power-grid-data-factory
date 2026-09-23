@@ -18,6 +18,18 @@ MAP_SCRIPT=$ROOT/scripts/run_campaign_ac_opf_round.py
 REDUCE_SCRIPT=$ROOT/scripts/reduce_campaign_shards.py
 
 module load julia/1.8.2 2>/dev/null || true
+module load python/.3.11-anaconda3 2>/dev/null || true
+
+PYBIN=${PYBIN:-$ROOT/.venv/bin/python}
+if [[ ! -x "$PYBIN" ]]; then
+  echo "Python interpreter is not executable: $PYBIN" >&2
+  exit 2
+fi
+if ! PYTHONPATH="$ROOT/src" "$PYBIN" -c 'import grid_data_factory, pydantic, yaml, pandas, pyarrow' >/dev/null 2>&1; then
+  echo "Python preflight failed for $PYBIN: required campaign packages are unavailable" >&2
+  exit 2
+fi
+echo "[$(date -u +%FT%TZ)] python=$($PYBIN -c 'import sys; print(sys.executable)') version=$($PYBIN -c 'import platform; print(platform.python_version())')"
 
 # Prefer a prebuilt PackageCompiler sysimage so solves skip first-run compilation.
 # Explicit path avoids relying on per-node hostname detection; a missing file
@@ -157,7 +169,7 @@ fi
 if [[ "$RESUMING" == "0" && "$RUN_BOOTSTRAP" == "1" ]]; then
   read -r -a CASE_ARRAY <<< "$CASES"
   echo "[$(date -u +%FT%TZ)] Bootstrapping campaign candidates and round selection"
-  PYTHONPATH="$ROOT/src" python3.11 "$BOOTSTRAP_SCRIPT" \
+  PYTHONPATH="$ROOT/src" "$PYBIN" "$BOOTSTRAP_SCRIPT" \
     --campaign-id "$CAMPAIGN_ID" \
     --config "$CONFIG" \
     --cases "${CASE_ARRAY[@]}" \
@@ -200,7 +212,7 @@ SHARD_ARGS=(
 ROUND_SUMMARY="$CAMPAIGN_ROOT/round_summaries/round_${ROUND_PAD}.json"
 FULL_BUDGET=0
 if [[ -s "$ROUND_SUMMARY" ]]; then
-  FULL_BUDGET=$(python3.11 -c "import json,sys;d=json.load(open(sys.argv[1]));cc=int(d.get('candidate_count',0));sc=int(d.get('selected_count',-1));print(1 if cc>0 and cc==sc else 0)" "$ROUND_SUMMARY" 2>/dev/null || echo 0)
+  FULL_BUDGET=$("$PYBIN" -c "import json,sys;d=json.load(open(sys.argv[1]));cc=int(d.get('candidate_count',0));sc=int(d.get('selected_count',-1));print(1 if cc>0 and cc==sc else 0)" "$ROUND_SUMMARY" 2>/dev/null || echo 0)
 fi
 if [[ "$FULL_BUDGET" == "1" ]]; then
   echo "[$(date -u +%FT%TZ)] full-budget selection detected; skipping pool universe scan + backfill (coverage complete by construction)"
@@ -218,7 +230,7 @@ else
 fi
 
 if [[ "$RESUMING" == "0" ]]; then
-  PYTHONPATH="$ROOT/src" python3.11 "$SHARD_SCRIPT" "${SHARD_ARGS[@]}"
+  PYTHONPATH="$ROOT/src" "$PYBIN" "$SHARD_SCRIPT" "${SHARD_ARGS[@]}"
 else
   echo "[$(date -u +%FT%TZ)] Skipping re-sharding (resume): reusing existing shard files"
 fi
@@ -234,6 +246,14 @@ for ((i=0; i<SHARD_COUNT; i++)); do
   fi
 done
 
+if [[ -d "$LOCK_DIR" ]]; then
+  if rmdir "$LOCK_DIR"; then
+    echo "[$(date -u +%FT%TZ)] Removed stale queue lock: $LOCK_DIR"
+  else
+    echo "Queue lock exists and is not empty: $LOCK_DIR" >&2
+    exit 2
+  fi
+fi
 echo 0 > "$INDEX_FILE"
 
 if [[ ! -s "$SHARD_IDS_FILE" ]]; then
@@ -262,6 +282,7 @@ SOLVER_ID="'$SOLVER_ID'"
 TIMEOUT_S="'$TIMEOUT_S'"
 RUNS_ROOT="'$RUNS_ROOT'"
 EXECUTION_POLICY="'$EXECUTION_POLICY'"
+PYBIN="'$PYBIN'"
 MAX_CANDIDATES="'$MAX_CANDIDATES'"
 CONTINUE_ON_ERROR="'$CONTINUE_ON_ERROR'"
 MAX_FAILURE_FRACTION="'$MAX_FAILURE_FRACTION'"
@@ -337,14 +358,14 @@ while true; do
   fi
 
   echo "[$(date -u +%FT%TZ)] task=$TASK_ID shard_number=$shard_number shard_campaign_id=$SHARD_CAMPAIGN_ID"
-  PYTHONPATH="$ROOT/src" python3.11 "$MAP_SCRIPT" "${ARGS[@]}"
+  PYTHONPATH="$ROOT/src" "$PYBIN" "$MAP_SCRIPT" "${ARGS[@]}"
   touch "$DONE_DIR/$shard_number"
 done
 '
 
 echo "[$(date -u +%FT%TZ)] Map stage complete. Starting deterministic reduce stage"
 
-PYTHONPATH="$ROOT/src" python3.11 "$REDUCE_SCRIPT" \
+PYTHONPATH="$ROOT/src" "$PYBIN" "$REDUCE_SCRIPT" \
   --campaign-id "$CAMPAIGN_ID" \
   --round-index "$ROUND_INDEX" \
   --config "$CONFIG" \
