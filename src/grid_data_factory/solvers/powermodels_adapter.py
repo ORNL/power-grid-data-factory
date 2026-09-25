@@ -42,13 +42,13 @@ class PersistentPowerModelsSession:
     def _start(self) -> None:
         script_name = str(self.options.get("julia_script") or os.environ.get("PGDF_OPF_SCRIPT", "").strip() or "run_opf.jl")
         script = self.adapter.julia_scripts_dir / script_name
-        if script_name != "run_opf.jl":
+        if script_name not in {"run_opf.jl", "run_pf.jl"}:
             raise ValueError(f"persistent PowerModels mode does not support {script_name}")
         if not script.exists():
             raise FileNotFoundError(script)
 
         cmd = [
-            "julia",
+            os.environ.get("PGDF_JULIA_BIN", "julia"),
             f"--project={self.adapter.julia_project_dir}",
             *self.adapter._julia_mode_flags(),
             str(script),
@@ -74,6 +74,21 @@ class PersistentPowerModelsSession:
         return self._stderr.read()
 
     def solve_ac_opf(self, case: dict, timeout_s: float | None = None) -> dict:
+        return self._solve(case, "ac_opf", timeout_s)
+
+    def solve_pf(
+        self,
+        case: dict,
+        timeout_s: float | None = None,
+        controls: dict | None = None,
+        contingency: dict | None = None,
+    ) -> dict:
+        payload = {"controls": controls or {}}
+        if contingency:
+            payload["contingency"] = contingency
+        return self._solve(case, "pf", timeout_s, payload)
+
+    def _solve(self, case: dict, task: str, timeout_s: float | None = None, payload: dict | None = None) -> dict:
         start_t = time.perf_counter()
         exec_ctx = collect_execution_context()
         request_timeout_s = self.timeout_s if timeout_s is None else float(timeout_s)
@@ -100,7 +115,8 @@ class PersistentPowerModelsSession:
                 return finalize({"success": False, "termination_status": "process_error", "solver_name": "powermodels", "stderr": str(exc)})
 
         assert self.process is not None and self.process.stdin is not None and self.process.stdout is not None
-        request = {"case": case, "payload": {"task": "ac_opf", "options": self.options}}
+        request_payload = {"task": task, "options": self.options, **(payload or {})}
+        request = {"case": case, "payload": request_payload}
         try:
             self.process.stdin.write(json.dumps(request) + "\n")
             self.process.stdin.flush()
@@ -176,8 +192,14 @@ class PowerModelsAdapter:
             self.julia_scripts_dir = Path(repo_root) / "julia"
         else:
             self.julia_scripts_dir = self.julia_project_dir
-        self.depot_path = depot_path
         self.repo_root = Path(repo_root) if repo_root is not None else None
+        if depot_path is None:
+            depot_path = os.environ.get("JULIA_DEPOT_PATH") or None
+        if depot_path is None and self.repo_root is not None and self.julia_project_dir.name == "riker":
+            riker_depot = self.repo_root / ".julia_depot_riker"
+            if riker_depot.is_dir():
+                depot_path = str(riker_depot)
+        self.depot_path = depot_path
         self.sysimage_path = self.resolve_julia_sysimage(self.repo_root)
 
     @staticmethod
@@ -194,6 +216,8 @@ class PowerModelsAdapter:
             candidates.append(repo_root / "julia" / "lockfiles" / "andes")
         elif "frontier" in host:
             candidates.append(repo_root / "julia" / "lockfiles" / "frontier")
+        elif "riker" in host:
+            candidates.append(repo_root / "julia" / "lockfiles" / "riker")
 
         candidates.append(repo_root / "julia" / "lockfiles" / "local")
         candidates.append(repo_root / "julia")
@@ -256,6 +280,11 @@ class PowerModelsAdapter:
     def persistent_ac_opf_session(self, options: dict | None = None) -> PersistentPowerModelsSession:
         return PersistentPowerModelsSession(self, options)
 
+    def persistent_pf_session(self, options: dict | None = None) -> PersistentPowerModelsSession:
+        opts = dict(options or {})
+        opts["julia_script"] = "run_pf.jl"
+        return PersistentPowerModelsSession(self, opts)
+
     def solve_contingency_pf(self, case: dict, contingency: dict, controls: dict | None = None, options: dict | None = None) -> dict:
         return self._run_julia_script(
             "run_pf.jl",
@@ -281,14 +310,17 @@ class PowerModelsAdapter:
                 pkgs.add(match)
         return sorted(pkgs)
 
-    def _run_preflight(self, env: dict[str, str], timeout_s: float | None) -> dict | None:
+    def _run_preflight(self, env: dict[str, str], timeout_s: float | None, *, task: str | None = None) -> dict | None:
         preflight_timeout = 180.0 if timeout_s is None else max(60.0, min(timeout_s, 300.0))
+        imports = "JSON3, PowerModels, Ipopt"
+        if task == "scopf":
+            imports += ", PowerModelsSecurityConstrained"
         preflight_cmd = [
-            "julia",
+            os.environ.get("PGDF_JULIA_BIN", "julia"),
             f"--project={self.julia_project_dir}",
             *self._julia_mode_flags(),
             "-e",
-            "import JSON3, PowerModels, Ipopt; println(\"PREFLIGHT_OK\")",
+            f"import {imports}; println(\"PREFLIGHT_OK\")",
         ]
         cmd_display = " ".join(shlex.quote(c) for c in preflight_cmd)
         shell_cmd = f"module load julia 2>/dev/null || true; {cmd_display}"
@@ -367,7 +399,8 @@ class PowerModelsAdapter:
         if isinstance(options, dict) and options.get("timeout_s") is not None:
             timeout_s = float(options["timeout_s"])
 
-        preflight_result = self._run_preflight(env=env, timeout_s=timeout_s)
+        task = payload.get("task") if isinstance(payload, dict) else None
+        preflight_result = self._run_preflight(env=env, timeout_s=timeout_s, task=task)
         if preflight_result is not None:
             # In unstable HPC environments preflight can timeout even when the solver
             # run itself succeeds; continue to the solve path in that specific case.
@@ -389,7 +422,7 @@ class PowerModelsAdapter:
                 out_path = f_out.name
 
             cmd = [
-                "julia",
+                os.environ.get("PGDF_JULIA_BIN", "julia"),
                 f"--project={self.julia_project_dir}",
                 *self._julia_mode_flags(),
                 str(script),

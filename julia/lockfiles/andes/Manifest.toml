@@ -2,7 +2,7 @@
 
 julia_version = "1.8.2"
 manifest_format = "2.0"
-project_hash = "d63bb29d12ec2f1ae36a52849be0cc7f9668cc2d"
+project_hash = "b84f0ba7563c8efe7f8993f67794f90b01e48e9d"
 
 [[deps.ASL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -366,6 +366,12 @@ deps = ["InfrastructureModels", "JSON", "JuMP", "LinearAlgebra", "Memento", "NLs
 git-tree-sha1 = "b8e410e1d827b621e82e7e670967f0efc5845c30"
 uuid = "c36e90e8-916a-50a6-bd94-075b64ef4655"
 version = "0.21.5"
+
+[[deps.PowerModelsSecurityConstrained]]
+deps = ["Distributed", "InfrastructureModels", "JSON", "JuMP", "Memento", "PowerModels", "SparseArrays", "Statistics"]
+git-tree-sha1 = "f3815b0a4eb2ef85fe850ceb9549113198b33a28"
+uuid = "53333297-f92c-5019-980b-942fc744b407"
+version = "0.12.0"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]

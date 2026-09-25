@@ -6,6 +6,7 @@ Use separate Julia project directories per machine to avoid dependency conflicts
 
 - `julia/lockfiles/andes/`
 - `julia/lockfiles/frontier/`
+- `julia/lockfiles/riker/`
 - `julia/lockfiles/local/`
 
 Each profile directory contains:

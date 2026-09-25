@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from _bootstrap import REPO_ROOT, case_available
 
-from grid_data_factory.parsers.matpower import parse_matpower_case, parse_matrix
+from grid_data_factory.parsers.matpower import parse_matpower_case, parse_matrix, write_matpower_case
 from grid_data_factory.sources.registry import resolve_case_file
 
 
@@ -53,6 +55,35 @@ class TestMatpowerParser(unittest.TestCase):
                 parse_matpower_case(cf, "tmp")
         finally:
             cf.unlink()
+
+    def test_control_fields_survive_round_trip(self):
+        case = {
+            "case_id": "controls",
+            "base_mva": 100.0,
+            "buses": [
+                {"bus_id": "1", "type": 3, "vm": 1.02, "va": 0.0, "vmin": 0.9, "vmax": 1.1},
+                {"bus_id": "2", "type": 1, "vm": 1.0, "va": 0.0, "vmin": 0.9, "vmax": 1.1},
+            ],
+            "loads": [{"load_id": "load_1", "bus_id": "2", "pd": 40.0, "qd": 10.0}],
+            "generators": [{
+                "gen_id": "gen_000001", "bus_id": "1", "pg": 42.5, "qg": 11.5,
+                "vg": 1.02, "mbase": 100.0, "status": 1, "pmin": 0.0,
+                "pmax": 100.0, "qmin": -50.0, "qmax": 50.0,
+            }],
+            "branches": [{
+                "branch_id": "branch_000001", "from": "1", "to": "2", "r": 0.01,
+                "x": 0.1, "b": 0.02, "rate_a": 80.0, "rate_b": 90.0,
+                "rate_c": 100.0, "tap": 1.05, "shift": 3.0, "status": 1,
+                "angmin": -30.0, "angmax": 30.0,
+            }],
+        }
+        with TemporaryDirectory() as tmp:
+            parsed = parse_matpower_case(write_matpower_case(case, Path(tmp) / "case.m"), "controls")
+        self.assertEqual(parsed["generators"][0]["pg"], 42.5)
+        self.assertEqual(parsed["generators"][0]["qg"], 11.5)
+        self.assertEqual(parsed["generators"][0]["vg"], 1.02)
+        self.assertEqual(parsed["branches"][0]["tap"], 1.05)
+        self.assertEqual(parsed["branches"][0]["shift"], 3.0)
 
 
 if __name__ == "__main__":

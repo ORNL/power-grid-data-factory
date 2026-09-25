@@ -62,6 +62,22 @@ Reference:
 
 - `docs/scripts_reference.md`
 
+### PF campaign addendum
+
+Before a Riker PF production submission:
+
+- [ ] `PASS` the immutable Andes AC-OPF anchor index, checksum manifest, and
+  parent split registry exist.
+- [ ] `PASS` `configs/slurm/submit_riker_pf_smoke.sh` completes map and reduce.
+- [ ] `PASS` smoke outputs include expected outcome partitions and the PF
+  coverage, diversity, security-boundary, and active-constraint ledgers.
+- [ ] `PASS` a same-parameter `RESUME=1` smoke skips completed work.
+- [ ] `PASS` `COUNT`, node count, shard count, walltime, campaign ID, and runs
+  root are reviewed before `configs/slurm/submit_riker_pf_large.sh`.
+
+See [Riker Complementary PF Campaign](riker_pf_campaign.md) for commands and
+the implemented scientific policy.
+
 ## 5) Solver calibration gate (Phase 1)
 
 - [ ] `PASS` solver consistency report generated.

@@ -28,6 +28,18 @@ Layout notes:
   and includes a content hash of the outage set for uniqueness. See
   [Resumable Campaigns](resumable_campaigns.md#2-contingency-in-path-output-naming).
 
+The high-throughput complementary PF campaign uses a task-specific bulk layout
+instead of one attempt directory per solve:
+
+```text
+<runs_root>/mapreduce_round_<round>/shard_<shard>/pf/samples.jsonl
+<runs_root>/mapreduce_round_<round>/shard_<shard>/pf/outcomes/<outcome>/samples.jsonl
+```
+
+Each shard keeps one sample sink open, writes a shard manifest, and owns an
+isolated campaign-ledger directory. The parent reducer merges those ledgers
+after all shard reports exist. See [Riker Complementary PF Campaign](riker_pf_campaign.md).
+
 ## Attempt lifecycle
 
 1. Atomically claim a unique in-progress attempt directory (race-safe under
@@ -63,5 +75,9 @@ closes the window where another process finalized the same index. See
 - `solvers/base.py`: common solver protocol.
 - `solvers/powermodels_adapter.py`: Julia process wrapper for PowerModels tasks.
 - `solvers/exago_adapter.py`: ExaGO adapter scaffold.
+- `pf/anchors.py`: immutable AC-OPF anchor index and parent split registry.
+- `pf/candidates.py`: PF control, topology, criticality, and response schedules.
+- `pf/controls.py`: stable-ID controls, balanced redispatch, and outage response.
+- `pf/validation.py`: physical and exact-anchor PF quality gates.
 
 MATPOWER in this codebase is treated as an input case format and reference dataset source, not a maintained solver execution backend.

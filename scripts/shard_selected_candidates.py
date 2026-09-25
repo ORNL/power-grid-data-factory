@@ -54,6 +54,12 @@ def parse_args() -> argparse.Namespace:
         help="Stream the split in O(1) memory instead of loading the whole input. "
         "Required at 10M+ candidate scale to avoid loading tens of GB into RAM.",
     )
+    p.add_argument(
+        "--assignment",
+        choices=("round-robin", "contiguous"),
+        default="round-robin",
+        help="Assign rows round-robin or as consecutive, balanced input ranges.",
+    )
     return p.parse_args()
 
 
@@ -95,10 +101,8 @@ def _missing(universe: dict[str, set[str]], counts: dict[str, dict[str, int]], k
 def run_stream(args: argparse.Namespace, coverage_keys: list[str]) -> None:
     """Shard by streaming: never holds the full candidate set in memory.
 
-    Each input line is round-robined to shard ``idx % num_shards`` via an open
-    append handle per shard, so peak memory is O(distinct coverage buckets)
-    plus the shard write buffers rather than O(candidates). At 15M candidates
-    the in-memory path needed ~180 GB per file; this stays near flat.
+    Input lines are assigned through the requested strategy, while peak memory
+    remains O(distinct coverage buckets) plus shard write buffers.
     """
     in_path = Path(args.input).resolve()
     out_dir = Path(args.out_dir).resolve()
@@ -116,18 +120,23 @@ def run_stream(args: argparse.Namespace, coverage_keys: list[str]) -> None:
     counts = [0] * num_shards
     sel_counts: dict[str, dict[str, int]] = {k: defaultdict(int) for k in coverage_keys}
     selected_ids: set[str] = set()
-    num_input = 0
+    num_input = sum(1 for _ in _iter_jsonl_lines(in_path)) if args.assignment == "contiguous" else 0
     idx = 0
 
     handles = [open(f, "w", encoding="utf-8") for f in files]
     try:
         for line in _iter_jsonl_lines(in_path):
-            shard = idx % num_shards
+            shard = (
+                min(num_shards - 1, idx * num_shards // num_input)
+                if args.assignment == "contiguous" and num_input > 0
+                else idx % num_shards
+            )
             handles[shard].write(line)
             handles[shard].write("\n")
             counts[shard] += 1
             idx += 1
-            num_input += 1
+            if args.assignment != "contiguous":
+                num_input += 1
             if coverage_keys or need_ids:
                 row = json.loads(line)
                 for key in coverage_keys:
@@ -212,6 +221,7 @@ def run_stream(args: argparse.Namespace, coverage_keys: list[str]) -> None:
     manifest = {
         "ok": True,
         "mode": "stream",
+        "assignment": args.assignment,
         "input": str(in_path),
         "num_input": num_input,
         "num_output": num_input + len(added_ids),

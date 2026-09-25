@@ -79,6 +79,18 @@ class SysimageResolutionTests(unittest.TestCase):
     def test_no_repo_root_returns_none(self) -> None:
         self.assertIsNone(PowerModelsAdapter.resolve_julia_sysimage(None))
 
+    def test_riker_project_uses_local_depot(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "julia" / "lockfiles" / "riker"
+            project.mkdir(parents=True)
+            depot = root / ".julia_depot_riker"
+            depot.mkdir()
+            with patch.dict(os.environ, {"PGDF_JULIA_PROJECT_DIR": str(project)}, clear=False):
+                with patch.dict(os.environ, {"JULIA_DEPOT_PATH": ""}):
+                    adapter = PowerModelsAdapter(repo_root=root)
+            self.assertEqual(adapter.depot_path, str(depot))
+
 
 class PersistentSessionTests(unittest.TestCase):
     def test_reuses_process_and_ignores_unframed_stdout(self) -> None:

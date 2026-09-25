@@ -45,6 +45,7 @@ function to_powermodels_data(case_data)
             "index" => idx,
             "bus_i" => bid,
             "bus_type" => btype,
+            "area" => haskey(b, :area) ? Int(b[:area]) : 1,
             # Keep bus-level demand at zero and model demands explicitly in `load`.
             "pd" => 0.0,
             "qd" => 0.0,
@@ -102,16 +103,17 @@ function to_powermodels_data(case_data)
         pm_gen[string(idx)] = Dict(
             "index" => idx,
             "gen_bus" => bus_id,
-            "gen_status" => 1,
-            "pg" => max(min((pmin + pmax) / 2, pmax), pmin),
-            "qg" => 0.0,
+            "gen_status" => haskey(g, :status) ? Int(g[:status]) : 1,
+            "pg" => haskey(g, :pg) ? Float64(g[:pg]) / base_mva : max(min((pmin + pmax) / 2, pmax), pmin),
+            "qg" => haskey(g, :qg) ? Float64(g[:qg]) / base_mva : 0.0,
             "qmax" => qmax,
             "qmin" => qmin,
-            "vg" => 1.0,
-            "mbase" => 1.0,
+            "vg" => haskey(g, :vg) ? Float64(g[:vg]) : 1.0,
+            "mbase" => haskey(g, :mbase) ? Float64(g[:mbase]) / base_mva : 1.0,
             "pmax" => pmax,
             "pmin" => pmin,
             "source_id" => Any["gen", bus_id, String(g[:gen_id])],
+            "alpha" => haskey(g, :alpha) ? Float64(g[:alpha]) : 1.0,
             "bus_idx" => bus_idx,
             "model" => 2,
             "ncost" => 3,
@@ -121,11 +123,20 @@ function to_powermodels_data(case_data)
         )
     end
 
+    area_gens = Dict{Int, Set{Int}}()
+    for gen in values(pm_gen)
+        area = Int(pm_bus[string(gen["bus_idx"])]["area"])
+        push!(get!(area_gens, area, Set{Int}()), Int(gen["index"]))
+    end
+
     pm_branch = Dict{String, Any}()
     for (idx, br) in enumerate(branches)
         f_bus = parse(Int, String(br[:from]))
         t_bus = parse(Int, String(br[:to]))
         b_ch = haskey(br, :b) ? Float64(br[:b]) : 0.0
+        raw_tap = haskey(br, :tap) ? Float64(br[:tap]) : 0.0
+        tap = raw_tap == 0.0 ? 1.0 : raw_tap
+        shift = deg2rad(haskey(br, :shift) ? Float64(br[:shift]) : 0.0)
         pm_branch[string(idx)] = Dict(
             "index" => idx,
             "f_bus" => f_bus,
@@ -136,15 +147,16 @@ function to_powermodels_data(case_data)
             "b_to" => b_ch / 2.0,
             "g_fr" => 0.0,
             "g_to" => 0.0,
-            "br_status" => 1,
+            "br_status" => haskey(br, :status) ? Int(br[:status]) : 1,
             "rate_a" => Float64(br[:rate_a]) / base_mva,
-            "rate_b" => Float64(br[:rate_a]) / base_mva,
-            "rate_c" => Float64(br[:rate_a]) / base_mva,
-            "angmin" => -60.0,
-            "angmax" => 60.0,
-            "tap" => 1.0,
-            "shift" => 0.0,
-            "transformer" => false,
+            "rate_b" => (haskey(br, :rate_b) ? Float64(br[:rate_b]) : Float64(br[:rate_a])) / base_mva,
+            "rate_c" => (haskey(br, :rate_c) ? Float64(br[:rate_c]) : Float64(br[:rate_a])) / base_mva,
+            "angmin" => deg2rad(haskey(br, :angmin) ? Float64(br[:angmin]) : -60.0),
+            "angmax" => deg2rad(haskey(br, :angmax) ? Float64(br[:angmax]) : 60.0),
+            "tap" => tap,
+            "shift" => shift,
+            "transformer" => haskey(br, :transformer) ? Bool(br[:transformer]) : raw_tap != 0.0 || shift != 0.0,
+            "source_id" => Any["branch", String(br[:branch_id])],
         )
     end
 
@@ -175,6 +187,7 @@ function to_powermodels_data(case_data)
         "dcline" => Dict{String, Any}(),
         "storage" => Dict{String, Any}(),
         "switch" => Dict{String, Any}(),
+        "area_gens" => area_gens,
     )
 end
 
@@ -245,15 +258,17 @@ function run_server()
     end
 end
 
-if length(ARGS) == 1 && ARGS[1] == "--server"
-    run_server()
-elseif length(ARGS) >= 3
-    case_data = JSON3.read(read(ARGS[1], String))
-    payload = JSON3.read(read(ARGS[2], String))
-    result = solve_request(case_data, payload)
-    open(ARGS[3], "w") do io
-        JSON3.write(io, result)
+if abspath(PROGRAM_FILE) == @__FILE__
+    if length(ARGS) == 1 && ARGS[1] == "--server"
+        run_server()
+    elseif length(ARGS) >= 3
+        case_data = JSON3.read(read(ARGS[1], String))
+        payload = JSON3.read(read(ARGS[2], String))
+        result = solve_request(case_data, payload)
+        open(ARGS[3], "w") do io
+            JSON3.write(io, result)
+        end
+    else
+        error("usage: run_opf.jl <case_json> <payload_json> <out_json> | --server")
     end
-else
-    error("usage: run_opf.jl <case_json> <payload_json> <out_json> | --server")
 end

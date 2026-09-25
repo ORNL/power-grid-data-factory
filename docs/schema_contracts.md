@@ -91,6 +91,40 @@ subset and treat `indeterminate`/`error` as excluded/unlabeled. ExaGO reports a
 generic `nonconverged` status, which maps to `indeterminate` unless the adapter
 surfaces a proven-infeasibility signal.
 
+## PF Candidate and Sample Contract
+
+PF candidates use the validated `PFCandidate` schema and include `task: pf`,
+AC-OPF source lineage, parent network/topology IDs, a preassigned dataset split,
+both parent and variant topology hashes, the exact resolved anchor case, complete stable-ID generator
+controls, control-distance metadata, and an explicit response policy. Requiring
+the resolved case prevents workers from reconstructing a different operating
+condition from a mutable base case.
+
+`controls` contains stable-ID generator `pg`, optional `qg`, and `vg` values,
+plus transformer taps/shifts and shunts. Active generators must have controls;
+unknown generator IDs and conflicting voltage targets at a shared generator bus
+are rejected. `response_policy.policy_id` is one of
+`fixed_controls_slack_loss`, `reserve_participation`, `fixed_participation`, or
+`governor_droop`; the latter two require explicit weight maps.
+
+PF samples are written separately to `<runs_root>/pf/samples.jsonl`, schema
+version `1.0`. In addition to the common fields they contain source and parent
+lineage, split, control method/distance/stratum, response policy ID, and an
+`outcome_class`: `converged_valid`, `converged_invalid`, `nonconvergent`,
+`islanded`, or `software_model_error`.
+
+The AC-OPF anchor index is Parquet with JSON strings for controls, resolved
+cases, and source candidates. Its sidecar manifest records source paths, row
+count, schema version, source SHA-256 values, and the index SHA-256. A sibling
+`parent_split_registry.parquet` assigns each parent network to exactly one of
+`train`, `validation`, `test`, or `ood`.
+
+PF workers also write one outcome-specific copy under
+`<runs_root>/pf/outcomes/<outcome_class>/samples.jsonl`. Campaign metadata uses
+`diversity_ledger`, `active_constraint_ledger`, `security_boundary_ledger`, and
+`pf_coverage_ledger`; the reducer appends ordinary rows and aggregates active
+constraints by `(constraint_family, component_id)`.
+
 ## Run Registry Contract
 
 Run registry files:

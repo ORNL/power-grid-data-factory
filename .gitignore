@@ -37,6 +37,7 @@ install/
 # Julia local state
 julia/.julia/
 .julia_depot_*/
+.software/
 
 # Julia sysimages (large, machine-specific PackageCompiler output)
 julia/sysimages/

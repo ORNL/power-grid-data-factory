@@ -24,6 +24,9 @@ This documentation describes the purpose, architecture, setup, and reproducibili
 18. [Configuration Reference](configuration_reference.md)
 19. [Resumable Campaigns and the Top-Level Driver](resumable_campaigns.md)
 20. [Enumeration-Time Feasibility Prefiltering](feasibility_prefiltering.md)
+21. [Campaign Diversity Analysis](diversity_analysis.md)
+22. [Riker Complementary PF Campaign](riker_pf_campaign.md)
+23. [Complementary PF Campaign Plan and Roadmap](complementary_pf_campaign_plan.md)
 
 ## Intended audience
 
