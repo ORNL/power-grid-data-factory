@@ -11,7 +11,7 @@ import re
 from typing import Any
 
 
-def _outaged_components(contingency: dict[str, Any]) -> list[tuple[str, str]]:
+def outaged_components(contingency: dict[str, Any]) -> list[tuple[str, str]]:
     event_type = contingency.get("event_type")
     if event_type == "sequential_n1n1":
         first = contingency.get("first_outage") or {}
@@ -23,6 +23,9 @@ def _outaged_components(contingency: dict[str, Any]) -> list[tuple[str, str]]:
     if event_type == "sequential_cascade":
         return [(str(s.get("type")), str(s.get("id"))) for s in contingency.get("stages", [])]
     return [(str(c.get("type")), str(c.get("id"))) for c in contingency.get("components", [])]
+
+
+_outaged_components = outaged_components
 
 
 def _sanitize_token(token: str) -> str:
@@ -38,7 +41,7 @@ def contingency_slug(contingency: dict[str, Any] | None, max_readable: int = 48)
     """
     if not contingency:
         return "ctg_base"
-    comps = _outaged_components(contingency)
+    comps = outaged_components(contingency)
     sequential = contingency.get("event_type") in ("sequential_n1n1", "sequential_cascade")
     order = len(comps)
     key_comps = comps if sequential else sorted(comps)

@@ -25,9 +25,26 @@ The following are scaffolded placeholders and should be implemented for producti
 - `scripts/register_case.py`
 - `scripts/run_pf.py`
 - `scripts/run_dc_opf.py`
-- `scripts/run_scopf.py`
 
 ## Campaign input generation
+
+- `scripts/build_pf_anchor_index.py`
+  - Builds a deterministic Parquet index and checksum manifest from successful
+    AC-OPF `samples.jsonl` records for downstream PF candidate generation.
+- `scripts/generate_pf_candidates.py`
+  - Generates seeded control-distance, topology, criticality, and response-policy
+    quotas from the anchor index.
+  - Streams candidates to an `.in_progress` JSONL and atomically publishes the
+    completed file, avoiding retention of all expanded candidates in memory.
+- `scripts/run_campaign_pf_round.py`
+  - Validates PF candidate schemas, applies explicit contingency response
+    policies, reuses a persistent PowerModels process, and writes resumable
+    samples and a manifest under `<runs_root>/pf/`.
+  - Validates residuals, controls, voltage/reactive/thermal limits, and exact
+    AC-OPF anchor consistency; preserves each outcome in a separate partition.
+- `scripts/reduce_pf_campaign_shards.py`
+  - Atomically merges PF diversity, boundary, and coverage ledgers across shards
+    and aggregates active-constraint counts while retaining prior rounds.
 
 - `scripts/create_operating_point.py`
   - Generates structured operating-point candidates for adaptive campaigns (parametric perturbations plus reference load snapshots when a snapshot registry exists).
@@ -49,6 +66,11 @@ Implemented workflow command:
   - Runs AC-OPF through `PowerModelsAdapter` for selected MATPOWER cases.
   - Creates full preservation-first attempt directories under `data/runs/ac_opf/...`.
   - Writes normalized outputs, validation placeholders, manifests/checksums, terminal marker, and appends run registry records.
+- `scripts/run_scopf.py`
+  - Runs coupled nonlinear AC SCOPF through `PowerModelsSecurityConstrained.run_c1_scopf` and Ipopt.
+  - Accepts a JSON contingency-set object, a JSON array, or campaign JSONL rows with nested `contingency` objects; case-tagged JSONL rows are filtered for each selected case.
+  - Requires static branch or generator N-1 events and rejects sequential or simultaneous N-k inputs before allocating an attempt.
+  - Preserves the resolved case and contingency set, raw and normalized results, solver provenance, logs, timing, checksums, terminal marker, and SCOPF run-registry record.
 - `scripts/run_exago_ac_opf.py`
   - Runs AC-OPF through ExaGO OPFLOW for selected MATPOWER cases.
   - Parses OPFLOW text output into structured `raw_result.solution` fields (`bus`, `branch`, `gen`) for downstream HydraGNN-style OPF training conversion.
@@ -74,9 +96,11 @@ Implemented workflow command:
   - Discovers per-scenario MATPOWER snapshot files for a case and registers them as reference load operating points.
   - Writes `data/operating_point_registry/<case_id>/load_snapshots.json` with season, voltage regime, difficulty, and per-bus loads.
 - `scripts/shard_selected_candidates.py`
-  - Deterministically shards selected-candidate JSONL files by `candidate_id` ordering.
+  - Deterministically shards selected-candidate JSONL files.
   - Produces fixed shard files and a manifest for map-stage parallel execution.
   - Supports coverage gates (for example by dataset/topology) and deterministic pool-based backfill before sharding.
+  - `--assignment contiguous --stream` creates balanced consecutive input ranges
+    with bounded memory; the Riker PF launcher uses this mode.
 - `scripts/reduce_campaign_shards.py`
   - Deterministically merges shard campaign ledgers and shard AC execution reports back into the target campaign.
   - Aggregates active-constraint ledger rows by `(constraint_family, component_id)` and writes a reduce report marker per round.
@@ -90,6 +114,13 @@ Implemented workflow command:
 - `scripts/monitor_campaign.py`
   - Read-only progress dashboard for a map/reduce campaign round: bootstrap sub-stage, candidate counts, shards done/total, aggregated solved/failed/skipped, and reduce status.
   - Reads only cheap signals (intermediate files, the per-shard reports, and `queue/done` markers), so it stays fast even with millions of attempt directories. `--watch N` refreshes every N seconds. See [Resumable Campaigns](resumable_campaigns.md#monitoring-progress).
+- `scripts/analyze_campaign_diversity.py`
+  - Streams authoritative per-shard diversity ledgers and writes a reproducible JSON, CSV, and self-contained HTML audit under `data/reports/diversity/`.
+  - Computes exact low-cardinality structural coverage and deterministic sampled estimates for robust nearest-neighbor distance, near-duplicate rate, effective sample ratio, intrinsic dimension, active-signature diversity, and similarity-cluster concentration.
+  - Uses versioned defaults from `configs/diversity_analysis.yaml`; see [Campaign Diversity Analysis](diversity_analysis.md).
+- `scripts/analyze_campaign_diversity_mpi.py`
+  - MPI map/reduce variant of the diversity audit. Deterministically partitions shard ledgers, merges exact counters and the global lowest-hash sample, and writes only from rank 0.
+  - Produces the same report schema as the serial reference implementation; use `configs/slurm/andes_diversity_analysis_mpi.sbatch` for the production corpus.
 
 ## Source onboarding helpers
 

@@ -2,6 +2,23 @@
 
 Place cluster-specific submission templates and resource presets here.
 
+## MPI Diversity Analysis
+
+`andes_diversity_analysis_mpi.sbatch` parallelizes the read-only diversity audit
+across campaign shard ledgers. It defaults to 4 nodes and 32 MPI ranks; rank 0
+alone computes global sampled metrics and writes curated outputs under
+`data/reports/diversity/`. Install `mpi4py` against the active Andes MPI stack
+before submission:
+
+```bash
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+bash scripts/setup_andes_venv.sh
+sbatch configs/slurm/andes_diversity_analysis_mpi.sbatch
+```
+
+Environment overrides: `CAMPAIGN_ID`, `ROUNDS`, `CONFIG`, `SAMPLE_SIZE`,
+`BLOCK_SIZE`, `NEAR_DUPLICATE_THRESHOLD`, `OUTPUT_DIR`, and `PYTHON`.
+
 ## Campaign-Driven Scheduler Template
 
 `configs/slurm/andes_powermodels_acopf_small_10n_36h.sbatch` now runs the
@@ -179,6 +196,46 @@ sbatch \
 
 Prefer the top-level driver (below), which detects the correct round and sets
 `RESUME=1` automatically.
+
+## Riker complementary PF campaign
+
+`riker_pf_mapreduce.sbatch` runs the complementary PF workflow from a frozen
+Andes AC-OPF anchor index: stratified candidate generation, deterministic
+sharding, dynamic persistent-Julia map workers, physical validation, outcome
+partitioning, and adaptive-ledger reduction. Build the index once, then submit
+the bounded smoke before production:
+
+```bash
+PGDF_JULIA_BIN=.software/bin/julia \
+	.venv-riker/bin/python scripts/build_pf_anchor_index.py \
+	'data/outputs/runs/mapreduce_round_*/shard_*/ac_opf/samples.jsonl' \
+	--output data/derived/pf_anchors/andes_acopf_anchors.parquet
+
+configs/slurm/submit_riker_pf_smoke.sh
+```
+
+After the smoke succeeds, submit a larger multi-node round with consecutive,
+balanced candidate ranges per shard:
+
+```bash
+configs/slurm/submit_riker_pf_large.sh
+```
+
+Defaults are 100,000 PF candidates on 8 nodes with 32 workers per node and
+2,048 shards. Override `COUNT`, `NODES`, `NTASKS_PER_NODE`, `SHARD_COUNT`,
+`WALLTIME`, `CAMPAIGN_ID`, or `ANCHOR_INDEX` in the environment. The launcher
+refuses to submit unless the immutable multi-case anchor index exists. Set
+`RESUME=1` with the same campaign, round, seed, and shard count to continue an
+interrupted round.
+
+Production submission uses the same template with an isolated campaign and
+runs root. Resume reuses generated candidates and shards, skips completed shard
+markers and candidate IDs, and exits successfully when reduction is complete:
+
+```bash
+sbatch --export=ALL,ANCHOR_INDEX=$PWD/data/derived/pf_anchors/andes_acopf_anchors.parquet,COUNT=10000 \
+	configs/slurm/riker_pf_mapreduce.sbatch
+```
 
 ### Top-Level Driver (Auto-Resume and Chaining)
 

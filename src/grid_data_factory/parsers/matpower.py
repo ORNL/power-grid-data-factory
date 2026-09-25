@@ -147,8 +147,9 @@ def write_matpower_case(case_data: dict[str, Any], out_path: Path, case_name: st
     ]
     for g in case_data.get("generators", []):
         cols = [
-            int(float(str(g.get("bus_id")))), 0.0, 0.0,
-            float(g.get("qmax", 0.0)), float(g.get("qmin", 0.0)), 1.0, base_mva, 1,
+            int(float(str(g.get("bus_id")))), float(g.get("pg", 0.0)), float(g.get("qg", 0.0)),
+            float(g.get("qmax", 0.0)), float(g.get("qmin", 0.0)), float(g.get("vg", 1.0)),
+            float(g.get("mbase", base_mva)), int(g.get("status", 1)),
             float(g.get("pmax", 0.0)), float(g.get("pmin", 0.0)),
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ]
@@ -166,7 +167,9 @@ def write_matpower_case(case_data: dict[str, Any], out_path: Path, case_name: st
         cols = [
             int(float(str(br.get("from")))), int(float(str(br.get("to")))),
             float(br.get("r", 0.0)), float(br.get("x", 0.0)), float(br.get("b", 0.0)),
-            rate_a, rate_a, rate_a, 0.0, 0.0, 1, -360.0, 360.0,
+            rate_a, float(br.get("rate_b", rate_a)), float(br.get("rate_c", rate_a)),
+            float(br.get("tap", 0.0)), float(br.get("shift", 0.0)), int(br.get("status", 1)),
+            float(br.get("angmin", -360.0)), float(br.get("angmax", 360.0)),
         ]
         lines.append("\t" + "\t".join(_fmt_number(c) for c in cols) + ";")
     lines += [
@@ -236,6 +239,11 @@ def parse_matpower_case(case_file: Path, case_id: str) -> dict[str, Any]:
             {
                 "gen_id": f"gen_{idx + 1:06d}",
                 "bus_id": str(int(row[0])),
+                "pg": float(row[1]),
+                "qg": float(row[2]),
+                "vg": float(row[5]),
+                "mbase": float(row[6]),
+                "status": status,
                 "pmin": float(row[9]),
                 "pmax": float(row[8]),
                 "qmin": float(row[4]),
@@ -258,6 +266,14 @@ def parse_matpower_case(case_file: Path, case_id: str) -> dict[str, Any]:
                 "x": float(row[3]),
                 "b": float(row[4]),
                 "rate_a": rate_a,
+                "rate_b": float(row[6]) if float(row[6]) > 0.0 else rate_a,
+                "rate_c": float(row[7]) if float(row[7]) > 0.0 else rate_a,
+                "tap": float(row[8]),
+                "shift": float(row[9]),
+                "status": int(row[10]),
+                "angmin": float(row[11]),
+                "angmax": float(row[12]),
+                "transformer": float(row[8]) != 0.0 or float(row[9]) != 0.0,
             }
         )
 

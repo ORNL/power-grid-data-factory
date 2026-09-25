@@ -31,10 +31,20 @@ source "$VENV/bin/activate"
 python -m pip install --upgrade pip
 python -m pip install -r "$REQ"
 
-echo "[setup] verifying parquet engine"
+MPI_COMPILER=${MPICC:-$(command -v cc || command -v mpicc || true)}
+if [[ -z "$MPI_COMPILER" ]]; then
+  echo "[setup] MPI compiler wrapper not found; load the Frontier programming environment or set MPICC." >&2
+  exit 2
+fi
+MPICC="$MPI_COMPILER" python -m pip install --no-binary=mpi4py -e "$ROOT[analysis-mpi]"
+
+echo "[setup] verifying parquet and MPI engines"
 python - <<'PY'
 import pandas, pyarrow
+from mpi4py import MPI
 print("pandas", pandas.__version__, "pyarrow", pyarrow.__version__)
+print("mpi4py", MPI.Get_version())
+print(MPI.Get_library_version().strip())
 PY
 
 echo "[setup] done. The sbatch defaults PGDF_VENV to $VENV and will use it automatically."

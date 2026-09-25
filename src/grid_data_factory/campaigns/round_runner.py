@@ -12,6 +12,7 @@ from grid_data_factory.diversity.clustering import adaptive_bin_id
 from grid_data_factory.diversity.descriptors import SolvedStateDescriptor
 from grid_data_factory.preservation.artifacts import build_artifacts_manifest
 from grid_data_factory.preservation.checksums import verify_checksums, write_checksums
+from grid_data_factory.pf.schemas import PFSampleMetadata
 from grid_data_factory.sources.registry import resolve_case_file
 from grid_data_factory.storage.layout import (
     create_next_attempt_directory,
@@ -107,10 +108,12 @@ def _descriptor_from_result(candidate: dict[str, Any], case_data: dict[str, Any]
 
     bus_vals = [float(v.get("vm", 1.0)) for v in (solution.get("bus") or {}).values()]
     branch_vals = []
+    network_losses = 0.0
     for v in (solution.get("branch") or {}).values():
         pf = abs(float(v.get("pf", 0.0))) * base_mva
         pt = abs(float(v.get("pt", 0.0))) * base_mva
         branch_vals.append(max(pf, pt))
+        network_losses += (float(v.get("pf", 0.0)) + float(v.get("pt", 0.0))) * base_mva
 
     gen_p = [abs(float(v.get("pg", 0.0)) * base_mva) for v in (solution.get("gen") or {}).values()]
     gen_q = [abs(float(v.get("qg", 0.0)) * base_mva) for v in (solution.get("gen") or {}).values()]
@@ -135,7 +138,7 @@ def _descriptor_from_result(candidate: dict[str, Any], case_data: dict[str, Any]
         branch_loading_p90=b90,
         generator_p_p90=p90,
         generator_q_p90=q90,
-        network_losses=0.0,
+        network_losses=network_losses,
         active_constraint_signature=";".join(active_keys),
         near_active_constraint_signature=";".join(near_keys),
         active_constraint_count=len(active_keys),
@@ -177,11 +180,18 @@ def _candidate_identity(candidate: dict[str, Any]) -> tuple[str, str, str, str]:
     return case_id, topology_id, operating_point_id, contingency_id
 
 
+def _candidate_task(candidate: dict[str, Any]) -> str:
+    task = str(candidate.get("task", "ac_opf"))
+    if task not in {"ac_opf", "pf"}:
+        raise ValueError(f"Unsupported campaign task: {task}")
+    return task
+
+
 def _candidate_solver_dir(runs_root: Path, candidate: dict[str, Any], solver_id: str) -> Path:
     case_id, topology_id, operating_point_id, contingency_id = _candidate_identity(candidate)
     return get_solver_directory(
         runs_root=runs_root,
-        task="ac_opf",
+        task=_candidate_task(candidate),
         case_id=case_id,
         topology_id=topology_id,
         operating_point_id=operating_point_id,
@@ -199,10 +209,11 @@ def _write_attempt(
     solver_id: str,
 ) -> tuple[Path, str]:
     case_id, topology_id, operating_point_id, contingency_id = _candidate_identity(candidate)
+    task = _candidate_task(candidate)
 
     solver_dir = get_solver_directory(
         runs_root=runs_root,
-        task="ac_opf",
+        task=task,
         case_id=case_id,
         topology_id=topology_id,
         operating_point_id=operating_point_id,
@@ -214,7 +225,7 @@ def _write_attempt(
     run_id = f"{case_id}-{topology_id}-{operating_point_id}-{contingency_id}-{solver_id}-{attempt_id}"
     run_yaml = {
         "run_id": run_id,
-        "task": "ac_opf",
+        "task": task,
         "case_id": case_id,
         "topology_id": topology_id,
         "operating_point_id": operating_point_id,
@@ -278,6 +289,7 @@ def _write_attempt(
 # ---------------------------------------------------------------------------
 
 SAMPLE_SCHEMA_VERSION = "1.1"
+PF_SAMPLE_SCHEMA_VERSION = "1.0"
 
 # Normalized feasibility labels for downstream feasibility-vs-infeasibility
 # classification. Every solved candidate is persisted regardless of outcome, so
@@ -369,8 +381,24 @@ def classify_feasibility(result: dict[str, Any]) -> str:
     return FEASIBILITY_INDETERMINATE
 
 
-def _shard_samples_path(runs_root: Path) -> Path:
-    return runs_root / "ac_opf" / "samples.jsonl"
+def _shard_samples_path(runs_root: Path, task: str = "ac_opf") -> Path:
+    if task not in {"ac_opf", "pf"}:
+        raise ValueError(f"Unsupported campaign task: {task}")
+    return runs_root / task / "samples.jsonl"
+
+
+def _pf_outcome_class(result: dict[str, Any]) -> str:
+    status = str(result.get("termination_status", "unknown")).upper()
+    if bool(result.get("success", False)):
+        return "converged_valid" if result.get("validation_passed", True) else "converged_invalid"
+    raw_result = result.get("raw_result") or {}
+    if result.get("islanded") or "ISLAND" in status or (
+        status == "INVALID_MODEL" and str(raw_result.get("primal_status", "")).upper() == "FEASIBLE_POINT"
+    ):
+        return "islanded"
+    if status in _ERROR_STATUSES:
+        return "software_model_error"
+    return "nonconvergent"
 
 
 def _lean_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -390,13 +418,14 @@ def _sample_record(
     run_id: str,
 ) -> dict[str, Any]:
     case_id, topology_id, operating_point_id, contingency_id = _candidate_identity(candidate)
+    task = _candidate_task(candidate)
     runtime_meta = result.get("runtime_metadata") or {}
     wallclock_seconds = runtime_meta.get("wallclock_seconds", result.get("solve_time", result.get("runtime")))
-    return {
-        "schema_version": SAMPLE_SCHEMA_VERSION,
+    record = {
+        "schema_version": PF_SAMPLE_SCHEMA_VERSION if task == "pf" else SAMPLE_SCHEMA_VERSION,
         "run_id": run_id,
         "candidate_id": str(candidate.get("candidate_id")),
-        "task": "ac_opf",
+        "task": task,
         "case_id": case_id,
         "topology_id": topology_id,
         "operating_point_id": operating_point_id,
@@ -412,6 +441,23 @@ def _sample_record(
         "result": _lean_result(result),
         "runtime_metadata": runtime_meta,
     }
+    if task == "pf":
+        policy = candidate.get("response_policy") or {}
+        pf_metadata = PFSampleMetadata(
+            source_ac_opf_run_id=str(candidate.get("source_ac_opf_run_id", "")),
+            parent_network_id=str(candidate.get("parent_network_id", "")),
+            parent_topology_id=str(candidate.get("parent_topology_id", "")),
+            parent_topology_hash=str(candidate.get("parent_topology_hash", "")),
+            topology_hash=str(candidate.get("topology_hash", "")),
+            dataset_split=candidate.get("dataset_split"),
+            control_sampling_method=str(candidate.get("control_sampling_method", "")),
+            control_distance=float(candidate.get("control_distance", 0.0)),
+            control_distance_stratum=str(candidate.get("control_distance_stratum", "")),
+            response_policy_id=str(policy.get("policy_id", candidate.get("response_policy_id", ""))),
+            outcome_class=_pf_outcome_class(result),
+        )
+        record.update(pf_metadata.model_dump())
+    return record
 
 
 def _append_sample(
@@ -425,7 +471,7 @@ def _append_sample(
     case_id, topology_id, operating_point_id, contingency_id = _candidate_identity(candidate)
     run_id = f"{case_id}-{topology_id}-{operating_point_id}-{contingency_id}-{solver_id}"
     record = _sample_record(candidate, case_data, result, solver_id, run_id)
-    samples_path = _shard_samples_path(runs_root)
+    samples_path = _shard_samples_path(runs_root, _candidate_task(candidate))
     samples_path.parent.mkdir(parents=True, exist_ok=True)
     with samples_path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record) + "\n")
@@ -449,13 +495,15 @@ class SampleSink:
     This drains the buffer down to ~0 un-flushed lines before the kill.
     """
 
-    def __init__(self, runs_root: Path, solver_id: str, flush_every: int = 200) -> None:
-        self.path = _shard_samples_path(runs_root)
+    def __init__(self, runs_root: Path, solver_id: str, flush_every: int = 200, task: str = "ac_opf") -> None:
+        self.path = _shard_samples_path(runs_root, task)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._solver_id = solver_id
+        self._task = task
         self._flush_every = max(1, int(flush_every))
         self._since_flush = 0
         self._fh = self.path.open("a", encoding="utf-8")
+        self._outcome_handles: dict[str, Any] = {}
         self._prev_handlers: dict[int, Any] = {}
         self._install_signal_flush()
 
@@ -473,6 +521,9 @@ class SampleSink:
                 self._fh.flush()
                 os.fsync(self._fh.fileno())
                 self._since_flush = 0
+            for handle in self._outcome_handles.values():
+                handle.flush()
+                os.fsync(handle.fileno())
         except Exception:
             pass
 
@@ -493,10 +544,20 @@ class SampleSink:
             os.kill(os.getpid(), signum)
 
     def append(self, candidate: dict[str, Any], case_data: dict[str, Any], result: dict[str, Any]) -> tuple[Path, str]:
+        if _candidate_task(candidate) != self._task:
+            raise ValueError(f"SampleSink task {self._task} cannot store {_candidate_task(candidate)} candidate")
         case_id, topology_id, operating_point_id, contingency_id = _candidate_identity(candidate)
         run_id = f"{case_id}-{topology_id}-{operating_point_id}-{contingency_id}-{self._solver_id}"
         record = _sample_record(candidate, case_data, result, self._solver_id, run_id)
-        self._fh.write(json.dumps(record) + "\n")
+        line = json.dumps(record) + "\n"
+        self._fh.write(line)
+        if self._task == "pf":
+            outcome = str(record["outcome_class"])
+            if outcome not in self._outcome_handles:
+                path = self.path.parent / "outcomes" / outcome / "samples.jsonl"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                self._outcome_handles[outcome] = path.open("a", encoding="utf-8")
+            self._outcome_handles[outcome].write(line)
         self._since_flush += 1
         if self._since_flush >= self._flush_every:
             self._fh.flush()
@@ -515,6 +576,11 @@ class SampleSink:
         if self._fh is not None and not self._fh.closed:
             self._fh.flush()
             self._fh.close()
+        for handle in self._outcome_handles.values():
+            if not handle.closed:
+                handle.flush()
+                handle.close()
+        self._outcome_handles = {}
         self._restore_signal_handlers()
 
     def __enter__(self) -> "SampleSink":
@@ -524,8 +590,8 @@ class SampleSink:
         self.close()
 
 
-def _loaded_sample_ids(runs_root: Path) -> set[str]:
-    samples_path = _shard_samples_path(runs_root)
+def _loaded_sample_ids(runs_root: Path, task: str = "ac_opf") -> set[str]:
+    samples_path = _shard_samples_path(runs_root, task)
     done: set[str] = set()
     if not samples_path.exists():
         return done
@@ -555,15 +621,15 @@ def _count_samples(samples_path: Path) -> int:
     return count
 
 
-def _write_shard_manifest(runs_root: Path, report: dict[str, Any]) -> Path:
-    samples_path = _shard_samples_path(runs_root)
+def _write_shard_manifest(runs_root: Path, report: dict[str, Any], task: str = "ac_opf") -> Path:
+    samples_path = _shard_samples_path(runs_root, task)
     manifest = {
         "schema_version": SAMPLE_SCHEMA_VERSION,
         "samples_file": samples_path.name,
         "sample_count": _count_samples(samples_path),
         **report,
     }
-    out = runs_root / "ac_opf" / "shard_manifest.json"
+    out = runs_root / task / "shard_manifest.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return out

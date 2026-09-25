@@ -61,6 +61,22 @@ Unless noted otherwise, all files are YAML and are read with `yaml.safe_load`.
 - **Consumed by:** [scripts/launch_ultrascale_campaign.py](../scripts/launch_ultrascale_campaign.py)
   (default `--config`).
 
+### `pf_campaign_riker.yaml`
+- **Purpose:** Frozen generation, validation, adaptation, and execution policy
+  for the complementary Riker PowerModels PF corpus.
+- **Key fields:** `generation.candidate_count/maximum_anchors/seed`,
+  `control_distance_strata.*`, `topology_quotas.*`,
+  `contingency_criticality_quotas.*`, `generator_response_quotas.*`,
+  `validation.*`, `adaptive.*`, `security_margin_bands.*`, and `execution.*`.
+- **Consumed by:** [generate_pf_candidates.py](../scripts/generate_pf_candidates.py),
+  [run_campaign_pf_round.py](../scripts/run_campaign_pf_round.py),
+  [reduce_pf_campaign_shards.py](../scripts/reduce_pf_campaign_shards.py), and
+  [riker_pf_mapreduce.sbatch](../configs/slurm/riker_pf_mapreduce.sbatch).
+- **Semantics:** Quotas are candidate targets allocated with deterministic
+  largest remainder. Prior valid PF samples can rebalance control-distance
+  quotas; other adaptive keys currently record policy defaults but do not yet
+  retarget topology, response-policy, or constraint-signature quotas.
+
 ## Declarative reference specifications
 
 These files describe intended solver, storage, and validation behavior. They are

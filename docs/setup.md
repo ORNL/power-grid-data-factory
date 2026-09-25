@@ -14,10 +14,20 @@ cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 python -m venv .venv
 source .venv/bin/activate
 pip install -U pip
-pip install -e .
+pip install -e '.[analysis-mpi]'
 ```
 
 If your system `python` is older, use a known Python 3.11 interpreter.
+On Andes, the repository setup helper loads OpenMPI, creates or updates `.venv`,
+installs the mpi4py MPI-ABI wheel, and verifies that it resolves to the active
+MPI library:
+
+```bash
+bash scripts/setup_andes_venv.sh
+```
+
+On Frontier, use `bash scripts/setup_frontier_venv.sh`; it installs the same
+analysis extra against the active Cray compiler wrapper.
 
 ## Validate the base scaffold
 
@@ -34,6 +44,27 @@ Expected result for a fresh scaffold is `ok: true` with zero attempts.
 cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 julia --project=julia julia/setup_environment.jl
 ```
+
+### Riker PF campaign environment
+
+Riker uses an isolated container-backed Julia 1.10.10 environment rather than
+the Andes module stack:
+
+```bash
+cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+bash scripts/setup_riker_environment.sh
+
+export PGDF_JULIA_BIN=$PWD/.software/bin/julia
+export PGDF_JULIA_PROJECT_DIR=$PWD/julia/lockfiles/riker
+export JULIA_DEPOT_PATH=$PWD/.julia_depot_riker
+
+.venv-riker/bin/python -c 'import grid_data_factory, pydantic, pyarrow, yaml'
+$PGDF_JULIA_BIN --project="$PGDF_JULIA_PROJECT_DIR" \
+	-e 'import PowerModels, Ipopt, JSON3; println("RUNTIME_OK")'
+```
+
+See [Riker Complementary PF Campaign](riker_pf_campaign.md) for anchor-index
+creation, smoke testing, large submission, output layout, and resume behavior.
 
 ## HSL / MA27 / MA57 for the Julia + Ipopt stack
 
@@ -65,6 +96,7 @@ To prevent dependency lockfile conflicts across machines, use profile-specific p
 - `julia/lockfiles/andes/`
 - `julia/lockfiles/frontier/`
 - `julia/lockfiles/local/`
+- `julia/lockfiles/riker/`
 
 Initialize the profile on each machine before running PowerModels:
 
@@ -73,6 +105,13 @@ cd /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 module load julia/1.8.2
 export JULIA_DEPOT_PATH=$PWD/.julia_depot_andes_profile
 julia --project=julia/lockfiles/andes -e 'using Pkg; Pkg.Registry.add("General"); Pkg.resolve(); Pkg.instantiate()'
+```
+
+The profile installs `PowerModelsSecurityConstrained` for coupled AC SCOPF in
+addition to the base PowerModels stack. Verify the SCOPF dependency with:
+
+```bash
+julia --project=julia/lockfiles/andes -e 'using PowerModelsSecurityConstrained; println("PMSC_OK")'
 ```
 
 Then run with the same profile:
@@ -87,12 +126,60 @@ PowerModels Python workflows now auto-select a Julia project profile based on ho
 
 - hosts containing `andes` -> `julia/lockfiles/andes`
 - hosts containing `frontier` -> `julia/lockfiles/frontier`
+- hosts containing `riker` -> `julia/lockfiles/riker`
 - otherwise -> `julia/lockfiles/local` (fallback: `julia/`)
 
 You can override selection explicitly with:
 
 ```bash
 export PGDF_JULIA_PROJECT_DIR=julia/lockfiles/andes
+```
+
+## PowerModels security-constrained OPF
+
+`PowerModelsAdapter.solve_scopf(case, contingencies, options)` uses
+`PowerModelsSecurityConstrained.run_c1_scopf` and its explicit multinetwork
+formulation. Each contingency must be a static N-1 event with one `branch` or
+`generator` component, for example:
+
+```python
+result = adapter.solve_scopf(
+	case,
+	[{
+		"contingency_id": "line_1_out",
+		"event_type": "simultaneous",
+		"components": [{"type": "branch", "id": "branch_000001"}],
+	}],
+)
+```
+
+Sequential events and simultaneous N-k events are rejected because PMSC 0.12's
+coupled formulation represents one component outage per contingency network.
+PMSC also does not support nonempty PowerModels `storage`, `dcline`, or `switch`
+components.
+
+Run the preservation-first command with a MATPOWER case and contingency set:
+
+```bash
+python scripts/run_scopf.py \
+	--case-file external/ExaGO/datafiles/case5.m \
+	--contingency-set data/contingency_set_registry/case5_n1.json \
+	--timeout-s 1800
+```
+
+The contingency file may be JSONL campaign rows or a JSON object such as:
+
+```json
+{
+	"contingency_set_id": "case5_n1",
+	"contingencies": [
+		{
+			"contingency_id": "branch_000001_out",
+			"event_type": "simultaneous",
+			"components": [{"type": "branch", "id": "branch_000001"}]
+		}
+	]
+}
 ```
 
 If your environment has precompile instability, use conservative runtime settings:

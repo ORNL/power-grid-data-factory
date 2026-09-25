@@ -32,6 +32,7 @@ Full index: [docs/README.md](docs/README.md).
 - [Enumeration-Time Feasibility Prefiltering](docs/feasibility_prefiltering.md)
 - [Configuration Reference](docs/configuration_reference.md)
 - [Schema Contracts](docs/schema_contracts.md)
+- [Riker Complementary PF Campaign](docs/riker_pf_campaign.md)
 - [GO Challenge MATPOWER Duplicate Audit](docs/go_challenge_duplicate_audit.md)
 - [Evolution Log](docs/evolution_log.md)
 

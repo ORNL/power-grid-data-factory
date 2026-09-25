@@ -184,6 +184,22 @@ amount of build-out can be pinned as a **fraction of grid size**
 expansions. Every plan is deterministic (seed-threaded IDs), immutable in
 application, and **connectivity-checked** before use.
 
+### 2.7 Complementary PF control-state campaigns
+
+The Riker PowerModels PF workflow derives non-optimal control states from an
+immutable index of successful AC-OPF anchors. It independently quotas realized
+control distance and topology class, applies balanced generator redispatch,
+preserves fixed transformer/shunt controls, and models explicit generator-outage
+response through reserve, participation-factor, or droop policies.
+
+The current production mix includes intact networks, flow-ranked N-1 branch
+outages, output-ranked non-reference N-1 generator outages, and adjacent-branch
+N-2 events. PowerModels enforces reactive limits with PV-to-PQ conversion and
+reconstructs branch flows before physical validation. Valid, invalid,
+nonconvergent, islanded, and software/model outcomes are retained separately.
+See [Riker Complementary PF Campaign](riker_pf_campaign.md) for exact quotas,
+commands, limitations, and data layout.
+
 ---
 
 ## 3. HPC scalability
@@ -227,6 +243,9 @@ storage.
 - **Deterministic sharding**: round-robin by `candidate_id` spreads coverage keys
   (dataset, topology, regime, contingency class) evenly and reproducibly across
   shards.
+- **PF consecutive sharding**: the complementary PF launcher instead uses
+  balanced contiguous ranges from its seeded candidate JSONL. Dynamic workers
+  claim those consecutively numbered shards as they become available.
 
 ### 3.4 Parallel-filesystem (Lustre) awareness
 

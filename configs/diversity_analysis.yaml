@@ -1,0 +1,7 @@
+diversity_analysis:
+  # Metrics are exact for streamed categorical counts and estimated from this
+  # deterministic, order-independent sample for pairwise distances.
+  sample_size: 10000
+  seed: 20260924
+  near_duplicate_threshold: 0.02
+  block_size: 256
