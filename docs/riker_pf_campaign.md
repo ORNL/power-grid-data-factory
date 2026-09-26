@@ -209,11 +209,18 @@ Submit the multi-node campaign after the smoke succeeds:
 configs/slurm/submit_riker_pf_large.sh
 ```
 
-Large-launch defaults are 100,000 candidates, 8 nodes, 32 tasks per node, 2,048
-shards, and two hours. Override settings through the environment, for example:
+The launcher starts a scheduler-managed supervisor. Each supervisor cycle
+submits the first round whose PF reduce marker is missing or not `ok`, then
+resubmits itself with an `afterany` dependency on that round job. A timed-out or
+failed round is therefore resumed; a successfully reduced round advances to the
+next index. The supervisor stops when all configured rounds are complete.
+
+Large-launch defaults are 5 rounds of 100,000 candidates, 64 nodes, 32 tasks per
+node, 16,384 shards, and 36 hours per round. Override settings through the
+environment, for example:
 
 ```bash
-COUNT=250000 NODES=16 SHARD_COUNT=4096 WALLTIME=04:00:00 \
+ROUNDS=8 COUNT=250000 NODES=16 SHARD_COUNT=4096 WALLTIME=04:00:00 \
 CAMPAIGN_ID=riker_pf_complement_large_v1 \
   configs/slurm/submit_riker_pf_large.sh
 ```
@@ -223,17 +230,18 @@ balanced contiguous ranges of the generated JSONL. Workers claim consecutive
 shard IDs from a shared queue dynamically, so completion order can differ from
 shard order.
 
-To continue an interrupted round, preserve the campaign ID, round, seed, count,
-and shard count:
+To start the supervisor only after an existing job finishes, set `AFTER`:
 
 ```bash
-RESUME=1 CAMPAIGN_ID=riker_pf_complement_large_v1 \
+AFTER=<job_id> CAMPAIGN_ID=riker_pf_complement_large_v1 \
   configs/slurm/submit_riker_pf_large.sh
 ```
 
-Resume reuses a complete candidate file and existing shards, skips done shard
-markers and already recorded candidate IDs, and exits immediately when a valid
-reduce marker already exists.
+Every round submission uses resume mode. It reuses complete candidate and shard
+files, skips done shard markers and recorded candidate IDs, and exits immediately
+when a valid reduce marker already exists. `MAX_CYCLES` defaults to 500 and
+prevents unbounded resubmission. Use `DRY_RUN=1` to inspect the initial
+supervisor submission without calling `sbatch`.
 
 Do not infer physical infeasibility from `LOCALLY_INFEASIBLE`; the campaign
 retains it in the `nonconvergent` outcome partition.

@@ -263,6 +263,7 @@ is fully isolated from any single-campaign chain already running under the defau
 | `--campaign-id` | Campaign to drive (required). |
 | `--rounds` | Total number of rounds (required). |
 | `--sbatch` | Per-round map/reduce sbatch (defaults to the 10-node 36h template). |
+| `--reduce-marker-template` | Reduce-marker filename template; use `round_{round:03d}_pf_reduce_report.json` for Riker PF. |
 | `--config` | Campaign config (default `configs/campaign_default.yaml`). |
 | `--total-budget` | If > 0, split across rounds via the budget schedule. |
 | `--budget` | Per-round budget when `--total-budget` is not used. |
