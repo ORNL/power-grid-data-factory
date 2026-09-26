@@ -43,6 +43,26 @@ export PGDF_JULIA_SYSIMAGE
 JULIA_DEPOT_PATH=${JULIA_DEPOT_PATH:-$ROOT/.julia_depot_andes_profile}
 export JULIA_DEPOT_PATH
 
+# PowerModels tries Ipopt's standard linear solver first, then these Coin-HSL
+# fallbacks. Set the list empty to disable fallbacks, or set
+# POWER_MODELS_LINEAR_SOLVER to force one backend and disable the chain.
+POWER_MODELS_LINEAR_SOLVER=${POWER_MODELS_LINEAR_SOLVER:-}
+POWER_MODELS_LINEAR_SOLVER_FALLBACKS=${POWER_MODELS_LINEAR_SOLVER_FALLBACKS-ma27,ma57}
+if [[ -n "$POWER_MODELS_LINEAR_SOLVER" ]]; then
+  case "$POWER_MODELS_LINEAR_SOLVER" in ma27|ma57) ;; *) echo "Invalid POWER_MODELS_LINEAR_SOLVER=$POWER_MODELS_LINEAR_SOLVER" >&2; exit 2 ;; esac
+  [[ -f "$ROOT/external/coinhsl/env.sh" ]] || { echo "Coin-HSL is not installed; run scripts/install_hsl_ipopt.sh" >&2; exit 2; }
+  source "$ROOT/external/coinhsl/env.sh"
+  export IPOPT_LINEAR_SOLVER="$POWER_MODELS_LINEAR_SOLVER"
+elif [[ -n "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS" ]]; then
+  IFS=',' read -r -a _fallback_solvers <<< "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS"
+  for _solver in "${_fallback_solvers[@]}"; do
+    case "${_solver//[[:space:]]/}" in ma27|ma57) ;; *) echo "Invalid PowerModels fallback solver: $_solver" >&2; exit 2 ;; esac
+  done
+  [[ -f "$ROOT/external/coinhsl/env.sh" ]] || { echo "Coin-HSL is not installed; run scripts/install_hsl_ipopt.sh" >&2; exit 2; }
+  source "$ROOT/external/coinhsl/env.sh"
+  unset IPOPT_LINEAR_SOLVER
+fi
+
 CAMPAIGN_ID=${CAMPAIGN_ID:-pilot_pglib_14_57_118}
 ROUND_INDEX=${ROUND_INDEX:-0}
 CONFIG=${CONFIG:-configs/campaign_default.yaml}
@@ -157,6 +177,7 @@ echo "[$(date -u +%FT%TZ)] JOB=$SLURM_JOB_ID mode=map_reduce campaign_id=$CAMPAI
 echo "[$(date -u +%FT%TZ)] config=$CONFIG budget=$BUDGET per_case=$PER_CASE seed=$SEED"
 echo "[$(date -u +%FT%TZ)] contingencies=simultaneous+cascade max_k=$MAX_K seq_cascade_per_op=$SEQ_CASCADE_PER_OP seq_max_len=$SEQ_MAX_LEN"
 echo "[$(date -u +%FT%TZ)] solver_id=$SOLVER_ID timeout_s=$TIMEOUT_S shard_count=$SHARD_COUNT audit_fraction=$AUDIT_FRACTION"
+echo "[$(date -u +%FT%TZ)] linear_solver=${POWER_MODELS_LINEAR_SOLVER:-default} fallbacks=${POWER_MODELS_LINEAR_SOLVER_FALLBACKS:-none}"
 echo "[$(date -u +%FT%TZ)] execution_policy=${EXECUTION_POLICY:-none}"
 echo "[$(date -u +%FT%TZ)] coverage_keys=$COVERAGE_KEYS min_per_bucket=$MIN_PER_BUCKET enforce=$ENFORCE_COVERAGE backfill=$BACKFILL_FROM_POOL"
 
@@ -286,6 +307,7 @@ PYBIN="'$PYBIN'"
 MAX_CANDIDATES="'$MAX_CANDIDATES'"
 CONTINUE_ON_ERROR="'$CONTINUE_ON_ERROR'"
 MAX_FAILURE_FRACTION="'$MAX_FAILURE_FRACTION'"
+POWER_MODELS_LINEAR_SOLVER_FALLBACKS="'$POWER_MODELS_LINEAR_SOLVER_FALLBACKS'"
 QUEUE_FILE="'$QUEUE_FILE'"
 INDEX_FILE="'$INDEX_FILE'"
 LOCK_DIR="'$LOCK_DIR'"
@@ -342,6 +364,10 @@ while true; do
     --timeout-s "$TIMEOUT_S"
     --max-failure-fraction "$MAX_FAILURE_FRACTION"
   )
+
+  if [[ -n "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS" ]]; then
+    ARGS+=(--linear-solver-fallbacks "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS")
+  fi
 
   if [[ -n "$EXECUTION_POLICY" ]]; then
     ARGS+=(--execution-policy "$EXECUTION_POLICY")
