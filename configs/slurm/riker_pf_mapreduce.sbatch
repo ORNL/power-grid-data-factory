@@ -33,11 +33,17 @@ export JULIA_DEPOT_PATH=${JULIA_DEPOT_PATH:-$ROOT/.julia_depot_riker}
 export OPENBLAS_NUM_THREADS=1
 export JULIA_NUM_THREADS=1
 
+COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/current/env.sh}
+[[ -r "$COINHSL_ENV" ]] || { echo "Missing private Coin-HSL activation: $COINHSL_ENV" >&2; exit 2; }
+source "$COINHSL_ENV"
+[[ -r "${IPOPT_HSL_LIBRARY:-}" ]] || { echo "Missing Coin-HSL library: ${IPOPT_HSL_LIBRARY:-unset}" >&2; exit 2; }
+
 [[ -x "$PYBIN" ]] || { echo "Missing Python: $PYBIN" >&2; exit 2; }
 [[ -x "$PGDF_JULIA_BIN" ]] || { echo "Missing Julia wrapper: $PGDF_JULIA_BIN" >&2; exit 2; }
 [[ -s "$ANCHOR_INDEX" ]] || { echo "Missing anchor index: $ANCHOR_INDEX" >&2; exit 2; }
 PYTHONPATH="$ROOT/src" "$PYBIN" -c 'import grid_data_factory, pydantic, pyarrow, yaml'
 "$PGDF_JULIA_BIN" --project="$PGDF_JULIA_PROJECT_DIR" -e 'import PowerModels, Ipopt, JSON3; println("RUNTIME_OK")'
+echo "IPOPT_LINEAR_SOLVER_FALLBACK=default,ma27,ma57"
 
 printf -v ROUND_PAD "%03d" "$ROUND_INDEX"
 CAMPAIGN_ROOT="$ROOT/data/outputs/campaigns/$CAMPAIGN_ID"
@@ -92,6 +98,7 @@ ROOT="'$ROOT'"; PYBIN="'$PYBIN'"; CAMPAIGN_ID="'$CAMPAIGN_ID'"; ROUND_INDEX="'$R
 CONFIG="'$CONFIG'"; SHARD_DIR="'$SHARD_DIR'"; QUEUE_FILE="'$QUEUE_FILE'"; INDEX_FILE="'$INDEX_FILE'"; LOCK_DIR="'$LOCK_DIR'"; DONE_DIR="'$DONE_DIR'"
 RUNS_ROOT="'$RUNS_ROOT'"; SOLVER_ID="'$SOLVER_ID'"; TIMEOUT_S="'$TIMEOUT_S'"; MAX_FAILURE_FRACTION="'$MAX_FAILURE_FRACTION'"; RESUME="'$RESUME'"
 export PGDF_JULIA_BIN="'$PGDF_JULIA_BIN'" PGDF_JULIA_PROJECT_DIR="'$PGDF_JULIA_PROJECT_DIR'" JULIA_DEPOT_PATH="'$JULIA_DEPOT_PATH'" OPENBLAS_NUM_THREADS=1 JULIA_NUM_THREADS=1
+export IPOPT_HSL_LIBRARY="'${IPOPT_HSL_LIBRARY:-}'" LD_LIBRARY_PATH="'${LD_LIBRARY_PATH:-}'"
 total=$(wc -l < "$QUEUE_FILE")
 while true; do
   while ! mkdir "$LOCK_DIR" 2>/dev/null; do :; done

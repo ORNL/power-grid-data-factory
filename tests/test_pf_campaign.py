@@ -5,6 +5,7 @@ import random
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import Mock
 
 import pandas as pd
 from pydantic import ValidationError
@@ -22,6 +23,7 @@ from grid_data_factory.pf.controls import (
 )
 from grid_data_factory.pf.schemas import PFCandidate
 from grid_data_factory.pf.validation import validate_anchor_consistency, validate_pf_result
+from grid_data_factory.solvers.powermodels_adapter import PersistentPowerModelsSession
 
 
 def _case() -> dict:
@@ -125,6 +127,41 @@ class PFControlTests(unittest.TestCase):
         )
         self.assertEqual(contingency["components"], [{"type": "generator", "id": "g2"}])
         self.assertEqual(policy_id, "reserve_participation")
+
+
+class PFSolverFallbackTests(unittest.TestCase):
+    def test_stops_after_ma27_converges(self):
+        session = Mock()
+        session.solve_pf.side_effect = [
+            {"success": False, "termination_status": "ITERATION_LIMIT"},
+            {"success": True, "termination_status": "LOCALLY_SOLVED"},
+        ]
+
+        result = PersistentPowerModelsSession.solve_pf_with_fallback(
+            session, _case(), controls={}, hsl_library="/private/libcoinhsl.so"
+        )
+
+        attempted = [call.kwargs["options"]["linear_solver"] for call in session.solve_pf.call_args_list]
+        self.assertEqual(attempted, ["", "ma27"])
+        self.assertEqual(result["linear_solver"], "ma27")
+        self.assertEqual(result["solver_attempt_count"], 2)
+
+    def test_tries_ma57_after_two_nonconvergent_results(self):
+        session = Mock()
+        session.solve_pf.side_effect = [
+            {"success": False, "termination_status": "ITERATION_LIMIT"},
+            {"success": False, "termination_status": "LOCALLY_INFEASIBLE"},
+            {"success": False, "termination_status": "SLOW_PROGRESS"},
+        ]
+
+        result = PersistentPowerModelsSession.solve_pf_with_fallback(
+            session, _case(), controls={}, hsl_library="/private/libcoinhsl.so"
+        )
+
+        attempted = [call.kwargs["options"]["linear_solver"] for call in session.solve_pf.call_args_list]
+        self.assertEqual(attempted, ["", "ma27", "ma57"])
+        self.assertEqual(result["linear_solver"], "ma57")
+        self.assertEqual(result["solver_attempt_count"], 3)
 
 
 class PFAnchorTests(unittest.TestCase):

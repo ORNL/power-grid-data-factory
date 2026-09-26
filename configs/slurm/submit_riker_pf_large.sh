@@ -18,6 +18,7 @@ RUNS_ROOT=${RUNS_ROOT:-data/outputs/runs/$CAMPAIGN_ID}
 MAX_FAILURE_FRACTION=${MAX_FAILURE_FRACTION:-0.5}
 RESUME=${RESUME:-0}
 JOB_NAME=${JOB_NAME:-pgdf_pf_large}
+COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/current/env.sh}
 
 [[ -s "$ANCHOR_INDEX" ]] || {
   echo "Missing PF anchor index: $ANCHOR_INDEX" >&2
@@ -28,15 +29,19 @@ JOB_NAME=${JOB_NAME:-pgdf_pf_large}
   echo "COUNT, NODES, NTASKS_PER_NODE, and SHARD_COUNT must be positive" >&2
   exit 2
 }
+[[ -r "$COINHSL_ENV" ]] || { echo "Missing private Coin-HSL activation: $COINHSL_ENV" >&2; exit 2; }
+source "$COINHSL_ENV"
+[[ -r "${IPOPT_HSL_LIBRARY:-}" ]] || { echo "Missing Coin-HSL library: ${IPOPT_HSL_LIBRARY:-unset}" >&2; exit 2; }
 
 echo "[submit_riker_pf_large] campaign=$CAMPAIGN_ID round=$ROUND_INDEX candidates=$COUNT"
 echo "[submit_riker_pf_large] nodes=$NODES tasks_per_node=$NTASKS_PER_NODE shards=$SHARD_COUNT walltime=$WALLTIME"
 echo "[submit_riker_pf_large] anchor_index=$ANCHOR_INDEX runs_root=$RUNS_ROOT resume=$RESUME"
+echo "[submit_riker_pf_large] linear_solver_fallback=default,ma27,ma57"
 
 exec sbatch \
   -J "$JOB_NAME" \
   -N "$NODES" \
   --ntasks-per-node="$NTASKS_PER_NODE" \
   -t "$WALLTIME" \
-  --export="ALL,ANCHOR_INDEX=$ANCHOR_INDEX,CAMPAIGN_ID=$CAMPAIGN_ID,ROUND_INDEX=$ROUND_INDEX,COUNT=$COUNT,SEED=$SEED,SHARD_COUNT=$SHARD_COUNT,RUNS_ROOT=$RUNS_ROOT,MAX_FAILURE_FRACTION=$MAX_FAILURE_FRACTION,RESUME=$RESUME" \
+  --export="ALL,ANCHOR_INDEX=$ANCHOR_INDEX,CAMPAIGN_ID=$CAMPAIGN_ID,ROUND_INDEX=$ROUND_INDEX,COUNT=$COUNT,SEED=$SEED,SHARD_COUNT=$SHARD_COUNT,RUNS_ROOT=$RUNS_ROOT,MAX_FAILURE_FRACTION=$MAX_FAILURE_FRACTION,RESUME=$RESUME,IPOPT_HSL_LIBRARY=$IPOPT_HSL_LIBRARY,COINHSL_ENV=$COINHSL_ENV,LD_LIBRARY_PATH=$LD_LIBRARY_PATH" \
   "$SBATCH_FILE"

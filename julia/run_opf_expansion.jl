@@ -221,8 +221,11 @@ if task == "ac_opf"
             "sb" => "yes",
             "tol" => 1e-8,
         ]
-        let ls = strip(get(ENV, "IPOPT_LINEAR_SOLVER", ""))
+        let ls = String(strip(get(ENV, "IPOPT_LINEAR_SOLVER", "")))
             !isempty(ls) && push!(solver_attrs, "linear_solver" => ls)
+        end
+        let hsl_library = String(strip(get(ENV, "IPOPT_HSL_LIBRARY", "")))
+            !isempty(hsl_library) && push!(solver_attrs, "hsllib" => hsl_library)
         end
         optimizer = optimizer_with_attributes(Ipopt.Optimizer, solver_attrs...)
         # Enable dual variables (nodal-balance duals ~ LMPs, branch/bound multipliers).

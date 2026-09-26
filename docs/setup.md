@@ -68,26 +68,17 @@ creation, smoke testing, large submission, output layout, and resume behavior.
 
 ## HSL / MA27 / MA57 for the Julia + Ipopt stack
 
-The project currently requires a real HSL-enabled Ipopt build before MA27 or MA57 can be used in the AC-OPF solver path. The complete rebuild and validation workflow is documented in [docs/hsl_ma27_ma57_julia_stack.md](hsl_ma27_ma57_julia_stack.md).
-
-The short version is:
+Coin-HSL is installed in private user storage because its source and binaries
+must not be committed or redistributed. Install and validate both solvers with:
 
 ```bash
-module purge
-module use /sw/andes/spack-envs/modules/gcc/14.2.0
-module load gcc-14.2.0/openmpi/5.0.5 openmpi-5.0.5/gcc-14.2.0/petsc/3.22.1-mpi
-module load julia/1.8.2
-
-IPOPT_ROOT=/tmp/mlupopa/spack-install/linux-zen2/ipopt-3.14.14-z2ayx5wqcfaqtc444w22rlygqerfhr42
-find "$IPOPT_ROOT" -maxdepth 3 \( -iname 'libhsl*' -o -iname 'libcoinhsl*' -o -iname '*ma27*' -o -iname '*ma57*' \)
-
-# if HSL is missing, install/relink Ipopt against the HSL stack, then expose the runtime library path
-export LD_LIBRARY_PATH=/path/to/hsl/lib:/path/to/ipopt/lib:${LD_LIBRARY_PATH}
-
-julia --project=julia/lockfiles/andes -e 'using JuMP, Ipopt; m = Model(Ipopt.Optimizer); set_optimizer_attribute(m, "print_level", 0); set_optimizer_attribute(m, "linear_solver", "ma57"); println("MA57_AVAILABLE")'
+bash scripts/install_hsl_ipopt.sh "$HOME/coinhsl-2023.11.17.tar.gz" ma57
+source "$HOME/.local/coinhsl/current/env.sh"
 ```
 
-If the HSL backend is not installed, the Julia/Ipopt stack will not be able to use MA27 or MA57 reliably.
+The Julia runners consume both `IPOPT_LINEAR_SOLVER` and
+`IPOPT_HSL_LIBRARY`. See [the HSL guide](hsl_ma27_ma57_julia_stack.md) for the
+validated Riker stack and licensing constraints.
 
 ## Machine-scoped Julia lockfiles
 
