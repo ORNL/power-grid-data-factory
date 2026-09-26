@@ -159,17 +159,20 @@ end
 function solve_pf_with_controls(pm_data, optimizer, enforce_q_limits, q_limit_tolerance)
     converted_buses = Int[]
     pm_out = solve_pf(pm_data, ACPPowerModel, optimizer)
+    solved_statuses = ("LOCALLY_SOLVED", "OPTIMAL", "ALMOST_LOCALLY_SOLVED", "ALMOST_OPTIMAL")
     if enforce_q_limits
         for _ in 1:length(pm_data["bus"])
             term = string(pm_out["termination_status"])
-            term in ("LOCALLY_SOLVED", "OPTIMAL", "ALMOST_LOCALLY_SOLVED", "ALMOST_OPTIMAL") || break
+            term in solved_statuses || break
             newly_converted = enforce_reactive_limits!(pm_data, pm_out["solution"]; tolerance=q_limit_tolerance)
             isempty(newly_converted) && break
             append!(converted_buses, newly_converted)
             pm_out = solve_model(pm_data, ACPPowerModel, optimizer, build_pf_with_pq_limits)
         end
     end
-    if haskey(pm_out, "solution")
+    term = string(pm_out["termination_status"])
+    solution = get(pm_out, "solution", Dict{String, Any}())
+    if term in solved_statuses && haskey(solution, "bus") && haskey(solution, "gen")
         normalize_reactive_dispatch!(pm_data, pm_out["solution"])
         update_data!(pm_data, pm_out["solution"])
         flows = calc_branch_flow_ac(pm_data)
@@ -194,8 +197,9 @@ function solve_pf_request(case_data, payload)
         tolerance = haskey(options, :tol) ? Float64(options[:tol]) : 1e-8
         enforce_q_limits = haskey(options, :enforce_q_limits) ? Bool(options[:enforce_q_limits]) : true
         q_limit_tolerance = haskey(options, :q_limit_tolerance) ? Float64(options[:q_limit_tolerance]) : 1e-8
+        print_level = haskey(options, :print_level) ? Int(options[:print_level]) : 0
         solver_attrs = Pair{String,Any}[
-            "print_level" => 0,
+            "print_level" => print_level,
             "sb" => "yes",
             "tol" => tolerance,
         ]

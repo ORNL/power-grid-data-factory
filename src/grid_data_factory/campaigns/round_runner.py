@@ -79,7 +79,7 @@ def _build_margins(case_data: dict[str, Any], raw_result: dict[str, Any]) -> dic
     bus_sol = solution.get("bus") or {}
     for i, bus in enumerate(case_data.get("buses", []), start=1):
         bid = str(bus.get("bus_id", i))
-        s = bus_sol.get(str(i), {})
+        s = bus_sol.get(bid) or bus_sol.get(str(i), {})
         vm = float(s.get("vm", bus.get("vm", 1.0)))
         vmin = float(bus.get("vmin", 0.95))
         vmax = float(bus.get("vmax", 1.05))

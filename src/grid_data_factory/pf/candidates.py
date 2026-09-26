@@ -126,7 +126,16 @@ def _sample_controls(
     bus_by_id = {str(bus["bus_id"]): bus for bus in case_data.get("buses", [])}
     for _ in range(max_attempts):
         direction = {str(gen["gen_id"]): rng.uniform(-1.0, 1.0) * (float(gen["pmax"]) - float(gen["pmin"])) for gen in generators}
-        voltage_direction = {str(gen["gen_id"]): rng.uniform(-1.0, 1.0) for gen in generators}
+        generator_bus_ids = {str(gen["bus_id"]) for gen in generators}
+        voltage_direction = {bus_id: rng.uniform(-1.0, 1.0) for bus_id in generator_bus_ids}
+        anchor_voltage_by_bus = {
+            bus_id: next(
+                anchor_controls.generators[str(gen["gen_id"])].vg
+                for gen in generators
+                if str(gen["bus_id"]) == bus_id
+            )
+            for bus_id in generator_bus_ids
+        }
         scale = max(target, 0.01)
         best: tuple[PFControls, float, dict[str, Any]] | None = None
         for _ in range(10):
@@ -134,9 +143,10 @@ def _sample_controls(
             voltages = {}
             for gen in generators:
                 gid = str(gen["gen_id"])
-                bus = bus_by_id[str(gen["bus_id"])]
+                bus_id = str(gen["bus_id"])
+                bus = bus_by_id[bus_id]
                 span = float(bus.get("vmax", 1.1)) - float(bus.get("vmin", 0.9))
-                proposed = anchor_controls.generators[gid].vg + scale * voltage_direction[gid] * span
+                proposed = anchor_voltage_by_bus[bus_id] + scale * voltage_direction[bus_id] * span
                 voltages[gid] = min(float(bus.get("vmax", 1.1)), max(float(bus.get("vmin", 0.9)), proposed))
             controls, metadata = balanced_redispatch(case_data, deltas, voltage_setpoints=voltages)
             distance = normalized_control_distance(case_data, anchor_controls, controls)
@@ -321,6 +331,7 @@ def generate_candidates(
             topology_schedule[index], topology_schedule[swap_index] = topology_schedule[swap_index], topology_schedule[index]
             topology_class = "intact"
         generated = None
+        last_error: ValueError | KeyError | None = None
         for attempt in range(max_attempts):
             anchor = anchors[(index + attempt) % len(anchors)]
             try:
@@ -387,8 +398,10 @@ def generate_candidates(
                 break
             except (ValueError, KeyError) as exc:
                 rejected[type(exc).__name__] += 1
+                last_error = exc
         if generated is None:
-            raise ValueError(f"Unable to fill {stratum}/{topology_class} after {max_attempts} attempts")
+            detail = f": {last_error}" if last_error is not None else ""
+            raise ValueError(f"Unable to fill {stratum}/{topology_class} after {max_attempts} attempts{detail}")
         if candidate_sink is not None:
             candidate_sink(generated)
         if retain_candidates:

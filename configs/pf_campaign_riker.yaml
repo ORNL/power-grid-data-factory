@@ -4,7 +4,7 @@ generation:
   candidate_count: 10000
   maximum_anchors: 10000
   seed: 20260925
-  intact_anchors_only: true
+  intact_anchors_only: false
   max_attempts_per_candidate: 50
 
 control_distance_strata:
