@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections import Counter
 from pathlib import Path
@@ -107,6 +108,9 @@ def main() -> None:
     boundary_rows = []
     coverage_rows = []
     outcome_counts: Counter[str] = Counter()
+    hsl_library = os.environ.get("IPOPT_HSL_LIBRARY", "").strip()
+    if not hsl_library or not Path(hsl_library).is_file():
+        raise SystemExit("IPOPT_HSL_LIBRARY must name a readable Coin-HSL library for PF fallback")
 
     adapter = PowerModelsAdapter(repo_root=repo_root)
     with SampleSink(runs_root, args.solver_id, task="pf") as sink, adapter.persistent_pf_session(
@@ -125,7 +129,11 @@ def main() -> None:
                     candidate["response_policy"],
                 )
                 candidate["response_metadata"] = response_metadata
-                result = solver.solve_pf(post_case, controls=controls.model_dump(mode="json"))
+                result = solver.solve_pf_with_fallback(
+                    post_case,
+                    controls=controls.model_dump(mode="json"),
+                    hsl_library=hsl_library,
+                )
                 validation = validate_pf_result(post_case, controls, result, validation_tolerances)
                 if candidate["control_distance_stratum"] == "exact_consistency":
                     consistency = validate_anchor_consistency(

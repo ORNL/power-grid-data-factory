@@ -167,6 +167,18 @@ Implemented workflow command:
 
 ## Build and machine-profile helpers
 
+- `scripts/install_hsl_ipopt.sh`
+  - Builds a licensed Coin-HSL archive with Meson against the Riker Julia LP64
+    OpenBLAS artifact and installs it under private `$HOME/.local/coinhsl`
+    storage.
+  - Generates `current/env.sh`, explicitly configures Ipopt's `hsllib`, and
+    validates both MA27 and MA57 before activating the version.
+- `configs/slurm/submit_riker_pf_smoke.sh`
+  - Submits the one-node PF smoke after validating the private Coin-HSL
+    activation. Each candidate tries default Ipopt, MA27, then MA57 as needed.
+- `configs/slurm/submit_riker_pf_large.sh`
+  - Submits the resumable multi-node PF campaign with the same HSL preflight and
+    worker environment propagation. Run only after the smoke completes.
 - `scripts/configure_exago_build.py`
   - Configures machine-scoped ExaGO build/install directories under `external/ExaGO/builds/<profile>/`.
   - Supports optional configure/build/install execution and emits resolved paths in JSON.

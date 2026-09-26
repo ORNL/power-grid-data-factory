@@ -195,8 +195,13 @@ publication use atomic temporary files.
 Run the one-node smoke first:
 
 ```bash
-configs/slurm/submit_riker_pf_smoke.sh
+WALLTIME=01:00:00 configs/slurm/submit_riker_pf_smoke.sh
 ```
+
+For each candidate, the scheduler tries default Ipopt, MA27, and MA57 in that
+order, stopping at the first converged result. Both launchers require the private
+activation at `$HOME/.local/coinhsl/current/env.sh` and propagate its `hsllib`
+and runtime library paths to every worker. See [the HSL guide](hsl_ma27_ma57_julia_stack.md).
 
 Submit the multi-node campaign after the smoke succeeds:
 
@@ -229,6 +234,9 @@ RESUME=1 CAMPAIGN_ID=riker_pf_complement_large_v1 \
 Resume reuses a complete candidate file and existing shards, skips done shard
 markers and already recorded candidate IDs, and exits immediately when a valid
 reduce marker already exists.
+
+Do not infer physical infeasibility from `LOCALLY_INFEASIBLE`; the campaign
+retains it in the `nonconvergent` outcome partition.
 
 ## Current Limitations
 

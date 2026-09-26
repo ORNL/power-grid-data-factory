@@ -2,37 +2,26 @@
 # install_hsl_ipopt.sh — Build CoinHSL from source and wire it into the project's
 # Julia/Ipopt stack so MA27 and MA57 are available to PowerModels solves.
 #
-# Usage:
-#   bash scripts/install_hsl_ipopt.sh /path/to/coinhsl-YYYY.MM.DD.tar.gz [ma27|ma57]
+# Usage on Andes:
+#   bash scripts/install_hsl_ipopt.sh [coinhsl-YYYY.MM.DD.tar.gz] [ma27|ma57]
 #
 # The HSL source tarball requires a free academic licence:
 #   https://licences.stfc.ac.uk/product/coin-hsl
 #
 # What this script does:
-#   1. Extracts and compiles libcoinhsl.so using gfortran/gcc
+#   1. Extracts and compiles libcoinhsl.so using Meson, gfortran, and gcc
 #   2. Installs to external/coinhsl/lib/  (project-local, stable path)
-#   3. Copies libcoinhsl.so alongside the active Julia Ipopt_jll libipopt.so
-#      so Ipopt finds it via dlopen without requiring LD_LIBRARY_PATH changes
-#   4. Generates external/coinhsl/env.sh  (source this to add the lib to the path)
-#   5. Runs a Julia smoke test to confirm the chosen solver loads correctly
+#   3. Creates libhsl.so, the default runtime name used by Ipopt
+#   4. Generates external/coinhsl/env.sh for PowerModels jobs
+#   5. Solves a nonlinear model with both MA27 and MA57
 #
-# After a successful run, set IPOPT_LINEAR_SOLVER=ma57 (or ma27) in the
-# environment before launching a campaign.  The project's run_opf.jl and
-# run_opf_expansion.jl read that variable automatically.
+# ExaGO is intentionally not modified by this installer.
 
 set -euo pipefail
 
 # ── arguments ─────────────────────────────────────────────────────────────────
-HSL_TARBALL="${1:-}"
+HSL_TARBALL="${1:-${HSL_TARBALL:-$HOME/coinhsl-2023.11.17.tar.gz}}"
 SOLVER="${2:-ma57}"   # ma27 or ma57
-
-if [[ -z "$HSL_TARBALL" ]]; then
-    echo "Usage: bash scripts/install_hsl_ipopt.sh /path/to/coinhsl-*.tar.gz [ma27|ma57]" >&2
-    echo ""
-    echo "  Obtain the CoinHSL tarball from:" >&2
-    echo "    https://licences.stfc.ac.uk/product/coin-hsl" >&2
-    exit 1
-fi
 
 if [[ ! -f "$HSL_TARBALL" ]]; then
     echo "ERROR: HSL tarball not found: $HSL_TARBALL" >&2
@@ -49,6 +38,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 INSTALL_DIR="$ROOT/external/coinhsl"
 BUILD_DIR="$ROOT/external/coinhsl_build"
+BUILD_TOOLS_DIR="$ROOT/external/coinhsl_build_tools"
 LIB_DIR="$INSTALL_DIR/lib"
 
 echo "================================================================"
@@ -65,9 +55,20 @@ check_tool() {
         exit 1
     fi
 }
+module load gcc/9.3.0 2>/dev/null || true
+module load julia/1.8.2 2>/dev/null || true
+
 check_tool gfortran
 check_tool gcc
-check_tool make
+
+BUILD_PYTHON=${HSL_BUILD_PYTHON:-$ROOT/.venv/bin/python}
+if [[ ! -x "$BUILD_PYTHON" ]]; then
+    BUILD_PYTHON=$(command -v python3.11 2>/dev/null || true)
+fi
+if [[ -z "$BUILD_PYTHON" || ! -x "$BUILD_PYTHON" ]]; then
+    echo "ERROR: Python 3.11 is required to install current Meson/Ninja build tools." >&2
+    exit 1
+fi
 
 GFORTRAN_VER=$(gfortran --version | head -1)
 echo "Using: $GFORTRAN_VER"
@@ -83,23 +84,36 @@ if [[ ! -x "$JULIA_BIN" ]]; then
     JULIA_BIN=""
 fi
 
-# ── resolve Julia's active libipopt.so directory ──────────────────────────────
-JULIA_IPOPT_LIBDIR=""
-if [[ -n "$JULIA_BIN" ]]; then
-    JULIA_PROJECT="${PGDF_JULIA_PROJECT_DIR:-$ROOT/julia/lockfiles/andes}"
-    JULIA_DEPOT="${JULIA_DEPOT_PATH:-$ROOT/.julia_depot_andes_profile}"
-    JULIA_IPOPT_LIBDIR=$(
-        JULIA_DEPOT_PATH="$JULIA_DEPOT" "$JULIA_BIN" \
-            --project="$JULIA_PROJECT" \
-            -e 'using Ipopt; println(dirname(Ipopt.libipopt))' 2>/dev/null || true
-    )
-    if [[ -n "$JULIA_IPOPT_LIBDIR" && -d "$JULIA_IPOPT_LIBDIR" ]]; then
-        echo "Julia Ipopt lib dir : $JULIA_IPOPT_LIBDIR"
-    else
-        echo "WARNING: could not determine Julia Ipopt lib dir; will rely on LD_LIBRARY_PATH" >&2
-        JULIA_IPOPT_LIBDIR=""
+JULIA_DEPOT="${JULIA_DEPOT_PATH:-$ROOT/.julia_depot_andes_profile}"
+OPENBLAS_LIB=""
+while IFS= read -r candidate; do
+    if nm -D "$candidate" 2>/dev/null | grep ' dgemm_$' >/dev/null; then
+        OPENBLAS_LIB="$candidate"
+        break
     fi
+done < <(find "$JULIA_DEPOT/artifacts" -path '*/lib/libopenblas.so' -type f -o -path '*/lib/libopenblas.so' -type l 2>/dev/null | sort)
+if [[ -z "$OPENBLAS_LIB" ]]; then
+    echo "ERROR: no installed Julia OpenBLAS artifact exposes the required LP64 BLAS ABI." >&2
+    echo "Instantiate the Andes Julia project before installing Coin-HSL." >&2
+    exit 1
 fi
+OPENBLAS_LIB=$(readlink -f "$OPENBLAS_LIB")
+OPENBLAS_LIB_DIR=$(dirname "$OPENBLAS_LIB")
+echo "Using OpenBLAS32: $OPENBLAS_LIB_DIR/libopenblas.so"
+
+# Keep build tooling isolated from the project's runtime virtual environment.
+BUILD_TOOLS_PYTHON_OK=0
+if [[ -x "$BUILD_TOOLS_DIR/bin/python" ]] && "$BUILD_TOOLS_DIR/bin/python" -c 'import sys; raise SystemExit(sys.version_info < (3, 9))'; then
+    BUILD_TOOLS_PYTHON_OK=1
+fi
+if [[ "$BUILD_TOOLS_PYTHON_OK" != "1" || ! -x "$BUILD_TOOLS_DIR/bin/meson" || ! -x "$BUILD_TOOLS_DIR/bin/ninja" ]]; then
+    echo "--- Installing Meson build tools into $BUILD_TOOLS_DIR ---"
+    rm -rf "$BUILD_TOOLS_DIR"
+    "$BUILD_PYTHON" -m venv "$BUILD_TOOLS_DIR"
+    "$BUILD_TOOLS_DIR/bin/python" -m pip install --upgrade meson ninja
+fi
+MESON="$BUILD_TOOLS_DIR/bin/meson"
+export PATH="$BUILD_TOOLS_DIR/bin:$PATH"
 
 # ── build ─────────────────────────────────────────────────────────────────────
 rm -rf "$BUILD_DIR"
@@ -117,36 +131,33 @@ if [[ -z "$HSL_SRC_DIR" ]]; then
 fi
 echo "Source dir: $HSL_SRC_DIR"
 
-if [[ ! -f "$HSL_SRC_DIR/configure" ]]; then
-    echo "ERROR: expected an autoconf configure script inside the HSL tarball." >&2
+if [[ ! -f "$HSL_SRC_DIR/meson.build" ]]; then
+    echo "ERROR: expected meson.build inside the Coin-HSL tarball." >&2
     echo "  Check that the tarball is the CoinHSL academic package from STFC." >&2
     exit 1
 fi
 
-mkdir -p "$LIB_DIR"
+rm -rf "$INSTALL_DIR"
 
 echo ""
 echo "--- Configuring ---"
-pushd "$HSL_SRC_DIR" >/dev/null
-./configure \
+CC=gcc FC=gfortran "$MESON" setup "$HSL_SRC_DIR/build" "$HSL_SRC_DIR" \
+    --buildtype=release \
     --prefix="$INSTALL_DIR" \
-    --enable-shared \
-    --disable-static \
-    CC=gcc \
-    F77=gfortran \
-    FC=gfortran \
-    CFLAGS="-O2 -fPIC -fno-common" \
-    FFLAGS="-O2 -fPIC -fno-common" \
-    FCFLAGS="-O2 -fPIC -fno-common"
+    --libdir=lib \
+    -Dmodules=false \
+    -Dlibblas=openblas \
+    -Dliblapack=openblas \
+    -Dlibblas_path="$OPENBLAS_LIB_DIR" \
+    -Dliblapack_path="$OPENBLAS_LIB_DIR"
 
 echo ""
 echo "--- Building ($(nproc) threads) ---"
-make -j"$(nproc)"
+"$MESON" compile -C "$HSL_SRC_DIR/build" -j "$(nproc)"
 
 echo ""
 echo "--- Installing to $INSTALL_DIR ---"
-make install
-popd >/dev/null
+"$MESON" install -C "$HSL_SRC_DIR/build"
 
 # ── verify the library was produced ──────────────────────────────────────────
 COINHSL_LIB="$LIB_DIR/libcoinhsl.so"
@@ -163,24 +174,19 @@ fi
 echo ""
 echo "Built: $COINHSL_LIB"
 
-# Create a canonical symlink libcoinhsl.so -> actual versioned name
+# Create canonical loader names. Ipopt searches for libhsl.so by default.
 CANONICAL="$LIB_DIR/libcoinhsl.so"
 if [[ ! -f "$CANONICAL" ]]; then
     ln -sf "$(basename "$COINHSL_LIB")" "$CANONICAL"
 fi
-
-# ── copy alongside Julia's libipopt.so ───────────────────────────────────────
-if [[ -n "$JULIA_IPOPT_LIBDIR" && -d "$JULIA_IPOPT_LIBDIR" ]]; then
-    echo "Copying libcoinhsl.so -> $JULIA_IPOPT_LIBDIR/"
-    cp -f "$CANONICAL" "$JULIA_IPOPT_LIBDIR/libcoinhsl.so"
-fi
+ln -sfn "$(basename "$CANONICAL")" "$LIB_DIR/libhsl.so"
 
 # ── generate env activation snippet ──────────────────────────────────────────
 cat > "$INSTALL_DIR/env.sh" <<EOF
-# Source this file to make CoinHSL/MA27/MA57 visible to Ipopt at runtime.
+# Source this file only for Julia PowerModels jobs.
 # Generated by scripts/install_hsl_ipopt.sh
-export LD_LIBRARY_PATH="$LIB_DIR\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
-export IPOPT_LINEAR_SOLVER="$SOLVER"
+export LD_LIBRARY_PATH="$LIB_DIR:$OPENBLAS_LIB_DIR\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+export IPOPT_LINEAR_SOLVER="\${POWER_MODELS_LINEAR_SOLVER:-$SOLVER}"
 EOF
 
 echo ""
@@ -199,42 +205,49 @@ if [[ -z "$JULIA_BIN" ]]; then
     echo ""
     echo "Run manually after sourcing the env:"
     echo "  source $INSTALL_DIR/env.sh"
-    echo "  $JULIA_BIN --project=\$JULIA_PROJECT -e '"
-    echo "    using JuMP, Ipopt"
-    echo "    m = Model(Ipopt.Optimizer)"
-    echo "    set_optimizer_attribute(m, \"print_level\", 0)"
-    echo "    set_optimizer_attribute(m, \"linear_solver\", \"$SOLVER\")"
-    echo "    println(\"${SOLVER^^}_SMOKE_OK\")'"
+    echo "  rerun this installer with JULIA_BIN set to an executable Julia path"
     exit 0
 fi
 
 echo ""
-echo "--- Julia smoke test ($SOLVER) ---"
+echo "--- Julia smoke tests (MA27 and MA57) ---"
 JULIA_PROJECT="${PGDF_JULIA_PROJECT_DIR:-$ROOT/julia/lockfiles/andes}"
-JULIA_DEPOT="${JULIA_DEPOT_PATH:-$ROOT/.julia_depot_andes_profile}"
-SMOKE_RESULT=$(
-    LD_LIBRARY_PATH="$LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-    JULIA_DEPOT_PATH="$JULIA_DEPOT" \
-        "$JULIA_BIN" \
-            --project="$JULIA_PROJECT" \
-            -e "using JuMP, Ipopt
-m = Model(Ipopt.Optimizer)
-set_optimizer_attribute(m, \"print_level\", 0)
-set_optimizer_attribute(m, \"linear_solver\", \"$SOLVER\")
-println(\"${SOLVER^^}_SMOKE_OK\")" 2>&1
-)
-
-if echo "$SMOKE_RESULT" | grep -q "${SOLVER^^}_SMOKE_OK"; then
-    echo "PASSED: $SOLVER loaded successfully."
-else
-    echo "FAILED: smoke test did not confirm $SOLVER." >&2
-    echo "--- Julia output ---" >&2
-    echo "$SMOKE_RESULT" >&2
-    echo "" >&2
-    echo "The library was installed to $LIB_DIR but Ipopt may not be finding it." >&2
-    echo "Ensure LD_LIBRARY_PATH is set and/or libcoinhsl.so is in the Ipopt lib dir." >&2
-    exit 1
-fi
+for smoke_solver in ma27 ma57; do
+    SMOKE_RESULT=$(
+        LD_LIBRARY_PATH="$LIB_DIR:$OPENBLAS_LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+        JULIA_DEPOT_PATH="$JULIA_DEPOT" \
+            "$JULIA_BIN" \
+                --project="$JULIA_PROJECT" \
+                -e "using Ipopt
+eval_f(x) = (x[1] - 1.0)^2
+eval_g(x, g) = nothing
+eval_grad_f(x, grad) = (grad[1] = 2.0 * (x[1] - 1.0); nothing)
+eval_jac_g(x, rows, cols, values) = nothing
+function eval_h(x, rows, cols, obj_factor, lambda, values)
+    if values === nothing
+        rows[1] = 1
+        cols[1] = 1
+    else
+        values[1] = 2.0 * obj_factor
+    end
+end
+prob = Ipopt.CreateIpoptProblem(1, [-10.0], [10.0], 0, Float64[], Float64[], 0, 1, eval_f, eval_g, eval_grad_f, eval_jac_g, eval_h)
+prob.x = [2.0]
+Ipopt.AddIpoptIntOption(prob, \"print_level\", 0)
+Ipopt.AddIpoptStrOption(prob, \"linear_solver\", \"$smoke_solver\")
+status = Ipopt.IpoptSolve(prob)
+status == 0 || error(\"$smoke_solver solve failed with status \" * string(status))
+abs(prob.x[1] - 1.0) < 1e-6 || error(\"$smoke_solver returned x=\" * string(prob.x[1]))
+println(\"${smoke_solver^^}_SMOKE_OK\")" 2>&1
+    )
+    if echo "$SMOKE_RESULT" | grep -q "${smoke_solver^^}_SMOKE_OK"; then
+        echo "PASSED: $smoke_solver solved the nonlinear smoke model."
+    else
+        echo "FAILED: smoke test did not confirm $smoke_solver." >&2
+        echo "$SMOKE_RESULT" >&2
+        exit 1
+    fi
+done
 
 echo ""
 echo "================================================================"
@@ -246,9 +259,10 @@ echo ""
 echo "  To activate in your shell:"
 echo "    source $INSTALL_DIR/env.sh"
 echo ""
-echo "  To activate in Slurm sbatch:"
-echo "    source \$ROOT/external/coinhsl/env.sh"
+echo "  To activate in an Andes PowerModels job:"
+echo "    sbatch --export=ALL,POWER_MODELS_LINEAR_SOLVER=$SOLVER ..."
 echo ""
 echo "  The project's run_opf.jl reads IPOPT_LINEAR_SOLVER from the"
 echo "  environment and passes it to Ipopt automatically."
+echo "  ExaGO configuration is unchanged."
 echo "================================================================"

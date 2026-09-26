@@ -66,8 +66,11 @@ function solve_scopf_request(case_data, payload)
             "tol" => haskey(options, :tol) ? Float64(options[:tol]) : 1e-8,
         ]
         haskey(options, :max_iter) && push!(solver_attrs, "max_iter" => Int(options[:max_iter]))
-        let linear_solver = strip(get(ENV, "IPOPT_LINEAR_SOLVER", ""))
+        let linear_solver = String(strip(get(ENV, "IPOPT_LINEAR_SOLVER", "")))
             !isempty(linear_solver) && push!(solver_attrs, "linear_solver" => linear_solver)
+        end
+        let hsl_library = String(strip(get(ENV, "IPOPT_HSL_LIBRARY", "")))
+            !isempty(hsl_library) && push!(solver_attrs, "hsllib" => hsl_library)
         end
         optimizer = optimizer_with_attributes(Ipopt.Optimizer, solver_attrs...)
         pm_out = run_c1_scopf(multinetwork, ACPPowerModel, optimizer)

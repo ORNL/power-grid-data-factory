@@ -203,8 +203,11 @@ function solve_pf_request(case_data, payload)
             "sb" => "yes",
             "tol" => tolerance,
         ]
-        let linear_solver = strip(get(ENV, "IPOPT_LINEAR_SOLVER", ""))
+        let linear_solver = haskey(options, :linear_solver) ? String(strip(options[:linear_solver])) : String(strip(get(ENV, "IPOPT_LINEAR_SOLVER", "")))
             !isempty(linear_solver) && push!(solver_attrs, "linear_solver" => linear_solver)
+        end
+        let hsl_library = haskey(options, :hsl_library) ? String(strip(options[:hsl_library])) : String(strip(get(ENV, "IPOPT_HSL_LIBRARY", "")))
+            !isempty(hsl_library) && push!(solver_attrs, "hsllib" => hsl_library)
         end
         optimizer = optimizer_with_attributes(Ipopt.Optimizer, solver_attrs...)
         pm_out, converted_buses = solve_pf_with_controls(pm_data, optimizer, enforce_q_limits, q_limit_tolerance)

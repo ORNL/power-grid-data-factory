@@ -82,11 +82,45 @@ class PersistentPowerModelsSession:
         timeout_s: float | None = None,
         controls: dict | None = None,
         contingency: dict | None = None,
+        options: dict | None = None,
     ) -> dict:
-        payload = {"controls": controls or {}}
+        solver_options = dict(self.options)
+        solver_options.update(options or {})
+        payload = {"controls": controls or {}, "options": solver_options}
         if contingency:
             payload["contingency"] = contingency
         return self._solve(case, "pf", timeout_s, payload)
+
+    def solve_pf_with_fallback(
+        self,
+        case: dict,
+        *,
+        controls: dict | None = None,
+        hsl_library: str,
+        timeout_s: float | None = None,
+    ) -> dict:
+        attempts = []
+        for linear_solver in ("default", "ma27", "ma57"):
+            options = {
+                "linear_solver": "" if linear_solver == "default" else linear_solver,
+                "hsl_library": "" if linear_solver == "default" else hsl_library,
+            }
+            result = self.solve_pf(case, timeout_s=timeout_s, controls=controls, options=options)
+            attempts.append(
+                {
+                    "linear_solver": linear_solver,
+                    "success": bool(result.get("success")),
+                    "termination_status": result.get("termination_status", "unknown"),
+                    "solve_time": result.get("solve_time"),
+                }
+            )
+            if result.get("success"):
+                break
+
+        result["linear_solver"] = attempts[-1]["linear_solver"]
+        result["solver_attempt_count"] = len(attempts)
+        result["solver_attempts"] = attempts
+        return result
 
     def _solve(self, case: dict, task: str, timeout_s: float | None = None, payload: dict | None = None) -> dict:
         start_t = time.perf_counter()
