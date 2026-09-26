@@ -4,12 +4,12 @@ Coin-HSL is licensed software. Keep its archive, source, build tree, and shared
 libraries in private user storage. Never commit or redistribute them through
 this repository.
 
-## Validated Riker Stack
+## Validated Private Stacks
 
-The validated runtime is Julia 1.10.10 with PowerModels 0.21.5 and Ipopt 1.16.0.
-Coin-HSL 2023.11.17 was built with Meson/Ninja and GCC/GFortran 14 against the
-LP64 OpenBLAS artifact in `.julia_depot_riker`. Both MA27 and MA57 solve a real
-PowerModels AC model successfully.
+Coin-HSL installations are machine-scoped so incompatible compiler runtimes are
+never mixed. Andes uses `$HOME/.local/coinhsl/andes/current`; Riker uses
+`$HOME/.local/coinhsl/riker/current`. Both MA27 and MA57 have been validated
+with their corresponding Julia and compiler stacks.
 
 Ipopt requires both settings:
 
@@ -32,15 +32,15 @@ bash scripts/install_hsl_ipopt.sh \
 The installer:
 
 - refuses to overwrite an existing version;
-- installs under `$HOME/.local/coinhsl/<version>`;
-- uses the Riker Julia environment's LP64 OpenBLAS;
+- installs under `$HOME/.local/coinhsl/andes/<version>` by default;
+- uses the Andes Julia environment's LP64 OpenBLAS;
 - validates both MA27 and MA57 with Ipopt;
-- creates `$HOME/.local/coinhsl/current` only after validation.
+- creates `$HOME/.local/coinhsl/andes/current` only after validation.
 
 Activate it with:
 
 ```bash
-source "$HOME/.local/coinhsl/current/env.sh"
+source "$HOME/.local/coinhsl/andes/current/env.sh"
 ```
 
 Select MA27 instead of the default MA57 with:
@@ -55,7 +55,7 @@ Confirm the activation and licensed library without printing or copying its
 contents:
 
 ```bash
-source "$HOME/.local/coinhsl/current/env.sh"
+source "$HOME/.local/coinhsl/andes/current/env.sh"
 test -r "$IPOPT_HSL_LIBRARY"
 nm -D "$IPOPT_HSL_LIBRARY" | grep ' ma27ad_'
 nm -D "$IPOPT_HSL_LIBRARY" | grep ' ma57ad_'

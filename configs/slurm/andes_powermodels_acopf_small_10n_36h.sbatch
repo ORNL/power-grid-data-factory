@@ -17,6 +17,17 @@ EXEC_SCRIPT=$ROOT/scripts/run_campaign_ac_opf_round.py
 
 module load julia/1.8.2 2>/dev/null || true
 
+POWER_MODELS_LINEAR_SOLVER=${POWER_MODELS_LINEAR_SOLVER:-}
+if [[ -n "$POWER_MODELS_LINEAR_SOLVER" ]]; then
+  case "$POWER_MODELS_LINEAR_SOLVER" in ma27|ma57) ;; *) echo "Invalid POWER_MODELS_LINEAR_SOLVER=$POWER_MODELS_LINEAR_SOLVER" >&2; exit 2 ;; esac
+  COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/andes/current/env.sh}
+  [[ -r "$COINHSL_ENV" ]] || { echo "Missing private Coin-HSL activation: $COINHSL_ENV" >&2; exit 2; }
+  source "$COINHSL_ENV"
+  [[ -r "${IPOPT_HSL_LIBRARY:-}" ]] || { echo "Missing Coin-HSL library: ${IPOPT_HSL_LIBRARY:-unset}" >&2; exit 2; }
+  case "$(readlink -f "$IPOPT_HSL_LIBRARY")" in "$ROOT"|"$ROOT"/*) echo "Coin-HSL must not be loaded from the shared repository: $IPOPT_HSL_LIBRARY" >&2; exit 2 ;; esac
+  export IPOPT_LINEAR_SOLVER="$POWER_MODELS_LINEAR_SOLVER"
+fi
+
 # Campaign-driven scheduler parameters.
 CAMPAIGN_ID=${CAMPAIGN_ID:-pilot_pglib_14_57_118}
 ROUND_INDEX=${ROUND_INDEX:-0}

@@ -21,6 +21,17 @@ export PGDF_JULIA_SYSIMAGE=${PGDF_JULIA_SYSIMAGE:-$ROOT/julia/sysimages/andes/pg
 export JULIA_DEPOT_PATH=${JULIA_DEPOT_PATH:-$ROOT/.julia_depot_andes_profile}
 unset PYTHONUSERBASE PYTHONNOUSERSITE
 
+POWER_MODELS_LINEAR_SOLVER=${POWER_MODELS_LINEAR_SOLVER:-}
+if [[ -n "$POWER_MODELS_LINEAR_SOLVER" ]]; then
+  case "$POWER_MODELS_LINEAR_SOLVER" in ma27|ma57) ;; *) echo "Invalid POWER_MODELS_LINEAR_SOLVER=$POWER_MODELS_LINEAR_SOLVER" >&2; exit 2 ;; esac
+  COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/andes/current/env.sh}
+  [[ -r "$COINHSL_ENV" ]] || { echo "Missing private Coin-HSL activation: $COINHSL_ENV" >&2; exit 2; }
+  source "$COINHSL_ENV"
+  [[ -r "${IPOPT_HSL_LIBRARY:-}" ]] || { echo "Missing Coin-HSL library: ${IPOPT_HSL_LIBRARY:-unset}" >&2; exit 2; }
+  case "$(readlink -f "$IPOPT_HSL_LIBRARY")" in "$ROOT"|"$ROOT"/*) echo "Coin-HSL must not be loaded from the shared repository: $IPOPT_HSL_LIBRARY" >&2; exit 2 ;; esac
+  export IPOPT_LINEAR_SOLVER="$POWER_MODELS_LINEAR_SOLVER"
+fi
+
 CANDIDATES_JSONL=${CANDIDATES_JSONL:-data/outputs/campaigns/ultrascale_3b/round_summaries/round_000_selected_candidates.jsonl}
 PARTIAL_RUNS_TREE=${PARTIAL_RUNS_TREE:-data/outputs/runs_3b/mapreduce_round_000}
 SELECTION_DIR=${SELECTION_DIR:-data/outputs/benchmarks/ultrascale_3b_grid_readiness/selection}

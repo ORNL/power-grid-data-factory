@@ -2,6 +2,23 @@
 
 Place cluster-specific submission templates and resource presets here.
 
+## PowerModels MA27/MA57
+
+Install the licensed Coin-HSL archive once in private home storage. The Andes
+PowerModels map-reduce scheduler then tries default Ipopt, MA27, and MA57 in
+that order:
+
+```bash
+bash scripts/install_hsl_ipopt.sh /ccs/home/mlupopa/coinhsl-2023.11.17.tar.gz ma57
+sbatch configs/slurm/andes_powermodels_acopf_mapreduce_10n_36h.sbatch
+```
+
+The scheduler sources `$HOME/.local/coinhsl/andes/current/env.sh`; it rejects HSL
+libraries under the shared repository. Set `POWER_MODELS_LINEAR_SOLVER=ma27` or
+`ma57` to force one backend, or `POWER_MODELS_LINEAR_SOLVER_FALLBACKS=` to use
+only the standard solver. This environment is not sourced by ExaGO templates. See
+`docs/hsl_ma27_ma57_julia_stack.md` for installation and validation details.
+
 ## MPI Diversity Analysis
 
 `andes_diversity_analysis_mpi.sbatch` parallelizes the read-only diversity audit
