@@ -42,10 +42,8 @@ ARCHIVE_DIR=${ARCHIVE_DIR:-data/outputs/archives}
 case "$ARCHIVE_DIR" in /*) : ;; *) ARCHIVE_DIR="$ROOT/$ARCHIVE_DIR" ;; esac
 ARCHIVE="$ARCHIVE_DIR/round_${ROUND_PAD}_raw.tar.zst"
 SHARD_LIST="$ARCHIVE_DIR/round_${ROUND_PAD}_shard_campaign_dirs.txt"
-# Sibling tarball holding the campaign's curated reduce outputs (deduped ledgers +
-# reduce report + config). reduce_campaign_shards.py writes these at the campaign
-# ROOT, OUTSIDE the runs tree, so they are NOT in the raw tarball; folding them here
-# keeps data/outputs/archives self-contained.
+# Sibling tarball holding campaign-level provenance and legacy cumulative ledgers.
+# Authoritative per-shard ledgers are included in the raw archive above.
 ARCHIVE_META="$ARCHIVE_DIR/round_${ROUND_PAD}_campaign_meta.tar.zst"
 CAMPAIGN_META_LIST="$ARCHIVE_DIR/round_${ROUND_PAD}_campaign_meta_files.txt"
 
@@ -127,10 +125,9 @@ sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
 echo "[$(date -u +%FT%TZ)] verification passed"
 
 # --- Campaign-level curated outputs -> sibling self-contained metadata tarball ---
-# The raw tarball above is the labeled sample corpus. reduce_campaign_shards.py
-# ALSO writes deduped ledgers + a reduce report at the campaign ROOT, which live
-# OUTSIDE the runs tree and so are absent from the raw tarball. Fold those + config
-# into round_${PAD}_campaign_meta.tar.zst. The large REGENERABLE intermediates
+# The raw tarball above contains the labeled sample corpus and authoritative
+# per-shard ledgers. Fold the reduce report and config into
+# round_${PAD}_campaign_meta.tar.zst. The large REGENERABLE intermediates
 # (round0_screened_candidates / seed_* / round_${PAD}_selected_candidates /
 # round_${PAD}_shards) are deterministic from seed+config and are EXCLUDED.
 CAMP_DIR="data/outputs/campaigns/$CAMPAIGN_ID"
@@ -143,9 +140,10 @@ for f in \
   "$CAMP_DIR/README.md"; do
   [[ -s "$f" ]] && printf '%s\n' "$f" >> "$CAMPAIGN_META_LIST"
 done
-# Campaign-level reduce ledgers ACCUMULATE across rounds (reduce appends), so a
-# round-N tarball would carry rows for rounds 0..N. To avoid re-tarring the growing
-# ledger on every round, include it only on the FINAL round (auto) or when forced.
+# Legacy campaign-level ledgers accumulated across rounds. To avoid re-tarring
+# them, include them only on the final legacy round or when explicitly forced.
+# Manifest-mode reducers preserve authoritative ledgers in the raw archive and
+# always skip these obsolete cumulative files when INCLUDE_LEDGERS=auto.
 # INCLUDE_LEDGERS=1 force include, =0 skip, =auto (default) include iff final round.
 # TOTAL_ROUNDS>0 marks the final round as ROUND_INDEX==TOTAL_ROUNDS-1; unset/0 means
 # a single/last round -> ledgers included. On the final round the ledger snapshot is
@@ -156,7 +154,10 @@ _include_ledgers=0
 if [[ "$INCLUDE_LEDGERS" == "1" ]]; then
   _include_ledgers=1
 elif [[ "$INCLUDE_LEDGERS" == "auto" ]]; then
-  if [[ "$TOTAL_ROUNDS" -le 0 ]] || (( ROUND_INDEX >= TOTAL_ROUNDS - 1 )); then
+  REDUCE_MARKER="$CAMP_DIR/round_summaries/round_${ROUND_PAD}_mapreduce_reduce_report.json"
+  if [[ -s "$REDUCE_MARKER" ]] && grep -q '"mode": "authoritative_shard_manifest"' "$REDUCE_MARKER"; then
+    _include_ledgers=0
+  elif [[ "$TOTAL_ROUNDS" -le 0 ]] || (( ROUND_INDEX >= TOTAL_ROUNDS - 1 )); then
     _include_ledgers=1
   fi
 fi

@@ -477,6 +477,21 @@ out of wall clock, via two signal handlers:
 Handlers are restored on `close()`, and installation is silently skipped when
 the sink is created off the main thread.
 
+### Manifest-based deterministic reduction
+
+The AC campaign reducer treats per-shard ledgers as authoritative and publishes
+a sorted round manifest instead of copying every row into cumulative campaign
+JSONL files. It checkpoints validation every 128 shards and writes the reduce
+marker atomically after all shard reports are present and valid. A retry resumes
+from the checkpoint, revalidating at most 127 shards, and cannot duplicate ledger
+rows because it never mutates the source ledgers.
+
+The marker's `ledger_fragments` field records every authoritative shard ledger.
+Campaign diversity analysis reads the same shard ledgers directly. Legacy
+campaign-level cumulative JSONL files may remain for old rounds, but reducers do
+not append to them because interrupted appends cannot be made transactional at
+this scale.
+
 ### Clean-environment job submission
 
 The compute-node interpreter is `/usr/bin/python3.11`, and `PyYAML` lives in the
@@ -548,8 +563,20 @@ PYTHONPATH=src /usr/bin/python3.11 scripts/reduce_campaign_shards.py \
   --shard-campaign-ids-file "$SHARD_IDS_FILE"
 ```
 
-Add `--force` to re-run a reduce that already has a marker (e.g. after fixing a
-bug; the ledger append is idempotent with dedup).
+For production rounds, use the one-node reduce-only job instead of reserving the
+full map allocation:
+
+```bash
+sbatch --export=ALL,CAMPAIGN_ID=ultrascale_3b,ROUND_INDEX=5,CONFIG=configs/campaign_ultrascale_3b.yaml \
+  configs/slurm/andes_campaign_reduce.sbatch
+```
+
+The job reads existing shard reports and manifests only. It does not rerun maps
+or modify shard data.
+
+Add `--force` to rebuild a successful reduce marker from the authoritative shard
+reports and ledgers. An unsuccessful marker is replaced automatically while the
+reducer resumes its checkpoint.
 
 ### 4. Verify success
 
