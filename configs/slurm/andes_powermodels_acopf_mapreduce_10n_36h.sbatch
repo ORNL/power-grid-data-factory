@@ -48,18 +48,24 @@ export JULIA_DEPOT_PATH
 # POWER_MODELS_LINEAR_SOLVER to force one backend and disable the chain.
 POWER_MODELS_LINEAR_SOLVER=${POWER_MODELS_LINEAR_SOLVER:-}
 POWER_MODELS_LINEAR_SOLVER_FALLBACKS=${POWER_MODELS_LINEAR_SOLVER_FALLBACKS-ma27,ma57}
+COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/andes/current/env.sh}
 if [[ -n "$POWER_MODELS_LINEAR_SOLVER" ]]; then
   case "$POWER_MODELS_LINEAR_SOLVER" in ma27|ma57) ;; *) echo "Invalid POWER_MODELS_LINEAR_SOLVER=$POWER_MODELS_LINEAR_SOLVER" >&2; exit 2 ;; esac
-  [[ -f "$ROOT/external/coinhsl/env.sh" ]] || { echo "Coin-HSL is not installed; run scripts/install_hsl_ipopt.sh" >&2; exit 2; }
-  source "$ROOT/external/coinhsl/env.sh"
-  export IPOPT_LINEAR_SOLVER="$POWER_MODELS_LINEAR_SOLVER"
 elif [[ -n "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS" ]]; then
   IFS=',' read -r -a _fallback_solvers <<< "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS"
   for _solver in "${_fallback_solvers[@]}"; do
     case "${_solver//[[:space:]]/}" in ma27|ma57) ;; *) echo "Invalid PowerModels fallback solver: $_solver" >&2; exit 2 ;; esac
   done
-  [[ -f "$ROOT/external/coinhsl/env.sh" ]] || { echo "Coin-HSL is not installed; run scripts/install_hsl_ipopt.sh" >&2; exit 2; }
-  source "$ROOT/external/coinhsl/env.sh"
+fi
+if [[ -n "$POWER_MODELS_LINEAR_SOLVER" || -n "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS" ]]; then
+  [[ -r "$COINHSL_ENV" ]] || { echo "Missing private Coin-HSL activation: $COINHSL_ENV" >&2; exit 2; }
+  source "$COINHSL_ENV"
+  [[ -r "${IPOPT_HSL_LIBRARY:-}" ]] || { echo "Missing Coin-HSL library: ${IPOPT_HSL_LIBRARY:-unset}" >&2; exit 2; }
+  case "$(readlink -f "$IPOPT_HSL_LIBRARY")" in "$ROOT"|"$ROOT"/*) echo "Coin-HSL must not be loaded from the shared repository: $IPOPT_HSL_LIBRARY" >&2; exit 2 ;; esac
+fi
+if [[ -n "$POWER_MODELS_LINEAR_SOLVER" ]]; then
+  export IPOPT_LINEAR_SOLVER="$POWER_MODELS_LINEAR_SOLVER"
+elif [[ -n "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS" ]]; then
   unset IPOPT_LINEAR_SOLVER
 fi
 
