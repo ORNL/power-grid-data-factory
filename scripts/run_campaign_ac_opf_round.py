@@ -82,6 +82,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--runs-root", default="data/outputs/runs")
     p.add_argument("--solver-id", default="powermodels_ac_opf_ipopt_campaign")
     p.add_argument("--timeout-s", type=float, default=1200.0)
+    p.add_argument(
+        "--linear-solver-fallbacks",
+        default="",
+        help="Comma-separated Ipopt linear solvers attempted after the default solver fails.",
+    )
     p.add_argument("--execution-policy", default="", help="Optional per-case enable/timeout YAML policy.")
     p.add_argument("--max-candidates", type=int, default=0)
     p.add_argument("--continue-on-error", action="store_true")
@@ -129,7 +134,10 @@ def main() -> None:
 
     # Reuse one Julia process and one output handle for the whole shard.
     sink = SampleSink(runs_root, args.solver_id)
-    solver = adapter.persistent_ac_opf_session(options={"timeout_s": args.timeout_s})
+    fallback_solvers = [solver.strip() for solver in args.linear_solver_fallbacks.split(",") if solver.strip()]
+    solver = adapter.persistent_ac_opf_session(
+        options={"timeout_s": args.timeout_s, "linear_solver_fallbacks": fallback_solvers}
+    )
 
     for cand in candidates:
         case_id = str(cand.get("case_id"))
