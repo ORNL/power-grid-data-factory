@@ -70,6 +70,14 @@ class FirstIncompleteTests(unittest.TestCase):
                 _write_marker(Path(tmp), "camp", r, ok=True)
             self.assertIsNone(_DRV.first_incomplete_round(Path(tmp), "camp", 3))
 
+    def test_pf_marker_template_advances_to_next_round(self):
+        template = "round_{round:03d}_pf_reduce_report.json"
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = _DRV.reduce_marker_path(Path(tmp), "camp", 0, template)
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text(json.dumps({"ok": True}), encoding="utf-8")
+            self.assertEqual(_DRV.first_incomplete_round(Path(tmp), "camp", 3, template), 1)
+
 
 class BudgetTests(unittest.TestCase):
     def test_total_budget_splits_and_sums(self):

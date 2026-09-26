@@ -72,8 +72,9 @@ Before a Riker PF production submission:
 - [ ] `PASS` smoke outputs include expected outcome partitions and the PF
   coverage, diversity, security-boundary, and active-constraint ledgers.
 - [ ] `PASS` a same-parameter `RESUME=1` smoke skips completed work.
-- [ ] `PASS` `COUNT`, node count, shard count, walltime, campaign ID, and runs
-  root are reviewed before `configs/slurm/submit_riker_pf_large.sh`.
+- [ ] `PASS` round count, `COUNT` per round, node count, shard count, walltime,
+  campaign ID, runs root, and `MAX_CYCLES` are reviewed before
+  `configs/slurm/submit_riker_pf_large.sh`.
 
 See [Riker Complementary PF Campaign](riker_pf_campaign.md) for commands and
 the implemented scientific policy.

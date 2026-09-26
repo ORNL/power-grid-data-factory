@@ -177,8 +177,12 @@ Implemented workflow command:
   - Submits the one-node PF smoke after validating the private Coin-HSL
     activation. Each candidate tries default Ipopt, MA27, then MA57 as needed.
 - `configs/slurm/submit_riker_pf_large.sh`
-  - Submits the resumable multi-node PF campaign with the same HSL preflight and
-    worker environment propagation. Run only after the smoke completes.
+  - Starts the Riker PF campaign supervisor after the HSL preflight. Run only
+    after the smoke completes.
+- `configs/slurm/riker_pf_campaign_supervisor.sbatch`
+  - Submits the first incomplete PF round with resume enabled, then resubmits
+    itself `afterany` that job. It resumes timeouts, advances after successful
+    reduction, and stops after all configured rounds complete.
 - `scripts/configure_exago_build.py`
   - Configures machine-scoped ExaGO build/install directories under `external/ExaGO/builds/<profile>/`.
   - Supports optional configure/build/install execution and emits resolved paths in JSON.

@@ -44,6 +44,11 @@ def parse_args() -> argparse.Namespace:
         help="Path to the per-round map/reduce sbatch script.",
     )
     p.add_argument("--config", default="configs/campaign_default.yaml")
+    p.add_argument(
+        "--reduce-marker-template",
+        default="round_{round:03d}_mapreduce_reduce_report.json",
+        help="Reduce-marker filename template under round_summaries; must contain {round}.",
+    )
     p.add_argument("--total-budget", type=int, default=0, help="If >0, split across rounds via the budget schedule.")
     p.add_argument("--budget", type=int, default=0, help="Per-round budget when --total-budget is not used.")
     p.add_argument("--budget-schedule", default="constant", choices=("constant", "linear", "geometric"))
@@ -79,12 +84,28 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def reduce_marker_path(repo_root: Path, campaign_id: str, round_index: int) -> Path:
-    return paths.campaign_root(repo_root, campaign_id) / "round_summaries" / f"round_{round_index:03d}_mapreduce_reduce_report.json"
+def reduce_marker_path(
+    repo_root: Path,
+    campaign_id: str,
+    round_index: int,
+    marker_template: str = "round_{round:03d}_mapreduce_reduce_report.json",
+) -> Path:
+    try:
+        marker_name = marker_template.format(round=round_index)
+    except (KeyError, ValueError) as exc:
+        raise ValueError(f"invalid reduce-marker template: {marker_template}") from exc
+    if Path(marker_name).name != marker_name:
+        raise ValueError("reduce-marker template must produce a filename")
+    return paths.campaign_root(repo_root, campaign_id) / "round_summaries" / marker_name
 
 
-def round_complete(repo_root: Path, campaign_id: str, round_index: int) -> bool:
-    marker = reduce_marker_path(repo_root, campaign_id, round_index)
+def round_complete(
+    repo_root: Path,
+    campaign_id: str,
+    round_index: int,
+    marker_template: str = "round_{round:03d}_mapreduce_reduce_report.json",
+) -> bool:
+    marker = reduce_marker_path(repo_root, campaign_id, round_index, marker_template)
     if not marker.exists():
         return False
     try:
@@ -93,9 +114,14 @@ def round_complete(repo_root: Path, campaign_id: str, round_index: int) -> bool:
         return False
 
 
-def first_incomplete_round(repo_root: Path, campaign_id: str, rounds: int) -> int | None:
+def first_incomplete_round(
+    repo_root: Path,
+    campaign_id: str,
+    rounds: int,
+    marker_template: str = "round_{round:03d}_mapreduce_reduce_report.json",
+) -> int | None:
     for r in range(rounds):
-        if not round_complete(repo_root, campaign_id, r):
+        if not round_complete(repo_root, campaign_id, r, marker_template):
             return r
     return None
 
@@ -187,7 +213,7 @@ def main() -> None:
     budgets = compute_round_budgets(args.total_budget, args.budget, args.rounds, args.budget_schedule, args.budget_ratio)
     resource_flags = build_resource_flags(args.nodes, args.ntasks_per_node, args.cpus_per_task, args.time)
 
-    start = first_incomplete_round(repo_root, args.campaign_id, args.rounds)
+    start = first_incomplete_round(repo_root, args.campaign_id, args.rounds, args.reduce_marker_template)
     if start is None:
         done = {"campaign_id": args.campaign_id, "rounds": args.rounds, "status": "all_rounds_complete"}
         if args.emit_plan:
@@ -195,7 +221,11 @@ def main() -> None:
         print(json.dumps(done, indent=2))
         return
 
-    completed = [r for r in range(args.rounds) if round_complete(repo_root, args.campaign_id, r)]
+    completed = [
+        r
+        for r in range(args.rounds)
+        if round_complete(repo_root, args.campaign_id, r, args.reduce_marker_template)
+    ]
     print(f"campaign={args.campaign_id} rounds={args.rounds} completed={completed} furthest_incomplete={start}")
 
     targets = range(start, args.rounds) if args.chain else [start]
