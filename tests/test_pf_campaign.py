@@ -13,7 +13,7 @@ from _bootstrap import REPO_ROOT  # noqa: F401
 
 from grid_data_factory.campaigns.round_runner import SampleSink, _sample_record
 from grid_data_factory.pf.anchors import build_anchor_index, topology_hash
-from grid_data_factory.pf.candidates import _sample_stratified_contingency, allocate_quota
+from grid_data_factory.pf.candidates import _sample_controls, _sample_stratified_contingency, allocate_quota
 from grid_data_factory.pf.controls import (
     apply_response_policy,
     balanced_redispatch,
@@ -77,6 +77,19 @@ class PFControlTests(unittest.TestCase):
         self.assertEqual(controls.generators["g2"].pg, 0.0)
         self.assertAlmostEqual(metadata["residual_mw"], 0.0)
         self.assertGreater(normalized_control_distance(case, anchor, controls), 0.0)
+
+    def test_sampled_voltage_is_consistent_for_generators_on_same_bus(self):
+        case = _case()
+        case["generators"][1]["bus_id"] = "1"
+        controls, _, _ = _sample_controls(
+            case,
+            controls_from_case(case),
+            0.03,
+            0.10,
+            random.Random(1),
+            max_attempts=10,
+        )
+        self.assertEqual(controls.generators["g1"].vg, controls.generators["g2"].vg)
 
     def test_generator_outage_uses_reserve_policy(self):
         case = _case()

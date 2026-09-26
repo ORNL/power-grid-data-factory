@@ -34,15 +34,15 @@ function to_powermodels_data(case_data)
     end
 
     pm_bus = Dict{String, Any}()
-    for (idx, b) in enumerate(buses)
+    for b in buses
         bid = parse(Int, String(b[:bus_id]))
         btype = Int(b[:type])
         vm = Float64(b[:vm])
         va = Float64(b[:va])
         vmin = Float64(b[:vmin])
         vmax = Float64(b[:vmax])
-        pm_bus[string(idx)] = Dict(
-            "index" => idx,
+        pm_bus[string(bid)] = Dict(
+            "index" => bid,
             "bus_i" => bid,
             "bus_type" => btype,
             "area" => haskey(b, :area) ? Int(b[:area]) : 1,
@@ -58,11 +58,6 @@ function to_powermodels_data(case_data)
             "vmax" => vmax,
             "vmin" => vmin,
         )
-    end
-
-    bus_index_by_id = Dict{Int, Int}()
-    for (k, b) in pm_bus
-        bus_index_by_id[Int(b["bus_i"])] = Int(b["index"])
     end
 
     # Bus shunt elements (fixed capacitor banks / reactors). MATPOWER Gs/Bs are
@@ -89,7 +84,6 @@ function to_powermodels_data(case_data)
     pm_gen = Dict{String, Any}()
     for (idx, g) in enumerate(gens)
         bus_id = parse(Int, String(g[:bus_id]))
-        bus_idx = bus_index_by_id[bus_id]
         pmin = Float64(g[:pmin]) / base_mva
         pmax = Float64(g[:pmax]) / base_mva
         qmin = Float64(g[:qmin]) / base_mva
@@ -114,7 +108,7 @@ function to_powermodels_data(case_data)
             "pmin" => pmin,
             "source_id" => Any["gen", bus_id, String(g[:gen_id])],
             "alpha" => haskey(g, :alpha) ? Float64(g[:alpha]) : 1.0,
-            "bus_idx" => bus_idx,
+            "bus_idx" => bus_id,
             "model" => 2,
             "ncost" => 3,
             "cost" => [c2, c1, c0],

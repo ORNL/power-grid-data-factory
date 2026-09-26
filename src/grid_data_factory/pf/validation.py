@@ -21,19 +21,31 @@ def validate_anchor_consistency(
     source_solution: dict[str, Any],
     result: dict[str, Any],
     tolerances: dict[str, float] | None = None,
+    case_data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     limits = {**DEFAULT_TOLERANCES, **(tolerances or {})}
     solution = ((result.get("raw_result") or {}).get("solution") or {})
     source_buses = source_solution.get("bus") or {}
     solved_buses = solution.get("bus") or {}
+    source_angles = [abs(float(bus.get("va", 0.0))) for bus in source_buses.values()]
+    source_angle_scale = math.pi / 180.0 if max(source_angles, default=0.0) > 2.0 * math.pi else 1.0
     voltage_errors = []
     angle_errors = []
-    for bus_id, source_bus in source_buses.items():
-        if bus_id not in solved_buses:
+    if case_data is None:
+        bus_keys = [(str(bus_id), str(bus_id)) for bus_id in source_buses]
+    else:
+        bus_keys = [
+            (str(index), str(bus["bus_id"]))
+            for index, bus in enumerate(case_data.get("buses", []), start=1)
+        ]
+    for source_key, solved_key in bus_keys:
+        source_bus = source_buses.get(source_key) or source_buses.get(solved_key)
+        solved_bus = solved_buses.get(solved_key) or solved_buses.get(source_key)
+        if source_bus is None or solved_bus is None:
             continue
-        solved_bus = solved_buses[bus_id]
         voltage_errors.append(abs(float(solved_bus.get("vm", 0.0)) - float(source_bus.get("vm", 0.0))))
-        angle_errors.append(abs(float(solved_bus.get("va", 0.0)) - float(source_bus.get("va", 0.0))))
+        source_angle = float(source_bus.get("va", 0.0)) * source_angle_scale
+        angle_errors.append(abs(float(solved_bus.get("va", 0.0)) - source_angle))
     max_voltage_error = max(voltage_errors, default=math.inf)
     max_angle_error = max(angle_errors, default=math.inf)
     passed = (
@@ -107,7 +119,7 @@ def validate_pf_result(
     bus_vm: dict[str, float] = {}
     for index, bus in enumerate(case_data.get("buses", []), start=1):
         bid = str(bus["bus_id"])
-        solved = bus_solution.get(str(index))
+        solved = bus_solution.get(bid) or bus_solution.get(str(index))
         if solved is None:
             violations.append({"type": "missing_bus_solution", "component_id": bid})
             continue

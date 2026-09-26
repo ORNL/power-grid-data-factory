@@ -129,7 +129,10 @@ def main() -> None:
                 validation = validate_pf_result(post_case, controls, result, validation_tolerances)
                 if candidate["control_distance_stratum"] == "exact_consistency":
                     consistency = validate_anchor_consistency(
-                        candidate.get("source_ac_opf_solution") or {}, result, validation_tolerances
+                        candidate.get("source_ac_opf_solution") or {},
+                        result,
+                        validation_tolerances,
+                        case_data=post_case,
                     )
                     validation["anchor_consistency"] = consistency
                     validation["validation_passed"] = validation["validation_passed"] and consistency["passed"]
