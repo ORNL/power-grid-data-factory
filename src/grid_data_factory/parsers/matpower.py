@@ -134,8 +134,8 @@ def write_matpower_case(case_data: dict[str, Any], out_path: Path, case_name: st
         base_kv = float(bus.get("base_kv", 100.0) or 100.0)
         cols = [
             int(float(bid)), int(bus.get("type", 1)), pd, qd,
-            float(bus.get("gs", 0.0)), float(bus.get("bs", 0.0)), 1,
-            float(bus.get("vm", 1.0)), float(bus.get("va", 0.0)), base_kv, 1,
+            float(bus.get("gs", 0.0)), float(bus.get("bs", 0.0)), int(bus.get("area", 1)),
+            float(bus.get("vm", 1.0)), float(bus.get("va", 0.0)), base_kv, int(bus.get("zone", 1)),
             float(bus.get("vmax", 1.1)), float(bus.get("vmin", 0.9)),
         ]
         lines.append("\t" + "\t".join(_fmt_number(c) for c in cols) + ";")
@@ -215,6 +215,9 @@ def parse_matpower_case(case_file: Path, case_id: str) -> dict[str, Any]:
                 "vmax": float(row[11]),
                 "gs": float(row[4]),
                 "bs": float(row[5]),
+                "area": int(row[6]),
+                "base_kv": float(row[9]),
+                "zone": int(row[10]),
             }
         )
         pd = float(row[2])
@@ -257,6 +260,11 @@ def parse_matpower_case(case_file: Path, case_id: str) -> dict[str, Any]:
         rate_a = float(row[5])
         if rate_a <= 0.0:
             rate_a = 1.0e6
+        angmin = float(row[11])
+        angmax = float(row[12])
+        if angmin == 0.0 and angmax == 0.0:
+            angmin = -60.0
+            angmax = 60.0
         branches.append(
             {
                 "branch_id": f"branch_{idx + 1:06d}",
@@ -271,8 +279,8 @@ def parse_matpower_case(case_file: Path, case_id: str) -> dict[str, Any]:
                 "tap": float(row[8]),
                 "shift": float(row[9]),
                 "status": int(row[10]),
-                "angmin": float(row[11]),
-                "angmax": float(row[12]),
+                "angmin": angmin,
+                "angmax": angmax,
                 "transformer": float(row[8]) != 0.0 or float(row[9]) != 0.0,
             }
         )
