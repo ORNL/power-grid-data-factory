@@ -6,8 +6,10 @@ SUPERVISOR=$ROOT/configs/slurm/riker_pf_campaign_supervisor.sbatch
 
 ANCHOR_INDEX=${ANCHOR_INDEX:-$ROOT/data/derived/pf_anchors/andes_acopf_anchors.parquet}
 CAMPAIGN_ID=${CAMPAIGN_ID:-riker_pf_complement_large_v1}
+CONFIG=${CONFIG:-configs/pf_campaign_riker.yaml}
 ROUNDS=${ROUNDS:-5}
 COUNT=${COUNT:-100000}
+SEED_BASE=${SEED_BASE:-20260925}
 NODES=${NODES:-64}
 NTASKS_PER_NODE=${NTASKS_PER_NODE:-32}
 SHARD_MULTIPLIER=${SHARD_MULTIPLIER:-8}
@@ -36,7 +38,7 @@ COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/current/env.sh}
 source "$COINHSL_ENV"
 [[ -r "${IPOPT_HSL_LIBRARY:-}" ]] || { echo "Missing Coin-HSL library: ${IPOPT_HSL_LIBRARY:-unset}" >&2; exit 2; }
 
-export CAMPAIGN_ID ROUNDS COUNT ACCOUNT QOS DEP_TYPE MAX_CYCLES ANCHOR_INDEX RUNS_ROOT MAX_FAILURE_FRACTION COINHSL_ENV
+export CAMPAIGN_ID CONFIG ROUNDS COUNT SEED_BASE ACCOUNT QOS DEP_TYPE MAX_CYCLES ANCHOR_INDEX RUNS_ROOT MAX_FAILURE_FRACTION COINHSL_ENV
 export ROUND_NODES=$NODES ROUND_TASKS_PER_NODE=$NTASKS_PER_NODE ROUND_TIME=$WALLTIME ROUND_SHARD_COUNT=$SHARD_COUNT SHARD_MULTIPLIER
 
 CMD=(sbatch -A "$ACCOUNT")
@@ -45,6 +47,7 @@ CMD=(sbatch -A "$ACCOUNT")
 CMD+=(--export=ALL,CYCLE=1 "$SUPERVISOR")
 
 echo "[submit_riker_pf_large] campaign=$CAMPAIGN_ID rounds=$ROUNDS candidates_per_round=$COUNT"
+echo "[submit_riker_pf_large] config=$CONFIG seed_base=$SEED_BASE"
 echo "[submit_riker_pf_large] nodes=$NODES tasks_per_node=$NTASKS_PER_NODE shards=$SHARD_COUNT walltime=$WALLTIME"
 echo "[submit_riker_pf_large] anchor_index=$ANCHOR_INDEX runs_root=$RUNS_ROOT after=${AFTER:-none}"
 echo "[submit_riker_pf_large] linear_solver_fallback=default,ma27,ma57"

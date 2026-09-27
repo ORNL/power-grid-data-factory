@@ -108,10 +108,25 @@ are rejected. `response_policy.policy_id` is one of
 `governor_droop`; the latter two require explicit weight maps.
 
 PF samples are written separately to `<runs_root>/pf/samples.jsonl`, schema
-version `1.0`. In addition to the common fields they contain source and parent
+version `1.1`. In addition to the common fields they contain source and parent
 lineage, split, control method/distance/stratum, response policy ID, and an
 `outcome_class`: `converged_valid`, `converged_invalid`, `nonconvergent`,
 `islanded`, or `software_model_error`.
+
+Schema 1.1 also provides orthogonal filtering labels:
+
+- `solver_convergence`: `converged`, `not_converged`, or `error`;
+- `equation_balance_status`: `satisfied`, `violated`, or `not_evaluated`;
+- `operational_status`: `within_limits`, `limit_violating`, or `not_evaluated`;
+- `anchor_consistency_status`: `consistent`, `inconsistent`, `not_applicable`,
+  or `not_evaluated`.
+
+A converged PF state with near-zero equation residuals and voltage or thermal
+violations is therefore labeled `converged` / `satisfied` /
+`limit_violating`. It remains a usable solved state for equation-learning tasks
+but is excluded by an `operational_status == within_limits` filter when building
+secure-operation datasets. `outcome_class` remains for compatibility and
+partition layout.
 
 The AC-OPF anchor index is Parquet with JSON strings for controls, resolved
 cases, and source candidates. Its sidecar manifest records source paths, row

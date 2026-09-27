@@ -200,16 +200,55 @@ class PFAnchorTests(unittest.TestCase):
 class PFStorageTests(unittest.TestCase):
     def test_pf_sink_and_record_are_task_specific(self):
         candidate = _candidate()
-        result = {"success": True, "termination_status": "LOCALLY_SOLVED", "task": "pf"}
+        result = {
+            "success": True,
+            "termination_status": "LOCALLY_SOLVED",
+            "task": "pf",
+            "validation_passed": True,
+            "validation": {"violations": [], "active_power_residual_mw": 0.0, "reactive_power_residual_mvar": 0.0},
+        }
         record = _sample_record(candidate, _case(), result, "solver", "run")
         self.assertEqual(record["task"], "pf")
         self.assertEqual(record["outcome_class"], "converged_valid")
+        self.assertEqual(record["solver_convergence"], "converged")
+        self.assertEqual(record["equation_balance_status"], "satisfied")
+        self.assertEqual(record["operational_status"], "within_limits")
         self.assertEqual(record["response_policy_id"], "reserve_participation")
         with tempfile.TemporaryDirectory() as tmp:
             with SampleSink(Path(tmp), "solver", task="pf") as sink:
                 path, _ = sink.append(candidate, _case(), result)
             self.assertEqual(path.relative_to(tmp), Path("pf/samples.jsonl"))
             self.assertTrue((Path(tmp) / "pf/outcomes/converged_valid/samples.jsonl").exists())
+
+    def test_converged_limit_violation_has_orthogonal_labels(self):
+        candidate = _candidate()
+        result = {
+            "success": True,
+            "termination_status": "LOCALLY_SOLVED",
+            "task": "pf",
+            "validation_passed": False,
+            "validation": {
+                "violations": [{"type": "voltage_limit", "component_id": "2", "value": 0.88}],
+                "active_power_residual_mw": 0.0,
+                "reactive_power_residual_mvar": 0.0,
+            },
+        }
+
+        record = _sample_record(candidate, _case(), result, "solver", "run")
+
+        self.assertEqual(record["outcome_class"], "converged_invalid")
+        self.assertEqual(record["solver_convergence"], "converged")
+        self.assertEqual(record["equation_balance_status"], "satisfied")
+        self.assertEqual(record["operational_status"], "limit_violating")
+
+    def test_missing_validation_is_not_evaluated(self):
+        result = {"success": True, "termination_status": "LOCALLY_SOLVED", "task": "pf"}
+
+        record = _sample_record(_candidate(), _case(), result, "solver", "run")
+
+        self.assertEqual(record["solver_convergence"], "converged")
+        self.assertEqual(record["equation_balance_status"], "not_evaluated")
+        self.assertEqual(record["operational_status"], "not_evaluated")
 
 
 class PFValidationTests(unittest.TestCase):

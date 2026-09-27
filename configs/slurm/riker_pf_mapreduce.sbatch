@@ -19,7 +19,8 @@ CAMPAIGN_ID=${CAMPAIGN_ID:-riker_pf_complement_v1}
 ROUND_INDEX=${ROUND_INDEX:-0}
 CONFIG=${CONFIG:-configs/pf_campaign_riker.yaml}
 COUNT=${COUNT:-10000}
-SEED=${SEED:-$((20260925 + ROUND_INDEX))}
+SEED_BASE=${SEED_BASE:-20260925}
+SEED=${SEED:-$((SEED_BASE + ROUND_INDEX))}
 RUNS_ROOT=${RUNS_ROOT:-data/outputs/runs/riker_pf_complement_v1}
 SOLVER_ID=${SOLVER_ID:-powermodels_pf_ipopt}
 TIMEOUT_S=${TIMEOUT_S:-1200}
@@ -58,6 +59,21 @@ LOCK_DIR="$QUEUE_DIR/lock"
 DONE_DIR="$QUEUE_DIR/done"
 REDUCE_MARKER="$CAMPAIGN_ROOT/round_summaries/round_${ROUND_PAD}_pf_reduce_report.json"
 mkdir -p "$ROOT/data/scratch/logs" "$ROUND_DIR" "$DONE_DIR"
+
+if [[ "${ROUND_SELF_CONTINUE:-0}" == "1" ]]; then
+  [[ "${SLURM_JOB_ID:-}" =~ ^[0-9]+$ ]] || { echo "Missing SLURM_JOB_ID for self-continuation" >&2; exit 2; }
+  SUPERVISOR_SCRIPT=${SUPERVISOR_SCRIPT:-$ROOT/configs/slurm/riker_pf_campaign_supervisor.sbatch}
+  CONTINUATION_FILE="$ROUND_DIR/continuation_after_job_${SLURM_JOB_ID}.txt"
+  if [[ ! -s "$CONTINUATION_FILE" ]]; then
+    CONTINUE_CMD=(sbatch --parsable -A "${ACCOUNT:-lrn070}")
+    [[ -n "${QOS:-normal}" ]] && CONTINUE_CMD+=(-q "${QOS:-normal}")
+    CONTINUE_CMD+=(--dependency="afterany:${SLURM_JOB_ID}" --export="ALL,CYCLE=$(( ${CYCLE:-1} + 1 ))" "$SUPERVISOR_SCRIPT")
+    continuation_job=$("${CONTINUE_CMD[@]}")
+    printf '%s\n' "${continuation_job%%;*}" > "$CONTINUATION_FILE.in_progress"
+    mv "$CONTINUATION_FILE.in_progress" "$CONTINUATION_FILE"
+    echo "[$(date -u +%FT%TZ)] continuation_job=${continuation_job%%;*} dependency=afterany:${SLURM_JOB_ID}"
+  fi
+fi
 
 if [[ "$RESUME" == "1" && -s "$REDUCE_MARKER" ]] && grep -q '"ok": true' "$REDUCE_MARKER"; then
   echo "[$(date -u +%FT%TZ)] PF round already reduced successfully: $REDUCE_MARKER"
@@ -108,7 +124,7 @@ while true; do
   shard=$(sed -n "$((next + 1))p" "$QUEUE_FILE")
   [[ "$RESUME" == "1" && -f "$DONE_DIR/$shard" ]] && continue
   shard_campaign="${CAMPAIGN_ID}__r${ROUND_PAD}__s${shard}"
-  args=(--campaign-id "$shard_campaign" --round-index "$ROUND_INDEX" --candidates-jsonl "$SHARD_DIR/selected_${shard}.jsonl" --config "$ROOT/$CONFIG" --runs-root "$ROOT/$RUNS_ROOT/mapreduce_round_${ROUND_PAD}/shard_${shard}" --solver-id "$SOLVER_ID" --timeout-s "$TIMEOUT_S" --max-failure-fraction "$MAX_FAILURE_FRACTION" --continue-on-error)
+  args=(--campaign-id "$shard_campaign" --round-index "$ROUND_INDEX" --candidates-jsonl "$SHARD_DIR/selected_${shard}.jsonl" --config "$ROOT/$CONFIG" --runs-root "$ROOT/$RUNS_ROOT/mapreduce_round_${ROUND_PAD}/shard_${shard}" --solver-id "$SOLVER_ID" --timeout-s "$TIMEOUT_S" --max-failure-fraction "$MAX_FAILURE_FRACTION" --record-quality-failure --continue-on-error)
   [[ "$RESUME" == "1" ]] && args+=(--resume)
   PYTHONPATH="$ROOT/src" "$PYBIN" "$ROOT/scripts/run_campaign_pf_round.py" "${args[@]}"
   touch "$DONE_DIR/$shard"
@@ -117,6 +133,6 @@ done
 
 PYTHONPATH="$ROOT/src" "$PYBIN" "$ROOT/scripts/reduce_pf_campaign_shards.py" \
   --campaign-id "$CAMPAIGN_ID" --round-index "$ROUND_INDEX" --config "$ROOT/$CONFIG" \
-  --shard-campaign-ids-file "$IDS_FILE"
+  --shard-campaign-ids-file "$IDS_FILE" --runs-root "$ROOT/$RUNS_ROOT"
 
 echo "[$(date -u +%FT%TZ)] PF round complete: campaign=$CAMPAIGN_ID round=$ROUND_INDEX"

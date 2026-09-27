@@ -164,7 +164,10 @@ def _read_existing_diversity(campaign_root: Path) -> list[dict[str, Any]]:
     except ModuleNotFoundError:
         return []
     if parquet.exists():
-        return pd.read_parquet(parquet).to_dict(orient="records")
+        try:
+            return pd.read_parquet(parquet).to_dict(orient="records")
+        except Exception:  # noqa: BLE001
+            return _read_jsonl(fallback) if fallback.exists() else []
     return []
 
 
@@ -289,7 +292,7 @@ def _write_attempt(
 # ---------------------------------------------------------------------------
 
 SAMPLE_SCHEMA_VERSION = "1.1"
-PF_SAMPLE_SCHEMA_VERSION = "1.0"
+PF_SAMPLE_SCHEMA_VERSION = "1.1"
 
 # Normalized feasibility labels for downstream feasibility-vs-infeasibility
 # classification. Every solved candidate is persisted regardless of outcome, so
@@ -401,6 +404,59 @@ def _pf_outcome_class(result: dict[str, Any]) -> str:
     return "nonconvergent"
 
 
+def _pf_filter_labels(result: dict[str, Any], candidate: dict[str, Any]) -> dict[str, str]:
+    outcome = _pf_outcome_class(result)
+    if bool(result.get("success", False)):
+        solver_convergence = "converged"
+    elif outcome == "software_model_error":
+        solver_convergence = "error"
+    else:
+        solver_convergence = "not_converged"
+
+    equation_balance_status = "not_evaluated"
+    operational_status = "not_evaluated"
+    validation = result.get("validation") or {}
+    if solver_convergence == "converged" and "violations" in validation:
+        violation_types = {
+            str(violation.get("type", ""))
+            for violation in validation.get("violations", [])
+            if isinstance(violation, dict)
+        }
+        incomplete_types = {
+            "missing_generator_solution",
+            "missing_bus_solution",
+            "missing_branch_solution",
+        }
+        balance_types = {"active_power_residual", "reactive_power_residual"}
+        operational_types = {
+            "generator_q_limit",
+            "voltage_limit",
+            "branch_thermal",
+            "active_control_mismatch",
+        }
+        if violation_types & incomplete_types:
+            equation_balance_status = "not_evaluated"
+            operational_status = "not_evaluated"
+        else:
+            equation_balance_status = "violated" if violation_types & balance_types else "satisfied"
+            operational_status = "limit_violating" if violation_types & operational_types else "within_limits"
+
+    anchor_consistency_status = "not_applicable"
+    if candidate.get("control_distance_stratum") == "exact_consistency":
+        consistency = validation.get("anchor_consistency")
+        if isinstance(consistency, dict) and isinstance(consistency.get("passed"), bool):
+            anchor_consistency_status = "consistent" if consistency["passed"] else "inconsistent"
+        else:
+            anchor_consistency_status = "not_evaluated"
+
+    return {
+        "solver_convergence": solver_convergence,
+        "equation_balance_status": equation_balance_status,
+        "operational_status": operational_status,
+        "anchor_consistency_status": anchor_consistency_status,
+    }
+
+
 def _lean_result(result: dict[str, Any]) -> dict[str, Any]:
     trimmed = dict(result)
     trimmed.pop("stdout", None)
@@ -443,6 +499,7 @@ def _sample_record(
     }
     if task == "pf":
         policy = candidate.get("response_policy") or {}
+        filter_labels = _pf_filter_labels(result, candidate)
         pf_metadata = PFSampleMetadata(
             source_ac_opf_run_id=str(candidate.get("source_ac_opf_run_id", "")),
             parent_network_id=str(candidate.get("parent_network_id", "")),
@@ -454,6 +511,7 @@ def _sample_record(
             control_distance=float(candidate.get("control_distance", 0.0)),
             control_distance_stratum=str(candidate.get("control_distance_stratum", "")),
             response_policy_id=str(policy.get("policy_id", candidate.get("response_policy_id", ""))),
+            **filter_labels,
             outcome_class=_pf_outcome_class(result),
         )
         record.update(pf_metadata.model_dump())

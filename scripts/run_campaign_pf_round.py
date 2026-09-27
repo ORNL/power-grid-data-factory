@@ -70,7 +70,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-candidates", type=int, default=0)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--continue-on-error", action="store_true")
-    parser.add_argument("--max-failure-fraction", type=float, default=0.25)
+    parser.add_argument(
+        "--max-failure-fraction",
+        type=float,
+        default=0.25,
+        help="Round is marked not-ok when solve failures exceed this fraction of candidates.",
+    )
+    parser.add_argument(
+        "--record-quality-failure",
+        action="store_true",
+        help="Record a failed quality threshold in the report without returning a nonzero process status.",
+    )
     return parser.parse_args()
 
 
@@ -108,6 +118,8 @@ def main() -> None:
     boundary_rows = []
     coverage_rows = []
     outcome_counts: Counter[str] = Counter()
+    linear_solver_counts: Counter[str] = Counter()
+    solver_attempt_counts: Counter[str] = Counter()
     hsl_library = os.environ.get("IPOPT_HSL_LIBRARY", "").strip()
     if not hsl_library or not Path(hsl_library).is_file():
         raise SystemExit("IPOPT_HSL_LIBRARY must name a readable Coin-HSL library for PF fallback")
@@ -134,6 +146,10 @@ def main() -> None:
                     controls=controls.model_dump(mode="json"),
                     hsl_library=hsl_library,
                 )
+                linear_solver_counts[str(result.get("linear_solver", "unknown"))] += 1
+                for attempt in result.get("solver_attempts") or []:
+                    key = f"{attempt.get('linear_solver', 'unknown')}::{attempt.get('termination_status', 'unknown')}"
+                    solver_attempt_counts[key] += 1
                 validation = validate_pf_result(post_case, controls, result, validation_tolerances)
                 if candidate["control_distance_stratum"] == "exact_consistency":
                     consistency = validate_anchor_consistency(
@@ -215,6 +231,8 @@ def main() -> None:
     append_parquet_rows(campaign_root / "security_boundary_ledger.parquet", boundary_rows)
     append_parquet_rows(campaign_root / "pf_coverage_ledger.parquet", coverage_rows)
     report["outcome_counts"] = dict(outcome_counts)
+    report["linear_solver_counts"] = dict(linear_solver_counts)
+    report["solver_attempt_counts"] = dict(solver_attempt_counts)
     nonvalid_outcomes = sum(count for outcome, count in outcome_counts.items() if outcome != "converged_valid")
     exception_count = report["failed"] - nonvalid_outcomes
     attempted = report["solved"] + exception_count
@@ -225,7 +243,7 @@ def main() -> None:
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({**report, "manifest": str(manifest)}, indent=2))
-    if not report["ok"]:
+    if not report["ok"] and not args.record_quality_failure:
         raise SystemExit(1)
 
 

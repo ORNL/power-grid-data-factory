@@ -167,8 +167,13 @@ Every completed solve is retained and classified as one of:
 - `islanded`;
 - `software_model_error`.
 
-Only `converged_valid` is suitable for state-regression training. Other outcomes
-form explicit quality-control and classification partitions.
+These compatibility partitions are complemented by independent
+`solver_convergence`, `equation_balance_status`, `operational_status`, and
+`anchor_consistency_status` labels. Equation-learning datasets may retain
+converged, balance-satisfying states even when they violate operational limits;
+secure-operation datasets should additionally require
+`operational_status: within_limits`. Nonconvergent and software/model outcomes
+remain explicit quality-control and classification data.
 
 ## Output Layout
 
