@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -87,6 +89,11 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Comma-separated Ipopt linear solvers attempted after the default solver fails.",
     )
+    p.add_argument(
+        "--linear-solvers",
+        default="",
+        help="Comma-separated exact Ipopt linear-solver sequence; excludes the default solver unless named.",
+    )
     p.add_argument("--execution-policy", default="", help="Optional per-case enable/timeout YAML policy.")
     p.add_argument("--max-candidates", type=int, default=0)
     p.add_argument("--continue-on-error", action="store_true")
@@ -135,9 +142,15 @@ def main() -> None:
     # Reuse one Julia process and one output handle for the whole shard.
     sink = SampleSink(runs_root, args.solver_id)
     fallback_solvers = [solver.strip() for solver in args.linear_solver_fallbacks.split(",") if solver.strip()]
-    solver = adapter.persistent_ac_opf_session(
-        options={"timeout_s": args.timeout_s, "linear_solver_fallbacks": fallback_solvers}
-    )
+    linear_solvers = [solver.strip() for solver in args.linear_solvers.split(",") if solver.strip()]
+    if linear_solvers and fallback_solvers:
+        raise ValueError("--linear-solvers and --linear-solver-fallbacks are mutually exclusive")
+    solver_options = {"timeout_s": args.timeout_s}
+    if linear_solvers:
+        solver_options["linear_solvers"] = linear_solvers
+    else:
+        solver_options["linear_solver_fallbacks"] = fallback_solvers
+    solver = adapter.persistent_ac_opf_session(options=solver_options)
 
     for cand in candidates:
         case_id = str(cand.get("case_id"))
@@ -184,7 +197,20 @@ def main() -> None:
             case_data = apply_operating_point(case_data, op_params)
             case_data = apply_contingency(case_data, cand.get("contingency"))
 
-            result = solver.solve_ac_opf(case_data, timeout_s=case_settings.timeout_s)
+            solver_case_data = case_data
+            if os.environ.get("PGDF_PRE_SCALE_COSTS_FOR_PER_UNIT") == "1":
+                solver_case_data = copy.deepcopy(case_data)
+                base_mva = float(solver_case_data.get("base_mva", 100.0))
+                for generator in solver_case_data.get("generators", []):
+                    cost = list(generator.get("cost") or [0.0, 1.0, 0.0])
+                    cost.extend([0.0] * (3 - len(cost)))
+                    generator["cost"] = [
+                        float(cost[0]) * base_mva**2,
+                        float(cost[1]) * base_mva,
+                        float(cost[2]),
+                    ]
+
+            result = solver.solve_ac_opf(solver_case_data, timeout_s=case_settings.timeout_s)
             samples_path, run_id = sink.append(cand, case_data, result)
             result["_run_id"] = run_id
 

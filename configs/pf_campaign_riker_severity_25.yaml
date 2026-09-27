@@ -1,0 +1,59 @@
+campaign_id: riker_pf_severity_25
+
+generation:
+  candidate_count: 100
+  maximum_anchors: 10000
+  seed: 20260925
+  intact_anchors_only: false
+  max_attempts_per_candidate: 50
+
+control_distance_strata:
+  exact_consistency: {fraction: 0.02, minimum: 0.0, maximum: 0.0}
+  near_opf: {fraction: 0.18, minimum: 0.00125, maximum: 0.0075}
+  intermediate: {fraction: 0.35, minimum: 0.0075, maximum: 0.025}
+  large_credible: {fraction: 0.25, minimum: 0.025, maximum: 0.0625}
+  boundary_directed: {fraction: 0.20, minimum: 0.045, maximum: 0.075}
+
+topology_quotas:
+  intact: 0.50
+  n1_branch: 0.25
+  n1_generator: 0.15
+  n2_structured: 0.10
+
+contingency_criticality_quotas:
+  critical: 0.40
+  intermediate: 0.25
+  benign: 0.25
+  random_audit: 0.10
+
+generator_response_quotas:
+  reserve_participation: 0.50
+  fixed_participation: 0.25
+  governor_droop: 0.25
+
+validation:
+  active_power_residual_mw: 1.0
+  reactive_power_residual_mvar: 1.0
+  control_tolerance_mw: 0.1
+  voltage_tolerance_pu: 1.0e-5
+  limit_tolerance: 1.0e-5
+  anchor_voltage_tolerance_pu: 1.0e-4
+  anchor_angle_tolerance_rad: 1.0e-3
+
+adaptive:
+  near_duplicate_threshold: 0.02
+  random_audit_fraction: 0.10
+  novelty_saturation_rate: 0.005
+
+security_margin_bands:
+  comfortably_secure: {minimum_margin: 0.10}
+  moderately_secure: {minimum_margin: 0.03, maximum_margin: 0.10}
+  near_boundary_secure: {minimum_margin: 0.00, maximum_margin: 0.03}
+  near_boundary_insecure: {minimum_margin: -0.03, maximum_margin: 0.00}
+  severely_insecure: {maximum_margin: -0.03}
+
+execution:
+  timeout_s: 1200
+  workers_per_node: 32
+  shard_multiplier: 8
+  flush_every: 200

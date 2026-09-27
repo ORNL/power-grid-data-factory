@@ -111,7 +111,7 @@ function to_powermodels_data(case_data)
             "bus_idx" => bus_id,
             "model" => 2,
             "ncost" => 3,
-            "cost" => [c2, c1, c0],
+            "cost" => [c2 * base_mva^2, c1 * base_mva, c0],
             "startup" => 0.0,
             "shutdown" => 0.0,
         )

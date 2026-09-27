@@ -29,6 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--round-index", type=int, required=True)
     parser.add_argument("--config", default="configs/pf_campaign_riker.yaml")
     parser.add_argument("--shard-campaign-ids-file", required=True)
+    parser.add_argument("--runs-root", default="", help="PF runs root used to aggregate per-sample solver provenance.")
     parser.add_argument("--force", action="store_true")
     return parser.parse_args()
 
@@ -127,6 +128,23 @@ def main() -> None:
     outcomes: Counter[str] = Counter()
     for report in reports:
         outcomes.update(report.get("outcome_counts") or {})
+
+    runs_root = Path(args.runs_root) if args.runs_root else repo_root / "data" / "outputs" / "runs" / args.campaign_id
+    runs_root = runs_root if runs_root.is_absolute() else repo_root / runs_root
+    linear_solvers: Counter[str] = Counter()
+    solver_attempts: Counter[str] = Counter()
+    sample_pattern = f"mapreduce_round_{args.round_index:03d}/shard_*/pf/samples.jsonl"
+    for samples_path in sorted(runs_root.glob(sample_pattern)):
+        with samples_path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    result = (json.loads(line).get("result") or {}) if line.strip() else {}
+                except json.JSONDecodeError:
+                    continue
+                linear_solvers[str(result.get("linear_solver", "unknown"))] += 1
+                for attempt in result.get("solver_attempts") or []:
+                    key = f"{attempt.get('linear_solver', 'unknown')}::{attempt.get('termination_status', 'unknown')}"
+                    solver_attempts[key] += 1
     summary = {
         "ok": not missing_reports and all(bool(report.get("ok")) for report in reports),
         "campaign_id": args.campaign_id,
@@ -139,6 +157,8 @@ def main() -> None:
         "failed": sum(int(report.get("failed", 0)) for report in reports),
         "skipped": sum(int(report.get("skipped", 0)) for report in reports),
         "outcome_counts": dict(outcomes),
+        "linear_solver_counts": dict(linear_solvers),
+        "solver_attempt_counts": dict(solver_attempts),
         "ledger_counts": ledger_counts,
     }
     temporary = marker.with_suffix(marker.suffix + ".in_progress")

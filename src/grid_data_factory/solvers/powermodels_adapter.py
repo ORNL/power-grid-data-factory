@@ -74,7 +74,35 @@ class PersistentPowerModelsSession:
         return self._stderr.read()
 
     def solve_ac_opf(self, case: dict, timeout_s: float | None = None) -> dict:
-        return self._solve(case, "ac_opf", timeout_s)
+        configured = self.options.get("linear_solvers")
+        if configured is None:
+            fallbacks = self.options.get("linear_solver_fallbacks") or []
+            configured = ["default", *fallbacks]
+        linear_solvers = [str(solver).strip() for solver in configured if str(solver).strip()]
+        if not linear_solvers:
+            return self._solve(case, "ac_opf", timeout_s)
+
+        attempts = []
+        result: dict = {}
+        for linear_solver in linear_solvers:
+            options = dict(self.options)
+            options["linear_solver"] = "" if linear_solver == "default" else linear_solver
+            result = self._solve(case, "ac_opf", timeout_s, {"options": options})
+            attempts.append(
+                {
+                    "linear_solver": linear_solver,
+                    "success": bool(result.get("success")),
+                    "termination_status": result.get("termination_status", "unknown"),
+                    "solve_time": result.get("solve_time"),
+                }
+            )
+            if result.get("success"):
+                break
+
+        result["linear_solver"] = attempts[-1]["linear_solver"]
+        result["solver_attempt_count"] = len(attempts)
+        result["solver_attempts"] = attempts
+        return result
 
     def solve_pf(
         self,

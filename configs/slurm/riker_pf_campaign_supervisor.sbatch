@@ -20,6 +20,7 @@ PYBIN=${PYBIN:-$ROOT/.venv-riker/bin/python}
 CAMPAIGN_ID=${CAMPAIGN_ID:-riker_pf_complement_large_v1}
 ROUNDS=${ROUNDS:-5}
 COUNT=${COUNT:-100000}
+SEED_BASE=${SEED_BASE:-20260925}
 ACCOUNT=${ACCOUNT:-lrn070}
 QOS=${QOS:-normal}
 ROUND_SBATCH=${ROUND_SBATCH:-configs/slurm/riker_pf_mapreduce.sbatch}
@@ -34,6 +35,7 @@ ROUND_SHARD_COUNT=${ROUND_SHARD_COUNT:-$((ROUND_NODES * ROUND_TASKS_PER_NODE * S
 MAX_FAILURE_FRACTION=${MAX_FAILURE_FRACTION:-0.5}
 COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/current/env.sh}
 DEP_TYPE=${DEP_TYPE:-afterany}
+ROUND_SELF_CONTINUE=${ROUND_SELF_CONTINUE:-1}
 CYCLE=${CYCLE:-1}
 MAX_CYCLES=${MAX_CYCLES:-500}
 
@@ -71,12 +73,15 @@ if ! PYTHONPATH="$ROOT/src" "$PYBIN" "$DRIVE_SCRIPT" \
   --cpus-per-task 1 \
   --time "$ROUND_TIME" \
   --set "COUNT=$COUNT" \
+  --set "SEED_BASE=$SEED_BASE" \
   --set "CONFIG=$CONFIG" \
   --set "ANCHOR_INDEX=$ANCHOR_INDEX" \
   --set "RUNS_ROOT=$RUNS_ROOT" \
   --set "SHARD_COUNT=$ROUND_SHARD_COUNT" \
   --set "MAX_FAILURE_FRACTION=$MAX_FAILURE_FRACTION" \
   --set "COINHSL_ENV=$COINHSL_ENV" \
+  --set "ROUND_SELF_CONTINUE=$ROUND_SELF_CONTINUE" \
+  --set "SUPERVISOR_SCRIPT=$SUPERVISOR_SCRIPT" \
   "${QOS_ARGS[@]}"; then
   echo "drive_campaign failed; not resubmitting supervisor" >&2
   exit 1
@@ -92,6 +97,11 @@ fi
 
 ROUND_JOB=$($PYBIN -c "import json; p=json.load(open('$PLAN_FILE')); s=p.get('submitted') or []; print(s[0].get('job_id', '') if s else '')" 2>/dev/null || true)
 [[ "$ROUND_JOB" =~ ^[0-9]+$ ]] || { echo "Plan contains no valid round job id" >&2; exit 1; }
+
+if [[ "$ROUND_SELF_CONTINUE" == "1" ]]; then
+  echo "[$(date -u +%FT%TZ)] round_job=$ROUND_JOB will schedule cycle=$((CYCLE + 1)) after it starts"
+  exit 0
+fi
 
 SUPERVISOR_CMD=(sbatch -A "$ACCOUNT")
 [[ -n "$QOS" ]] && SUPERVISOR_CMD+=(-q "$QOS")

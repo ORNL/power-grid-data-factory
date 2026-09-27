@@ -98,6 +98,10 @@ class PFSampleMetadata(BaseModel):
     control_distance: float = Field(ge=0.0)
     control_distance_stratum: str
     response_policy_id: str
+    solver_convergence: Literal["converged", "not_converged", "error"]
+    equation_balance_status: Literal["satisfied", "violated", "not_evaluated"]
+    operational_status: Literal["within_limits", "limit_violating", "not_evaluated"]
+    anchor_consistency_status: Literal["consistent", "inconsistent", "not_applicable", "not_evaluated"]
     outcome_class: Literal[
         "converged_valid",
         "converged_invalid",
