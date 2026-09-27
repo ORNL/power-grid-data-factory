@@ -61,8 +61,8 @@ class TestMatpowerParser(unittest.TestCase):
             "case_id": "controls",
             "base_mva": 100.0,
             "buses": [
-                {"bus_id": "1", "type": 3, "vm": 1.02, "va": 0.0, "vmin": 0.9, "vmax": 1.1},
-                {"bus_id": "2", "type": 1, "vm": 1.0, "va": 0.0, "vmin": 0.9, "vmax": 1.1},
+                {"bus_id": "1", "type": 3, "vm": 1.02, "va": 0.0, "vmin": 0.9, "vmax": 1.1, "area": 2, "base_kv": 230.0, "zone": 3},
+                {"bus_id": "2", "type": 1, "vm": 1.0, "va": 0.0, "vmin": 0.9, "vmax": 1.1, "area": 2, "base_kv": 115.0, "zone": 4},
             ],
             "loads": [{"load_id": "load_1", "bus_id": "2", "pd": 40.0, "qd": 10.0}],
             "generators": [{
@@ -74,7 +74,7 @@ class TestMatpowerParser(unittest.TestCase):
                 "branch_id": "branch_000001", "from": "1", "to": "2", "r": 0.01,
                 "x": 0.1, "b": 0.02, "rate_a": 80.0, "rate_b": 90.0,
                 "rate_c": 100.0, "tap": 1.05, "shift": 3.0, "status": 1,
-                "angmin": -30.0, "angmax": 30.0,
+                "angmin": 0.0, "angmax": 0.0,
             }],
         }
         with TemporaryDirectory() as tmp:
@@ -82,8 +82,13 @@ class TestMatpowerParser(unittest.TestCase):
         self.assertEqual(parsed["generators"][0]["pg"], 42.5)
         self.assertEqual(parsed["generators"][0]["qg"], 11.5)
         self.assertEqual(parsed["generators"][0]["vg"], 1.02)
+        self.assertEqual(parsed["buses"][0]["area"], 2)
+        self.assertEqual(parsed["buses"][0]["base_kv"], 230.0)
+        self.assertEqual(parsed["buses"][1]["zone"], 4)
         self.assertEqual(parsed["branches"][0]["tap"], 1.05)
         self.assertEqual(parsed["branches"][0]["shift"], 3.0)
+        self.assertEqual(parsed["branches"][0]["angmin"], -60.0)
+        self.assertEqual(parsed["branches"][0]["angmax"], 60.0)
 
 
 if __name__ == "__main__":
