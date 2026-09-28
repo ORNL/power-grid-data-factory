@@ -58,7 +58,7 @@ else
   echo "[$(date -u +%FT%TZ)] prepare: reusing candidates and shards"
 fi
 
-if [[ ! -s "$QUEUE_READY" || ! -s "$IDS_FILE" || ! -s "$QUEUE_FILE" ]]; then
+if [[ ! -e "$QUEUE_READY" || ! -s "$IDS_FILE" || ! -s "$QUEUE_FILE" ]]; then
   find "$SHARD_DIR" -maxdepth 1 -type f -name 'selected_*.jsonl' -size +0 -printf '%f\n' \
     | sed -e 's/^selected_//' -e 's/\.jsonl$//' \
     | sort > "$QUEUE_FILE.in_progress"
