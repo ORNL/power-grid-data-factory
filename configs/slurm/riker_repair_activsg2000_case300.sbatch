@@ -77,7 +77,6 @@ grep -qF 'request_payload = {"task": task, "options": self.options' src/grid_dat
     exit 2
 }
 PYTHONPATH="$ROOT/src" "$PYBIN" -c 'import grid_data_factory, pydantic, pyarrow, yaml'
-"$PGDF_JULIA_BIN" --project="$PGDF_JULIA_PROJECT_DIR" -e 'import PowerModels, Ipopt, JSON3; println("RUNTIME_OK")'
 
 COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/current/env.sh}
 [[ -r "$COINHSL_ENV" ]] || { echo "Missing private Coin-HSL activation: $COINHSL_ENV" >&2; exit 2; }
@@ -93,12 +92,11 @@ if [[ "$PREFLIGHT_ONLY" == "1" ]]; then
 fi
 
 if [[ ! -s "$PREPARE_MANIFEST" || ! -s "$CANDIDATES" ]]; then
-    if [[ ! -s "$SOURCE_LIST" ]]; then
-        PYTHONPATH="$ROOT/src" "$PYBIN" "$PREPARE_SCRIPT" list-sources \
-            --runs-root "$SOURCE_RUNS_ROOT" \
-            --rounds "$ROUNDS" \
-            --output "$SOURCE_LIST"
-    fi
+    [[ -s "$SOURCE_LIST" ]] || {
+        echo "Missing prepared source list: $SOURCE_LIST" >&2
+        echo "Submit configs/slurm/riker_repair_prepare.sbatch before this compute job." >&2
+        exit 2
+    }
     mkdir -p "$PREPARE_PARTS_DIR"
     echo "[$(date -u +%FT%TZ)] parallel prepare: sources=$(wc -l < "$SOURCE_LIST") tasks=$SLURM_NTASKS"
     srun --ntasks="$SLURM_NTASKS" --nodes="$SLURM_JOB_NUM_NODES" --kill-on-bad-exit=1 bash -lc '
