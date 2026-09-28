@@ -43,7 +43,6 @@ source "$COINHSL_ENV"
 [[ -x "$PGDF_JULIA_BIN" ]] || { echo "Missing Julia wrapper: $PGDF_JULIA_BIN" >&2; exit 2; }
 [[ -s "$ANCHOR_INDEX" ]] || { echo "Missing anchor index: $ANCHOR_INDEX" >&2; exit 2; }
 PYTHONPATH="$ROOT/src" "$PYBIN" -c 'import grid_data_factory, pydantic, pyarrow, yaml'
-"$PGDF_JULIA_BIN" --project="$PGDF_JULIA_PROJECT_DIR" -e 'import PowerModels, Ipopt, JSON3; println("RUNTIME_OK")'
 echo "IPOPT_LINEAR_SOLVER_FALLBACK=default,ma27,ma57"
 
 printf -v ROUND_PAD "%03d" "$ROUND_INDEX"
@@ -57,21 +56,22 @@ QUEUE_FILE="$QUEUE_DIR/shards.txt"
 INDEX_FILE="$QUEUE_DIR/next_index.txt"
 LOCK_DIR="$QUEUE_DIR/lock"
 DONE_DIR="$QUEUE_DIR/done"
+QUEUE_READY="$QUEUE_DIR/ready"
 REDUCE_MARKER="$CAMPAIGN_ROOT/round_summaries/round_${ROUND_PAD}_pf_reduce_report.json"
 mkdir -p "$ROOT/data/scratch/logs" "$ROUND_DIR" "$DONE_DIR"
 
 if [[ "${ROUND_SELF_CONTINUE:-0}" == "1" ]]; then
   [[ "${SLURM_JOB_ID:-}" =~ ^[0-9]+$ ]] || { echo "Missing SLURM_JOB_ID for self-continuation" >&2; exit 2; }
-  SUPERVISOR_SCRIPT=${SUPERVISOR_SCRIPT:-$ROOT/configs/slurm/riker_pf_campaign_supervisor.sbatch}
-  CONTINUATION_FILE="$ROUND_DIR/continuation_after_job_${SLURM_JOB_ID}.txt"
-  if [[ ! -s "$CONTINUATION_FILE" ]]; then
-    CONTINUE_CMD=(sbatch --parsable -A "${ACCOUNT:-lrn070}")
-    [[ -n "${QOS:-normal}" ]] && CONTINUE_CMD+=(-q "${QOS:-normal}")
-    CONTINUE_CMD+=(--dependency="afterany:${SLURM_JOB_ID}" --export="ALL,CYCLE=$(( ${CYCLE:-1} + 1 ))" "$SUPERVISOR_SCRIPT")
-    continuation_job=$("${CONTINUE_CMD[@]}")
-    printf '%s\n' "${continuation_job%%;*}" > "$CONTINUATION_FILE.in_progress"
-    mv "$CONTINUATION_FILE.in_progress" "$CONTINUATION_FILE"
-    echo "[$(date -u +%FT%TZ)] continuation_job=${continuation_job%%;*} dependency=afterany:${SLURM_JOB_ID}"
+  FINALIZER_SCRIPT=${FINALIZER_SCRIPT:-$ROOT/configs/slurm/riker_pf_finalize.sbatch}
+  FINALIZER_FILE="$ROUND_DIR/finalizer_after_job_${SLURM_JOB_ID}.txt"
+  if [[ ! -s "$FINALIZER_FILE" ]]; then
+    FINALIZER_CMD=(sbatch --parsable -A "${ACCOUNT:-lrn070}")
+    [[ -n "${QOS:-normal}" ]] && FINALIZER_CMD+=(-q "${QOS:-normal}")
+    FINALIZER_CMD+=(--dependency="afterany:${SLURM_JOB_ID}" --export="ALL,CAMPAIGN_ID=$CAMPAIGN_ID,ROUND_INDEX=$ROUND_INDEX,CONFIG=$CONFIG,RUNS_ROOT=$RUNS_ROOT,SHARD_IDS_FILE=$IDS_FILE,CYCLE=${CYCLE:-1}" "$FINALIZER_SCRIPT")
+    finalizer_job=$("${FINALIZER_CMD[@]}")
+    printf '%s\n' "${finalizer_job%%;*}" > "$FINALIZER_FILE.in_progress"
+    mv "$FINALIZER_FILE.in_progress" "$FINALIZER_FILE"
+    echo "[$(date -u +%FT%TZ)] finalizer_job=${finalizer_job%%;*} dependency=afterany:${SLURM_JOB_ID}"
   fi
 fi
 
@@ -94,15 +94,20 @@ else
   echo "[$(date -u +%FT%TZ)] resume: reusing candidates and shards"
 fi
 
-: > "$IDS_FILE"
-: > "$QUEUE_FILE"
-for ((index=0; index<SHARD_COUNT; index++)); do
-  shard=$(printf "%05d" "$index")
-  if [[ -s "$SHARD_DIR/selected_${shard}.jsonl" ]]; then
-    printf "%s__r%s__s%s\n" "$CAMPAIGN_ID" "$ROUND_PAD" "$shard" >> "$IDS_FILE"
-    printf "%s\n" "$shard" >> "$QUEUE_FILE"
-  fi
-done
+if [[ ! -s "$QUEUE_READY" || ! -s "$IDS_FILE" || ! -s "$QUEUE_FILE" ]]; then
+  queue_tmp="$QUEUE_FILE.in_progress"
+  ids_tmp="$IDS_FILE.in_progress"
+  find "$SHARD_DIR" -maxdepth 1 -type f -name 'selected_*.jsonl' -size +0 -printf '%f\n' \
+    | sed -e 's/^selected_//' -e 's/\.jsonl$//' \
+    | sort > "$queue_tmp"
+  awk -v campaign="$CAMPAIGN_ID" -v round="$ROUND_PAD" \
+    '{ print campaign "__r" round "__s" $0 }' "$queue_tmp" > "$ids_tmp"
+  mv "$queue_tmp" "$QUEUE_FILE"
+  mv "$ids_tmp" "$IDS_FILE"
+  touch "$QUEUE_READY"
+else
+  echo "[$(date -u +%FT%TZ)] resume: reusing prepared shard queue"
+fi
 [[ -s "$QUEUE_FILE" ]] || { echo "No nonempty PF shards" >&2; exit 2; }
 rmdir "$LOCK_DIR" 2>/dev/null || true
 echo 0 > "$INDEX_FILE"
@@ -131,8 +136,11 @@ while true; do
 done
 '
 
-PYTHONPATH="$ROOT/src" "$PYBIN" "$ROOT/scripts/reduce_pf_campaign_shards.py" \
-  --campaign-id "$CAMPAIGN_ID" --round-index "$ROUND_INDEX" --config "$ROOT/$CONFIG" \
-  --shard-campaign-ids-file "$IDS_FILE" --runs-root "$ROOT/$RUNS_ROOT"
-
-echo "[$(date -u +%FT%TZ)] PF round complete: campaign=$CAMPAIGN_ID round=$ROUND_INDEX"
+if [[ "${ROUND_SELF_CONTINUE:-0}" == "1" ]]; then
+  echo "[$(date -u +%FT%TZ)] PF map phase complete: campaign=$CAMPAIGN_ID round=$ROUND_INDEX"
+else
+  PYTHONPATH="$ROOT/src" "$PYBIN" "$ROOT/scripts/reduce_pf_campaign_shards.py" \
+    --campaign-id "$CAMPAIGN_ID" --round-index "$ROUND_INDEX" --config "$ROOT/$CONFIG" \
+    --shard-campaign-ids-file "$IDS_FILE" --runs-root "$ROOT/$RUNS_ROOT"
+  echo "[$(date -u +%FT%TZ)] PF round complete: campaign=$CAMPAIGN_ID round=$ROUND_INDEX"
+fi
