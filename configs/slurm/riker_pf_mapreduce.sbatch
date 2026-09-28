@@ -80,7 +80,7 @@ if [[ "$RESUME" == "1" && -s "$REDUCE_MARKER" ]] && grep -q '"ok": true' "$REDUC
   exit 0
 fi
 
-if [[ "${ROUND_SELF_CONTINUE:-0}" == "1" && ( ! -s "$CANDIDATES" || ! -s "$QUEUE_READY" || ! -s "$IDS_FILE" || ! -s "$QUEUE_FILE" ) ]]; then
+if [[ "${ROUND_SELF_CONTINUE:-0}" == "1" && ( ! -s "$CANDIDATES" || ! -e "$QUEUE_READY" || ! -s "$IDS_FILE" || ! -s "$QUEUE_FILE" ) ]]; then
   echo "PF map inputs are incomplete; submit through riker_pf_campaign_supervisor.sbatch" >&2
   exit 2
 fi
@@ -99,7 +99,7 @@ else
   echo "[$(date -u +%FT%TZ)] resume: reusing candidates and shards"
 fi
 
-if [[ ! -s "$QUEUE_READY" || ! -s "$IDS_FILE" || ! -s "$QUEUE_FILE" ]]; then
+if [[ ! -e "$QUEUE_READY" || ! -s "$IDS_FILE" || ! -s "$QUEUE_FILE" ]]; then
   queue_tmp="$QUEUE_FILE.in_progress"
   ids_tmp="$IDS_FILE.in_progress"
   find "$SHARD_DIR" -maxdepth 1 -type f -name 'selected_*.jsonl' -size +0 -printf '%f\n' \
