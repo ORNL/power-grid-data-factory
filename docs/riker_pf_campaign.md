@@ -215,12 +215,14 @@ configs/slurm/submit_riker_pf_large.sh
 ```
 
 The launcher starts a scheduler-managed supervisor. Each supervisor cycle
-submits the first round whose PF reduce marker is missing or not `ok`. The
-multi-node round job performs only the parallel map phase, then releases its
-nodes. A dependent one-node finalizer reduces complete maps and schedules the
-next supervisor cycle. A timed-out or failed map is therefore resumed without
-running a partial reduction; a successfully reduced round advances to the next
-index. The supervisor stops when all configured rounds are complete.
+submits a one-node preparation job for the first round whose PF reduce marker is
+missing or not `ok`. Preparation generates or reuses candidates, shards, and the
+worker queue before submitting the multi-node map job. The map allocation can
+therefore proceed directly to parallel work, then release its nodes. A dependent
+one-node finalizer reduces complete maps and schedules the next supervisor cycle.
+A timed-out or failed map is resumed without running a partial reduction; a
+successfully reduced round advances to the next index. The supervisor stops when
+all configured rounds are complete.
 
 Large-launch defaults are 5 rounds of 100,000 candidates, 64 nodes, 32 tasks per
 node, 16,384 shards, and 36 hours per round. Override settings through the

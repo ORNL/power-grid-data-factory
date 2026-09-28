@@ -80,6 +80,11 @@ if [[ "$RESUME" == "1" && -s "$REDUCE_MARKER" ]] && grep -q '"ok": true' "$REDUC
   exit 0
 fi
 
+if [[ "${ROUND_SELF_CONTINUE:-0}" == "1" && ( ! -s "$CANDIDATES" || ! -s "$QUEUE_READY" || ! -s "$IDS_FILE" || ! -s "$QUEUE_FILE" ) ]]; then
+  echo "PF map inputs are incomplete; submit through riker_pf_campaign_supervisor.sbatch" >&2
+  exit 2
+fi
+
 if [[ "$RESUME" != "1" || ! -s "$CANDIDATES" ]]; then
   PRIOR_ARGS=()
   while IFS= read -r prior; do PRIOR_ARGS+=("$prior"); done < <(find "$ROOT/$RUNS_ROOT" -path '*/pf/samples.jsonl' -type f 2>/dev/null | sort)
