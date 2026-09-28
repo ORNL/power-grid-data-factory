@@ -14,7 +14,7 @@ set -euo pipefail
 
 ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 PYBIN=${PYBIN:-$ROOT/.venv-riker/bin/python}
-REPAIR_ID=${REPAIR_ID:-riker_activsg2000_case300_r000_r005}
+REPAIR_ID=${REPAIR_ID:-riker_activsg2000_case300_r000_r005_parallel_v1}
 ROUNDS=${ROUNDS:-0-5}
 CASES=${CASES:-"activsg2000 pglib_opf_case300_ieee"}
 ALL_CASES=${ALL_CASES:-0}
@@ -34,6 +34,8 @@ SHARD_SCRIPT=$ROOT/scripts/shard_selected_candidates.py
 RUN_SCRIPT=$ROOT/scripts/run_campaign_ac_opf_round.py
 CANDIDATES=$ROOT/$WORK_ROOT/failed_candidates.jsonl
 PREPARE_MANIFEST=$ROOT/$WORK_ROOT/prepare_manifest.json
+SOURCE_LIST=$ROOT/$WORK_ROOT/source_files.txt
+PREPARE_PARTS_DIR=$ROOT/$WORK_ROOT/prepare_parts
 SHARD_DIR=$ROOT/$WORK_ROOT/shards
 REPAIR_RUNS_ROOT=$ROOT/$WORK_ROOT/runs
 DONE_DIR=$ROOT/$WORK_ROOT/done
@@ -91,19 +93,61 @@ if [[ "$PREFLIGHT_ONLY" == "1" ]]; then
 fi
 
 if [[ ! -s "$PREPARE_MANIFEST" || ! -s "$CANDIDATES" ]]; then
-    PREPARE_ARGS=(
-        --runs-root "$SOURCE_RUNS_ROOT" \
-        --rounds "$ROUNDS" \
-        --output "$CANDIDATES" \
+    if [[ ! -s "$SOURCE_LIST" ]]; then
+        PYTHONPATH="$ROOT/src" "$PYBIN" "$PREPARE_SCRIPT" list-sources \
+            --runs-root "$SOURCE_RUNS_ROOT" \
+            --rounds "$ROUNDS" \
+            --output "$SOURCE_LIST"
+    fi
+    mkdir -p "$PREPARE_PARTS_DIR"
+    echo "[$(date -u +%FT%TZ)] parallel prepare: sources=$(wc -l < "$SOURCE_LIST") tasks=$SLURM_NTASKS"
+    srun --ntasks="$SLURM_NTASKS" --nodes="$SLURM_JOB_NUM_NODES" --kill-on-bad-exit=1 bash -lc '
+set -euo pipefail
+ROOT="'$ROOT'"
+PYBIN="'$PYBIN'"
+PREPARE_SCRIPT="'$PREPARE_SCRIPT'"
+SOURCE_LIST="'$SOURCE_LIST'"
+PREPARE_PARTS_DIR="'$PREPARE_PARTS_DIR'"
+CASES="'$CASES'"
+ALL_CASES="'$ALL_CASES'"
+PART_INDEX=${SLURM_PROCID:?}
+PART_COUNT=${SLURM_NTASKS:?}
+part=$(printf "%05d" "$PART_INDEX")
+output="$PREPARE_PARTS_DIR/part_${part}.jsonl"
+manifest="$PREPARE_PARTS_DIR/part_${part}.json"
+if [[ -f "$output" && -s "$manifest" ]]; then
+    exit 0
+fi
+args=(
+    --source-list "$SOURCE_LIST"
+    --part-index "$PART_INDEX"
+    --part-count "$PART_COUNT"
+    --output "$output"
+    --manifest "$manifest"
+)
+if [[ "$ALL_CASES" == "1" ]]; then
+    args+=(--all-cases)
+else
+    read -r -a case_array <<< "$CASES"
+    args+=(--cases "${case_array[@]}")
+fi
+PYTHONPATH="$ROOT/src" "$PYBIN" "$PREPARE_SCRIPT" prepare-part "${args[@]}"
+'
+    FINALIZE_ARGS=(
+        --parts-dir "$PREPARE_PARTS_DIR"
+        --part-count "$SLURM_NTASKS"
+        --runs-root "$SOURCE_RUNS_ROOT"
+        --rounds "$ROUNDS"
+        --output "$CANDIDATES"
         --manifest "$PREPARE_MANIFEST"
     )
     if [[ "$ALL_CASES" == "1" ]]; then
-        PREPARE_ARGS+=(--all-cases)
+        FINALIZE_ARGS+=(--all-cases)
     else
         read -r -a CASE_ARRAY <<< "$CASES"
-        PREPARE_ARGS+=(--cases "${CASE_ARRAY[@]}")
+        FINALIZE_ARGS+=(--cases "${CASE_ARRAY[@]}")
     fi
-    PYTHONPATH="$ROOT/src" "$PYBIN" "$PREPARE_SCRIPT" prepare "${PREPARE_ARGS[@]}"
+    PYTHONPATH="$ROOT/src" "$PYBIN" "$PREPARE_SCRIPT" finalize-prepare "${FINALIZE_ARGS[@]}"
 fi
 
 if ! compgen -G "$SHARD_DIR/repair_*.jsonl" >/dev/null; then

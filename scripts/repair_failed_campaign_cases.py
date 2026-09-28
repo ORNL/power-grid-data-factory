@@ -65,6 +65,71 @@ def _report_relpath(campaign_id: str, round_index: int) -> str:
     )
 
 
+def _source_files(runs_root: Path, rounds: list[int]) -> list[Path]:
+    sources: list[Path] = []
+    for round_index in rounds:
+        pattern = f"mapreduce_round_{round_index:03d}/shard_*/ac_opf/samples.jsonl"
+        sources.extend(sorted(runs_root.glob(pattern)))
+    return sources
+
+
+def _extract_sources(
+    repo_root: Path,
+    sources: list[Path],
+    cases: set[str] | None,
+    destination: TextIO,
+) -> dict[str, Any]:
+    counts = {case_id: 0 for case_id in sorted(cases or set())}
+    malformed_rows = 0
+    extracted = 0
+
+    for source in sources:
+        source_relpath = str(source.relative_to(repo_root))
+        round_index = int(source.parents[2].name.removeprefix("mapreduce_round_"))
+        shard_id = source.parents[1].name.removeprefix("shard_")
+        campaign_id = f"ultrascale_3b__r{round_index:03d}__s{shard_id}"
+        report_relpath = _report_relpath(campaign_id, round_index)
+        with source.open(encoding="utf-8") as handle:
+            for raw_line in handle:
+                try:
+                    record = json.loads(raw_line)
+                except json.JSONDecodeError:
+                    malformed_rows += 1
+                    continue
+                case_id = str(record.get("case_id", ""))
+                if (cases is not None and case_id not in cases) or bool(record.get("success", False)):
+                    continue
+                candidate = dict((record.get("inputs") or {}).get("candidate") or {})
+                candidate_id = str(record.get("candidate_id", candidate.get("candidate_id", "")))
+                run_id = str(record.get("run_id", ""))
+                if not candidate_id or not run_id or not candidate:
+                    malformed_rows += 1
+                    continue
+                key = _repair_key(source_relpath, candidate_id, run_id)
+                candidate.update(
+                    {
+                        "candidate_id": f"{candidate_id}::repair::{key[:16]}",
+                        "_repair_key": key,
+                        "_repair_original_candidate_id": candidate_id,
+                        "_repair_source_samples_relpath": source_relpath,
+                        "_repair_source_report_relpath": report_relpath,
+                        "_repair_source_round": round_index,
+                        "_repair_original_run_id": run_id,
+                        "_repair_original_status": str(record.get("termination_status", "unknown")),
+                    }
+                )
+                destination.write(json.dumps(candidate, separators=(",", ":")) + "\n")
+                counts[case_id] = counts.get(case_id, 0) + 1
+                extracted += 1
+
+    return {
+        "source_files": len(sources),
+        "extracted_failures": extracted,
+        "counts_by_case": counts,
+        "malformed_rows_skipped": malformed_rows,
+    }
+
+
 def prepare(
     repo_root: Path,
     runs_root: Path,
@@ -76,53 +141,8 @@ def prepare(
     if output.exists():
         output.unlink()
     output.parent.mkdir(parents=True, exist_ok=True)
-    counts = {case_id: 0 for case_id in sorted(cases or set())}
-    source_files = 0
-    malformed_rows = 0
-    extracted = 0
-
     with output.open("w", encoding="utf-8") as destination:
-        for round_index in rounds:
-            pattern = f"mapreduce_round_{round_index:03d}/shard_*/ac_opf/samples.jsonl"
-            for source in sorted(runs_root.glob(pattern)):
-                source_files += 1
-                source_relpath = str(source.relative_to(repo_root))
-                shard_name = source.parents[1].name
-                shard_id = shard_name.removeprefix("shard_")
-                campaign_id = f"ultrascale_3b__r{round_index:03d}__s{shard_id}"
-                report_relpath = _report_relpath(campaign_id, round_index)
-                with source.open(encoding="utf-8") as handle:
-                    for raw_line in handle:
-                        try:
-                            record = json.loads(raw_line)
-                        except json.JSONDecodeError:
-                            malformed_rows += 1
-                            continue
-                        case_id = str(record.get("case_id", ""))
-                        if (cases is not None and case_id not in cases) or bool(record.get("success", False)):
-                            continue
-                        candidate = dict((record.get("inputs") or {}).get("candidate") or {})
-                        candidate_id = str(record.get("candidate_id", candidate.get("candidate_id", "")))
-                        run_id = str(record.get("run_id", ""))
-                        if not candidate_id or not run_id or not candidate:
-                            malformed_rows += 1
-                            continue
-                        key = _repair_key(source_relpath, candidate_id, run_id)
-                        candidate.update(
-                            {
-                                "candidate_id": f"{candidate_id}::repair::{key[:16]}",
-                                "_repair_key": key,
-                                "_repair_original_candidate_id": candidate_id,
-                                "_repair_source_samples_relpath": source_relpath,
-                                "_repair_source_report_relpath": report_relpath,
-                                "_repair_source_round": round_index,
-                                "_repair_original_run_id": run_id,
-                                "_repair_original_status": str(record.get("termination_status", "unknown")),
-                            }
-                        )
-                        destination.write(json.dumps(candidate, separators=(",", ":")) + "\n")
-                        counts[case_id] = counts.get(case_id, 0) + 1
-                        extracted += 1
+        counts = _extract_sources(repo_root, _source_files(runs_root, rounds), cases, destination)
         destination.flush()
         os.fsync(destination.fileno())
 
@@ -134,10 +154,114 @@ def prepare(
         "rounds": rounds,
         "cases": sorted(cases) if cases is not None else None,
         "all_cases": cases is None,
-        "source_files": source_files,
-        "extracted_failures": extracted,
-        "counts_by_case": counts,
-        "malformed_rows_skipped": malformed_rows,
+        **counts,
+        "candidates_jsonl": str(output),
+    }
+    _atomic_write_json(manifest_path, manifest)
+    return manifest
+
+
+def write_source_list(runs_root: Path, rounds: list[int], output: Path) -> dict[str, Any]:
+    sources = _source_files(runs_root, rounds)
+    _atomic_write_text(output, "".join(f"{source}\n" for source in sources))
+    return {"source_files": len(sources), "source_list": str(output), "rounds": rounds}
+
+
+def prepare_part(
+    repo_root: Path,
+    source_list: Path,
+    part_index: int,
+    part_count: int,
+    cases: set[str] | None,
+    output: Path,
+    manifest_path: Path,
+) -> dict[str, Any]:
+    if part_count <= 0 or not 0 <= part_index < part_count:
+        raise ValueError("part index must satisfy 0 <= part_index < part_count")
+    sources = [Path(line.strip()) for line in source_list.read_text(encoding="utf-8").splitlines() if line.strip()]
+    start = len(sources) * part_index // part_count
+    end = len(sources) * (part_index + 1) // part_count
+    temporary = output.with_suffix(output.suffix + ".in_progress")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with temporary.open("w", encoding="utf-8") as destination:
+        counts = _extract_sources(repo_root, sources[start:end], cases, destination)
+        destination.flush()
+        os.fsync(destination.fileno())
+    temporary.replace(output)
+    manifest = {
+        "schema_version": 1,
+        "mode": "prepare_part",
+        "part_index": part_index,
+        "part_count": part_count,
+        "source_start": start,
+        "source_end": end,
+        "total_source_files": len(sources),
+        "cases": sorted(cases) if cases is not None else None,
+        **counts,
+        "candidates_jsonl": str(output),
+    }
+    _atomic_write_json(manifest_path, manifest)
+    return manifest
+
+
+def finalize_prepare(
+    parts_dir: Path,
+    part_count: int,
+    runs_root: Path,
+    rounds: list[int],
+    cases: set[str] | None,
+    output: Path,
+    manifest_path: Path,
+) -> dict[str, Any]:
+    totals: dict[str, Any] = {
+        "source_files": 0,
+        "extracted_failures": 0,
+        "counts_by_case": {case_id: 0 for case_id in sorted(cases or set())},
+        "malformed_rows_skipped": 0,
+    }
+    expected_start = 0
+    total_source_files: int | None = None
+    temporary = output.with_suffix(output.suffix + ".in_progress")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with temporary.open("wb") as destination:
+        for part_index in range(part_count):
+            part_output = parts_dir / f"part_{part_index:05d}.jsonl"
+            part_manifest = parts_dir / f"part_{part_index:05d}.json"
+            if not part_output.exists() or not part_manifest.exists():
+                raise RuntimeError(f"missing prepare part {part_index}")
+            item = json.loads(part_manifest.read_text(encoding="utf-8"))
+            if item.get("part_index") != part_index or item.get("part_count") != part_count:
+                raise RuntimeError(f"invalid prepare manifest for part {part_index}")
+            if item.get("source_start") != expected_start:
+                raise RuntimeError(f"noncontiguous source range at part {part_index}")
+            expected_start = int(item["source_end"])
+            if total_source_files is None:
+                total_source_files = int(item["total_source_files"])
+            elif total_source_files != int(item["total_source_files"]):
+                raise RuntimeError("prepare parts disagree on source-file count")
+            with part_output.open("rb") as source:
+                shutil.copyfileobj(source, destination, length=16 * 1024 * 1024)
+            totals["source_files"] += int(item["source_files"])
+            totals["extracted_failures"] += int(item["extracted_failures"])
+            totals["malformed_rows_skipped"] += int(item["malformed_rows_skipped"])
+            for case_id, count in item["counts_by_case"].items():
+                totals["counts_by_case"][case_id] = totals["counts_by_case"].get(case_id, 0) + int(count)
+        destination.flush()
+        os.fsync(destination.fileno())
+    if total_source_files is None or expected_start != total_source_files:
+        temporary.unlink(missing_ok=True)
+        raise RuntimeError(f"prepare parts cover {expected_start} of {total_source_files} source files")
+    temporary.replace(output)
+    manifest = {
+        "schema_version": 1,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "mode": "prepare_parallel",
+        "runs_root": str(runs_root),
+        "rounds": rounds,
+        "cases": sorted(cases) if cases is not None else None,
+        "all_cases": cases is None,
+        "parallel_parts": part_count,
+        **totals,
         "candidates_jsonl": str(output),
     }
     _atomic_write_json(manifest_path, manifest)
@@ -358,6 +482,32 @@ def parse_args() -> argparse.Namespace:
     prepare_parser.add_argument("--output", required=True)
     prepare_parser.add_argument("--manifest", required=True)
 
+    source_parser = subparsers.add_parser("list-sources", help="Write the deterministic repair source-file list.")
+    source_parser.add_argument("--runs-root", default="data/outputs/runs_3b")
+    source_parser.add_argument("--rounds", default="0-5")
+    source_parser.add_argument("--output", required=True)
+
+    part_parser = subparsers.add_parser("prepare-part", help="Extract one contiguous partition of repair sources.")
+    part_parser.add_argument("--source-list", required=True)
+    part_parser.add_argument("--part-index", type=int, required=True)
+    part_parser.add_argument("--part-count", type=int, required=True)
+    part_case_group = part_parser.add_mutually_exclusive_group()
+    part_case_group.add_argument("--cases", nargs="+")
+    part_case_group.add_argument("--all-cases", action="store_true")
+    part_parser.add_argument("--output", required=True)
+    part_parser.add_argument("--manifest", required=True)
+
+    finalize_parser = subparsers.add_parser("finalize-prepare", help="Combine deterministic parallel prepare parts.")
+    finalize_parser.add_argument("--parts-dir", required=True)
+    finalize_parser.add_argument("--part-count", type=int, required=True)
+    finalize_parser.add_argument("--runs-root", default="data/outputs/runs_3b")
+    finalize_parser.add_argument("--rounds", default="0-5")
+    finalize_case_group = finalize_parser.add_mutually_exclusive_group()
+    finalize_case_group.add_argument("--cases", nargs="+")
+    finalize_case_group.add_argument("--all-cases", action="store_true")
+    finalize_parser.add_argument("--output", required=True)
+    finalize_parser.add_argument("--manifest", required=True)
+
     merge_parser = subparsers.add_parser("merge", help="Merge only converged retry rows.")
     merge_parser.add_argument("--repair-runs-root", required=True)
     merge_parser.add_argument("--work-dir", required=True)
@@ -369,9 +519,10 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     repo_root = Path(__file__).resolve().parents[1]
-    if args.command == "prepare":
+    if args.command in {"prepare", "list-sources", "finalize-prepare"}:
         runs_root = Path(args.runs_root)
         runs_root = runs_root if runs_root.is_absolute() else repo_root / runs_root
+    if args.command == "prepare":
         result = prepare(
             repo_root,
             runs_root.resolve(),
@@ -379,6 +530,39 @@ def main() -> None:
             None if args.all_cases else set(args.cases or DEFAULT_CASES),
             (repo_root / args.output).resolve() if not Path(args.output).is_absolute() else Path(args.output),
             (repo_root / args.manifest).resolve() if not Path(args.manifest).is_absolute() else Path(args.manifest),
+        )
+    elif args.command == "list-sources":
+        output = Path(args.output)
+        result = write_source_list(
+            runs_root.resolve(),
+            _parse_rounds(args.rounds),
+            (repo_root / output).resolve() if not output.is_absolute() else output,
+        )
+    elif args.command == "prepare-part":
+        source_list = Path(args.source_list)
+        output = Path(args.output)
+        manifest = Path(args.manifest)
+        result = prepare_part(
+            repo_root,
+            (repo_root / source_list).resolve() if not source_list.is_absolute() else source_list,
+            args.part_index,
+            args.part_count,
+            None if args.all_cases else set(args.cases or DEFAULT_CASES),
+            (repo_root / output).resolve() if not output.is_absolute() else output,
+            (repo_root / manifest).resolve() if not manifest.is_absolute() else manifest,
+        )
+    elif args.command == "finalize-prepare":
+        parts_dir = Path(args.parts_dir)
+        output = Path(args.output)
+        manifest = Path(args.manifest)
+        result = finalize_prepare(
+            (repo_root / parts_dir).resolve() if not parts_dir.is_absolute() else parts_dir,
+            args.part_count,
+            runs_root.resolve(),
+            _parse_rounds(args.rounds),
+            None if args.all_cases else set(args.cases or DEFAULT_CASES),
+            (repo_root / output).resolve() if not output.is_absolute() else output,
+            (repo_root / manifest).resolve() if not manifest.is_absolute() else manifest,
         )
     else:
         repair_runs_root = Path(args.repair_runs_root)
