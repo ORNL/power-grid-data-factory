@@ -18,6 +18,7 @@ REPAIR_ID=${REPAIR_ID:-riker_activsg2000_case300_r000_r005_parallel_v1}
 ROUNDS=${ROUNDS:-0-5}
 SOURCE_RUNS_ROOT=${SOURCE_RUNS_ROOT:-data/outputs/runs_3b}
 WORK_ROOT=${WORK_ROOT:-data/outputs/repairs/$REPAIR_ID}
+SHARD_COUNT=${SHARD_COUNT:-8192}
 COMPUTE_SCRIPT=${COMPUTE_SCRIPT:-$ROOT/configs/slurm/riker_repair_activsg2000_case300.sbatch}
 SOURCE_LIST="$ROOT/$WORK_ROOT/source_files.txt"
 
@@ -26,10 +27,11 @@ mkdir -p data/scratch/logs "$ROOT/$WORK_ROOT"
 [[ -x "$PYBIN" ]] || { echo "Missing Python: $PYBIN" >&2; exit 2; }
 
 if [[ ! -s "$SOURCE_LIST" ]]; then
-    echo "[$(date -u +%FT%TZ)] preparing repair source list on one node"
+    echo "[$(date -u +%FT%TZ)] preparing repair source list on one node (deterministic, no directory scan)"
     PYTHONPATH="$ROOT/src" "$PYBIN" scripts/repair_failed_campaign_cases.py list-sources \
         --runs-root "$SOURCE_RUNS_ROOT" \
         --rounds "$ROUNDS" \
+        --shard-count "$SHARD_COUNT" \
         --output "$SOURCE_LIST"
 fi
 
