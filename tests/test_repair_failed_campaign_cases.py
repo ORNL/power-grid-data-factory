@@ -183,6 +183,59 @@ class RepairFailedCampaignCasesTests(unittest.TestCase):
             self.assertEqual(prepared["counts_by_case"], {"case-a": 1, "case-b": 1})
             self.assertTrue(prepared["all_cases"])
 
+    def test_parallel_prepare_matches_serial_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runs_root = root / "data/outputs/runs_3b"
+            records = [
+                self._record(
+                    success=index == 2,
+                    status="LOCALLY_SOLVED" if index == 2 else "LOCALLY_INFEASIBLE",
+                    candidate={
+                        "candidate_id": f"case-{index % 2}::{index}",
+                        "case_id": "activsg2000" if index % 2 == 0 else "pglib_opf_case300_ieee",
+                    },
+                    run_id=f"run-{index}",
+                )
+                for index in range(5)
+            ]
+            for index, record in enumerate(records):
+                source = runs_root / f"mapreduce_round_00{index % 2}/shard_{index:05d}/ac_opf/samples.jsonl"
+                source.parent.mkdir(parents=True)
+                source.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+            cases = {"activsg2000", "pglib_opf_case300_ieee"}
+            serial_output = root / "serial.jsonl"
+            _REPAIR.prepare(root, runs_root, [0, 1], cases, serial_output, root / "serial.json")
+            source_list = root / "source_files.txt"
+            _REPAIR.write_source_list(runs_root, [0, 1], source_list)
+            parts_dir = root / "parts"
+            for part_index in range(3):
+                _REPAIR.prepare_part(
+                    root,
+                    source_list,
+                    part_index,
+                    3,
+                    cases,
+                    parts_dir / f"part_{part_index:05d}.jsonl",
+                    parts_dir / f"part_{part_index:05d}.json",
+                )
+            parallel_output = root / "parallel.jsonl"
+            manifest = _REPAIR.finalize_prepare(
+                parts_dir,
+                3,
+                runs_root,
+                [0, 1],
+                cases,
+                parallel_output,
+                root / "parallel.json",
+            )
+
+            self.assertEqual(parallel_output.read_bytes(), serial_output.read_bytes())
+            self.assertEqual(manifest["source_files"], 5)
+            self.assertEqual(manifest["extracted_failures"], 4)
+            self.assertEqual(manifest["parallel_parts"], 3)
+
 
 if __name__ == "__main__":
     unittest.main()
