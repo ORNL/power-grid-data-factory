@@ -23,13 +23,14 @@ COUNT=${COUNT:-100000}
 SEED_BASE=${SEED_BASE:-20260925}
 ACCOUNT=${ACCOUNT:-lrn070}
 QOS=${QOS:-normal}
-ROUND_SBATCH=${ROUND_SBATCH:-configs/slurm/riker_pf_mapreduce.sbatch}
+ROUND_SBATCH=${ROUND_SBATCH:-configs/slurm/riker_pf_prepare.sbatch}
 CONFIG=${CONFIG:-configs/pf_campaign_riker.yaml}
 ANCHOR_INDEX=${ANCHOR_INDEX:-$ROOT/data/derived/pf_anchors/andes_acopf_anchors.parquet}
 RUNS_ROOT=${RUNS_ROOT:-data/outputs/runs/$CAMPAIGN_ID}
 ROUND_NODES=${ROUND_NODES:-64}
 ROUND_TASKS_PER_NODE=${ROUND_TASKS_PER_NODE:-32}
 ROUND_TIME=${ROUND_TIME:-36:00:00}
+PREP_TIME=${PREP_TIME:-04:00:00}
 SHARD_MULTIPLIER=${SHARD_MULTIPLIER:-8}
 ROUND_SHARD_COUNT=${ROUND_SHARD_COUNT:-$((ROUND_NODES * ROUND_TASKS_PER_NODE * SHARD_MULTIPLIER))}
 MAX_FAILURE_FRACTION=${MAX_FAILURE_FRACTION:-0.5}
@@ -68,15 +69,18 @@ if ! PYTHONPATH="$ROOT/src" "$PYBIN" "$DRIVE_SCRIPT" \
   --account "$ACCOUNT" \
   --dependency-type "$DEP_TYPE" \
   --emit-plan "$PLAN_FILE" \
-  --nodes "$ROUND_NODES" \
-  --ntasks-per-node "$ROUND_TASKS_PER_NODE" \
+  --nodes 1 \
+  --ntasks-per-node 1 \
   --cpus-per-task 1 \
-  --time "$ROUND_TIME" \
+  --time "$PREP_TIME" \
   --set "COUNT=$COUNT" \
   --set "SEED_BASE=$SEED_BASE" \
   --set "CONFIG=$CONFIG" \
   --set "ANCHOR_INDEX=$ANCHOR_INDEX" \
   --set "RUNS_ROOT=$RUNS_ROOT" \
+  --set "ROUND_NODES=$ROUND_NODES" \
+  --set "ROUND_TASKS_PER_NODE=$ROUND_TASKS_PER_NODE" \
+  --set "ROUND_TIME=$ROUND_TIME" \
   --set "SHARD_COUNT=$ROUND_SHARD_COUNT" \
   --set "MAX_FAILURE_FRACTION=$MAX_FAILURE_FRACTION" \
   --set "COINHSL_ENV=$COINHSL_ENV" \
