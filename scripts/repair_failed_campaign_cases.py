@@ -65,11 +65,15 @@ def _report_relpath(campaign_id: str, round_index: int) -> str:
     )
 
 
-def _source_files(runs_root: Path, rounds: list[int]) -> list[Path]:
+def _source_files(runs_root: Path, rounds: list[int], shard_count: int = 8192) -> list[Path]:
+    # Deterministic construction avoids Lustre directory-enumeration stalls: a
+    # wildcard glob() here must readdir every shard subdirectory (tens of
+    # thousands of entries), which has been observed to hang for hours.
     sources: list[Path] = []
     for round_index in rounds:
-        pattern = f"mapreduce_round_{round_index:03d}/shard_*/ac_opf/samples.jsonl"
-        sources.extend(sorted(runs_root.glob(pattern)))
+        round_dir = runs_root / f"mapreduce_round_{round_index:03d}"
+        for shard_index in range(shard_count):
+            sources.append(round_dir / f"shard_{shard_index:05d}" / "ac_opf" / "samples.jsonl")
     return sources
 
 
@@ -82,6 +86,8 @@ def _extract_sources(
     counts = {case_id: 0 for case_id in sorted(cases or set())}
     malformed_rows = 0
     extracted = 0
+    processed_sources = 0
+    missing_sources = 0
 
     for source in sources:
         source_relpath = str(source.relative_to(repo_root))
@@ -89,7 +95,15 @@ def _extract_sources(
         shard_id = source.parents[1].name.removeprefix("shard_")
         campaign_id = f"ultrascale_3b__r{round_index:03d}__s{shard_id}"
         report_relpath = _report_relpath(campaign_id, round_index)
-        with source.open(encoding="utf-8") as handle:
+        # Deterministic source lists are not existence-checked up front, so a
+        # missing shard (e.g. one that never produced ac_opf output) is expected.
+        try:
+            handle = source.open(encoding="utf-8")
+        except FileNotFoundError:
+            missing_sources += 1
+            continue
+        processed_sources += 1
+        with handle:
             for raw_line in handle:
                 try:
                     record = json.loads(raw_line)
@@ -123,7 +137,8 @@ def _extract_sources(
                 extracted += 1
 
     return {
-        "source_files": len(sources),
+        "source_files": processed_sources,
+        "missing_sources": missing_sources,
         "extracted_failures": extracted,
         "counts_by_case": counts,
         "malformed_rows_skipped": malformed_rows,
@@ -137,12 +152,13 @@ def prepare(
     cases: set[str] | None,
     output: Path,
     manifest_path: Path,
+    shard_count: int = 8192,
 ) -> dict[str, Any]:
     if output.exists():
         output.unlink()
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8") as destination:
-        counts = _extract_sources(repo_root, _source_files(runs_root, rounds), cases, destination)
+        counts = _extract_sources(repo_root, _source_files(runs_root, rounds, shard_count), cases, destination)
         destination.flush()
         os.fsync(destination.fileno())
 
@@ -161,8 +177,8 @@ def prepare(
     return manifest
 
 
-def write_source_list(runs_root: Path, rounds: list[int], output: Path) -> dict[str, Any]:
-    sources = _source_files(runs_root, rounds)
+def write_source_list(runs_root: Path, rounds: list[int], output: Path, shard_count: int = 8192) -> dict[str, Any]:
+    sources = _source_files(runs_root, rounds, shard_count)
     _atomic_write_text(output, "".join(f"{source}\n" for source in sources))
     return {"source_files": len(sources), "source_list": str(output), "rounds": rounds}
 
@@ -476,6 +492,7 @@ def parse_args() -> argparse.Namespace:
     prepare_parser = subparsers.add_parser("prepare", help="Extract failed target-case candidates.")
     prepare_parser.add_argument("--runs-root", default="data/outputs/runs_3b")
     prepare_parser.add_argument("--rounds", default="0-5")
+    prepare_parser.add_argument("--shard-count", type=int, default=8192)
     case_group = prepare_parser.add_mutually_exclusive_group()
     case_group.add_argument("--cases", nargs="+")
     case_group.add_argument("--all-cases", action="store_true", help="Extract failures for every case.")
@@ -485,6 +502,7 @@ def parse_args() -> argparse.Namespace:
     source_parser = subparsers.add_parser("list-sources", help="Write the deterministic repair source-file list.")
     source_parser.add_argument("--runs-root", default="data/outputs/runs_3b")
     source_parser.add_argument("--rounds", default="0-5")
+    source_parser.add_argument("--shard-count", type=int, default=8192)
     source_parser.add_argument("--output", required=True)
 
     part_parser = subparsers.add_parser("prepare-part", help="Extract one contiguous partition of repair sources.")
@@ -530,6 +548,7 @@ def main() -> None:
             None if args.all_cases else set(args.cases or DEFAULT_CASES),
             (repo_root / args.output).resolve() if not Path(args.output).is_absolute() else Path(args.output),
             (repo_root / args.manifest).resolve() if not Path(args.manifest).is_absolute() else Path(args.manifest),
+            args.shard_count,
         )
     elif args.command == "list-sources":
         output = Path(args.output)
@@ -537,6 +556,7 @@ def main() -> None:
             runs_root.resolve(),
             _parse_rounds(args.rounds),
             (repo_root / output).resolve() if not output.is_absolute() else output,
+            args.shard_count,
         )
     elif args.command == "prepare-part":
         source_list = Path(args.source_list)
