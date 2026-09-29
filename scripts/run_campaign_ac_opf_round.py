@@ -20,6 +20,7 @@ try:
         _descriptor_from_result,
         _load_bands,
         _loaded_sample_ids,
+        _loaded_sample_progress,
         _read_existing_diversity,
         _read_jsonl,
         _resolve_case_file,
@@ -52,6 +53,7 @@ except ModuleNotFoundError:
         _descriptor_from_result,
         _load_bands,
         _loaded_sample_ids,
+        _loaded_sample_progress,
         _read_existing_diversity,
         _read_jsonl,
         _resolve_case_file,
@@ -73,6 +75,7 @@ except ModuleNotFoundError:
     from grid_data_factory.storage.layout import has_finalized_attempt
 
 from grid_data_factory.storage import paths  # noqa: E402
+from grid_data_factory.campaigns.progress import SolveProgress  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -96,6 +99,8 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--execution-policy", default="", help="Optional per-case enable/timeout YAML policy.")
     p.add_argument("--max-candidates", type=int, default=0)
+    p.add_argument("--progress-file", default="", help="Optional atomic live-progress JSON path.")
+    p.add_argument("--progress-interval-s", type=float, default=60.0)
     p.add_argument("--continue-on-error", action="store_true")
     p.add_argument(
         "--max-failure-fraction",
@@ -137,7 +142,20 @@ def main() -> None:
     failed_rows: list[dict[str, Any]] = []
     skipped_rows: list[dict[str, Any]] = []
 
-    done_ids = _loaded_sample_ids(runs_root) if args.resume else set()
+    if args.resume:
+        done_ids, initial_progress = _loaded_sample_progress(runs_root)
+    else:
+        done_ids, initial_progress = set(), {}
+    progress_path = Path(args.progress_file) if args.progress_file else None
+    if progress_path is not None and not progress_path.is_absolute():
+        progress_path = (repo_root / progress_path).resolve()
+    progress = SolveProgress(
+        progress_path,
+        args.campaign_id,
+        len(candidates),
+        initial_progress,
+        args.progress_interval_s,
+    )
 
     # Reuse one Julia process and one output handle for the whole shard.
     sink = SampleSink(runs_root, args.solver_id)
@@ -160,6 +178,7 @@ def main() -> None:
         cand.setdefault("dataset", case_dataset)
         try:
             if args.resume and str(cand.get("candidate_id")) in done_ids:
+                progress.skipped(str(cand.get("candidate_id")))
                 skipped_rows.append(
                     {
                         "candidate_id": cand.get("candidate_id"),
@@ -170,6 +189,7 @@ def main() -> None:
                 continue
             case_settings = settings_for_case(execution_policy, case_id, args.timeout_s)
             if not case_settings.enabled:
+                progress.skipped(str(cand.get("candidate_id")))
                 skipped_rows.append(
                     {
                         "candidate_id": cand.get("candidate_id"),
@@ -210,8 +230,10 @@ def main() -> None:
                         float(cost[2]),
                     ]
 
+            progress.started(str(cand.get("candidate_id")))
             result = solver.solve_ac_opf(solver_case_data, timeout_s=case_settings.timeout_s)
             samples_path, run_id = sink.append(cand, case_data, result)
+            progress.result(case_id, str(cand.get("candidate_id")), result)
             result["_run_id"] = run_id
 
             margins = _build_margins(case_data, result)
@@ -284,6 +306,7 @@ def main() -> None:
                 }
             )
         except Exception as exc:  # noqa: BLE001
+            progress.error(str(cand.get("candidate_id")))
             failed_rows.append(
                 {
                     "candidate_id": cand.get("candidate_id"),
@@ -344,6 +367,7 @@ def main() -> None:
             "skipped_count": len(skipped_rows),
         },
     )
+    progress.complete()
 
     print(json.dumps({"ok": out_report["ok"], "report": str(report_path), "skipped_count": len(skipped_rows)}, indent=2))
     if not out_report["ok"]:
