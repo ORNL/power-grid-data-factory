@@ -648,11 +648,19 @@ class SampleSink:
         self.close()
 
 
-def _loaded_sample_ids(runs_root: Path, task: str = "ac_opf") -> set[str]:
+def _loaded_sample_progress(runs_root: Path, task: str = "ac_opf") -> tuple[set[str], dict[str, Any]]:
     samples_path = _shard_samples_path(runs_root, task)
     done: set[str] = set()
+    summary: dict[str, Any] = {
+        "attempted": 0,
+        "converged": 0,
+        "unsuccessful": 0,
+        "counts_by_case": {},
+        "converged_by_case": {},
+        "termination_statuses": {},
+    }
     if not samples_path.exists():
-        return done
+        return done, summary
     with samples_path.open("r", encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
@@ -665,6 +673,21 @@ def _loaded_sample_ids(runs_root: Path, task: str = "ac_opf") -> set[str]:
             cid = rec.get("candidate_id")
             if cid is not None:
                 done.add(str(cid))
+            case_id = str(rec.get("case_id", "unknown"))
+            status = str(rec.get("termination_status", "unknown"))
+            summary["attempted"] += 1
+            summary["counts_by_case"][case_id] = summary["counts_by_case"].get(case_id, 0) + 1
+            summary["termination_statuses"][status] = summary["termination_statuses"].get(status, 0) + 1
+            if bool(rec.get("success", False)):
+                summary["converged"] += 1
+                summary["converged_by_case"][case_id] = summary["converged_by_case"].get(case_id, 0) + 1
+            else:
+                summary["unsuccessful"] += 1
+    return done, summary
+
+
+def _loaded_sample_ids(runs_root: Path, task: str = "ac_opf") -> set[str]:
+    done, _ = _loaded_sample_progress(runs_root, task)
     return done
 
 

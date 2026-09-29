@@ -39,10 +39,11 @@ PREPARE_PARTS_DIR=$ROOT/$WORK_ROOT/prepare_parts
 SHARD_DIR=$ROOT/$WORK_ROOT/shards
 REPAIR_RUNS_ROOT=$ROOT/$WORK_ROOT/runs
 DONE_DIR=$ROOT/$WORK_ROOT/done
+PROGRESS_DIR=$ROOT/$WORK_ROOT/progress
 MERGE_MANIFEST=$ROOT/$WORK_ROOT/merge_manifest.json
 
 cd "$ROOT"
-mkdir -p data/scratch/logs "$ROOT/$WORK_ROOT" "$DONE_DIR"
+mkdir -p data/scratch/logs "$ROOT/$WORK_ROOT" "$DONE_DIR" "$PROGRESS_DIR"
 unset PYTHONUSERBASE PYTHONNOUSERSITE
 export PGDF_JULIA_BIN=${PGDF_JULIA_BIN:-$ROOT/.software/bin/julia}
 export PGDF_JULIA_PROJECT_DIR=${PGDF_JULIA_PROJECT_DIR:-$ROOT/julia/lockfiles/riker}
@@ -189,6 +190,7 @@ WORK_ROOT="'$WORK_ROOT'"
 SHARD_DIR="'$SHARD_DIR'"
 REPAIR_RUNS_ROOT="'$REPAIR_RUNS_ROOT'"
 DONE_DIR="'$DONE_DIR'"
+PROGRESS_DIR="'$PROGRESS_DIR'"
 RUN_SCRIPT="'$RUN_SCRIPT'"
 PYBIN="'$PYBIN'"
 TIMEOUT_S="'$TIMEOUT_S'"
@@ -218,6 +220,7 @@ for ((index=TASK_ID; index<${#SHARDS[@]}; index+=TASK_COUNT)); do
         --runs-root "$REPAIR_RUNS_ROOT/shard_${shard_number}" \
         --solver-id "$SOLVER_ID" \
         --timeout-s "$TIMEOUT_S" \
+        --progress-file "$PROGRESS_DIR/shard_${shard_number}.json" \
         "${SOLVER_ARGS[@]}" \
         --continue-on-error \
         --max-failure-fraction 1.0 \
