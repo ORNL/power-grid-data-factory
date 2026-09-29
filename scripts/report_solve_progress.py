@@ -13,6 +13,8 @@ def aggregate(progress_dir: Path, shard_count: int) -> dict[str, Any]:
     counts_by_case: Counter[str] = Counter()
     converged_by_case: Counter[str] = Counter()
     termination_statuses: Counter[str] = Counter()
+    session_converged_by_case: Counter[str] = Counter()
+    session_termination_statuses: Counter[str] = Counter()
     latest_update: str | None = None
     for shard_index in range(shard_count):
         path = progress_dir / f"shard_{shard_index:05d}.json"
@@ -23,11 +25,24 @@ def aggregate(progress_dir: Path, shard_count: int) -> dict[str, Any]:
         totals["started_shards"] += 1
         totals["complete_shards"] += item.get("phase") == "complete"
         totals["active_calculations"] += item.get("phase") == "running" and bool(item.get("current_candidate_id"))
-        for key in ("total_candidates", "attempted", "converged", "unsuccessful", "errors", "skipped"):
+        for key in (
+            "total_candidates",
+            "attempted",
+            "converged",
+            "unsuccessful",
+            "resumed_attempts",
+            "session_attempted",
+            "session_converged",
+            "session_unsuccessful",
+            "errors",
+            "skipped",
+        ):
             totals[key] += int(item.get(key, 0))
         counts_by_case.update(item.get("counts_by_case", {}))
         converged_by_case.update(item.get("converged_by_case", {}))
         termination_statuses.update(item.get("termination_statuses", {}))
+        session_converged_by_case.update(item.get("session_converged_by_case", {}))
+        session_termination_statuses.update(item.get("session_termination_statuses", {}))
         updated_at = item.get("updated_at")
         if updated_at and (latest_update is None or updated_at > latest_update):
             latest_update = updated_at
@@ -37,6 +52,8 @@ def aggregate(progress_dir: Path, shard_count: int) -> dict[str, Any]:
         "counts_by_case": dict(sorted(counts_by_case.items())),
         "converged_by_case": dict(sorted(converged_by_case.items())),
         "termination_statuses": dict(sorted(termination_statuses.items())),
+        "session_converged_by_case": dict(sorted(session_converged_by_case.items())),
+        "session_termination_statuses": dict(sorted(session_termination_statuses.items())),
         "latest_update": latest_update,
     }
 
