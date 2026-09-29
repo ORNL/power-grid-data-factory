@@ -648,7 +648,11 @@ class SampleSink:
         self.close()
 
 
-def _loaded_sample_progress(runs_root: Path, task: str = "ac_opf") -> tuple[set[str], dict[str, Any]]:
+def _loaded_sample_progress(
+    runs_root: Path,
+    task: str = "ac_opf",
+    retry_termination_statuses: set[str] | None = None,
+) -> tuple[set[str], dict[str, Any]]:
     samples_path = _shard_samples_path(runs_root, task)
     done: set[str] = set()
     summary: dict[str, Any] = {
@@ -670,11 +674,11 @@ def _loaded_sample_progress(runs_root: Path, task: str = "ac_opf") -> tuple[set[
                 rec = json.loads(line)
             except json.JSONDecodeError:
                 continue  # tolerate a truncated trailing line from a walltime-killed job
-            cid = rec.get("candidate_id")
-            if cid is not None:
-                done.add(str(cid))
             case_id = str(rec.get("case_id", "unknown"))
             status = str(rec.get("termination_status", "unknown"))
+            cid = rec.get("candidate_id")
+            if cid is not None and status not in (retry_termination_statuses or set()):
+                done.add(str(cid))
             summary["attempted"] += 1
             summary["counts_by_case"][case_id] = summary["counts_by_case"].get(case_id, 0) + 1
             summary["termination_statuses"][status] = summary["termination_statuses"].get(status, 0) + 1
