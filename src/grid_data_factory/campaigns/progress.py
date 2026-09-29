@@ -29,11 +29,17 @@ class SolveProgress:
             "attempted": int(initial.get("attempted", 0)),
             "converged": int(initial.get("converged", 0)),
             "unsuccessful": int(initial.get("unsuccessful", 0)),
+            "resumed_attempts": int(initial.get("attempted", 0)),
+            "session_attempted": 0,
+            "session_converged": 0,
+            "session_unsuccessful": 0,
             "errors": 0,
             "skipped": 0,
             "counts_by_case": dict(initial.get("counts_by_case", {})),
             "converged_by_case": dict(initial.get("converged_by_case", {})),
             "termination_statuses": dict(initial.get("termination_statuses", {})),
+            "session_converged_by_case": {},
+            "session_termination_statuses": {},
             "current_candidate_id": None,
             "updated_at": None,
         }
@@ -44,19 +50,25 @@ class SolveProgress:
         values[key] = int(values.get(key, 0)) + 1
 
     def started(self, candidate_id: str) -> None:
+        first_candidate = self.state["current_candidate_id"] is None
         self.state["current_candidate_id"] = candidate_id
-        self.write()
+        self.write(force=first_candidate)
 
     def result(self, case_id: str, candidate_id: str, result: dict[str, Any]) -> None:
         self.state["attempted"] += 1
+        self.state["session_attempted"] += 1
         self.state["current_candidate_id"] = candidate_id
         self._increment(self.state["counts_by_case"], case_id)
         self._increment(self.state["termination_statuses"], str(result.get("termination_status", "unknown")))
+        self._increment(self.state["session_termination_statuses"], str(result.get("termination_status", "unknown")))
         if bool(result.get("success", False)):
             self.state["converged"] += 1
+            self.state["session_converged"] += 1
             self._increment(self.state["converged_by_case"], case_id)
+            self._increment(self.state["session_converged_by_case"], case_id)
         else:
             self.state["unsuccessful"] += 1
+            self.state["session_unsuccessful"] += 1
         self.write()
 
     def error(self, candidate_id: str) -> None:

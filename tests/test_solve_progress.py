@@ -63,6 +63,9 @@ class SolveProgressTests(unittest.TestCase):
             self.assertEqual(summary["complete_shards"], 1)
             self.assertEqual(summary["attempted"], 3)
             self.assertEqual(summary["converged"], 2)
+            self.assertEqual(summary["resumed_attempts"], 2)
+            self.assertEqual(summary["session_attempted"], 1)
+            self.assertEqual(summary["session_converged"], 1)
             self.assertEqual(
                 summary["converged_by_case"],
                 {"activsg2000": 1, "pglib_opf_case300_ieee": 1},
