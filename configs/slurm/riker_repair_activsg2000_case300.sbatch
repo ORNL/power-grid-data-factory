@@ -99,7 +99,10 @@ if [[ ! -s "$PREPARE_MANIFEST" || ! -s "$CANDIDATES" ]]; then
     }
     mkdir -p "$PREPARE_PARTS_DIR"
     echo "[$(date -u +%FT%TZ)] parallel prepare: sources=$(wc -l < "$SOURCE_LIST") tasks=$SLURM_NTASKS"
-    srun --ntasks="$SLURM_NTASKS" --nodes="$SLURM_JOB_NUM_NODES" --kill-on-bad-exit=1 bash -lc '
+    # kill-on-bad-exit=0: a single task hitting a transient Lustre I/O error must
+    # not discard the other 511 tasks' idempotent per-part output; a resubmit
+    # resumes by only recomputing parts still missing their output+manifest.
+    srun --ntasks="$SLURM_NTASKS" --nodes="$SLURM_JOB_NUM_NODES" --kill-on-bad-exit=0 bash -lc '
 set -euo pipefail
 ROOT="'$ROOT'"
 PYBIN="'$PYBIN'"
