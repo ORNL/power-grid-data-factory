@@ -126,8 +126,17 @@ def main() -> None:
     )
 
     outcomes: Counter[str] = Counter()
+    filter_labels: dict[str, Counter[str]] = {
+        "solver_convergence": Counter(),
+        "equation_balance_status": Counter(),
+        "operational_status": Counter(),
+        "anchor_consistency_status": Counter(),
+    }
     for report in reports:
         outcomes.update(report.get("outcome_counts") or {})
+        for label, counts in (report.get("filter_label_counts") or {}).items():
+            if label in filter_labels:
+                filter_labels[label].update(counts)
 
     runs_root = Path(args.runs_root) if args.runs_root else repo_root / "data" / "outputs" / "runs" / args.campaign_id
     runs_root = runs_root if runs_root.is_absolute() else repo_root / runs_root
@@ -157,6 +166,10 @@ def main() -> None:
         "failed": sum(int(report.get("failed", 0)) for report in reports),
         "skipped": sum(int(report.get("skipped", 0)) for report in reports),
         "outcome_counts": dict(outcomes),
+        "filter_label_counts": {
+            label: dict(counts)
+            for label, counts in filter_labels.items()
+        },
         "linear_solver_counts": dict(linear_solvers),
         "solver_attempt_counts": dict(solver_attempts),
         "ledger_counts": ledger_counts,

@@ -19,6 +19,7 @@ try:
         _descriptor_from_result,
         _load_bands,
         _loaded_sample_ids,
+        _pf_filter_labels,
         _pf_outcome_class,
         _read_existing_diversity,
         _read_jsonl,
@@ -43,6 +44,7 @@ except ModuleNotFoundError:
         _descriptor_from_result,
         _load_bands,
         _loaded_sample_ids,
+        _pf_filter_labels,
         _pf_outcome_class,
         _read_existing_diversity,
         _read_jsonl,
@@ -118,6 +120,12 @@ def main() -> None:
     boundary_rows = []
     coverage_rows = []
     outcome_counts: Counter[str] = Counter()
+    filter_label_counts: dict[str, Counter[str]] = {
+        "solver_convergence": Counter(),
+        "equation_balance_status": Counter(),
+        "operational_status": Counter(),
+        "anchor_consistency_status": Counter(),
+    }
     linear_solver_counts: Counter[str] = Counter()
     solver_attempt_counts: Counter[str] = Counter()
     hsl_library = os.environ.get("IPOPT_HSL_LIBRARY", "").strip()
@@ -164,6 +172,9 @@ def main() -> None:
                         validation["reason"] = "anchor_consistency_failed"
                 result["validation"] = validation
                 result["validation_passed"] = validation["validation_passed"]
+                filter_labels = _pf_filter_labels(result, candidate)
+                for label, value in filter_labels.items():
+                    filter_label_counts[label][value] += 1
                 _, run_id = sink.append(candidate, post_case, result)
                 result["_run_id"] = run_id
                 report["solved"] += 1
@@ -231,6 +242,10 @@ def main() -> None:
     append_parquet_rows(campaign_root / "security_boundary_ledger.parquet", boundary_rows)
     append_parquet_rows(campaign_root / "pf_coverage_ledger.parquet", coverage_rows)
     report["outcome_counts"] = dict(outcome_counts)
+    report["filter_label_counts"] = {
+        label: dict(counts)
+        for label, counts in filter_label_counts.items()
+    }
     report["linear_solver_counts"] = dict(linear_solver_counts)
     report["solver_attempt_counts"] = dict(solver_attempt_counts)
     nonvalid_outcomes = sum(count for outcome, count in outcome_counts.items() if outcome != "converged_valid")
