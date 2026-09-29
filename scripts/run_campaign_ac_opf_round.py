@@ -101,6 +101,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-candidates", type=int, default=0)
     p.add_argument("--progress-file", default="", help="Optional atomic live-progress JSON path.")
     p.add_argument("--progress-interval-s", type=float, default=60.0)
+    p.add_argument(
+        "--retry-termination-statuses",
+        default="",
+        help="Comma-separated recorded statuses that resume must execute again.",
+    )
     p.add_argument("--continue-on-error", action="store_true")
     p.add_argument(
         "--max-failure-fraction",
@@ -143,7 +148,11 @@ def main() -> None:
     skipped_rows: list[dict[str, Any]] = []
 
     if args.resume:
-        done_ids, initial_progress = _loaded_sample_progress(runs_root)
+        retry_statuses = {status.strip() for status in args.retry_termination_statuses.split(",") if status.strip()}
+        done_ids, initial_progress = _loaded_sample_progress(
+            runs_root,
+            retry_termination_statuses=retry_statuses,
+        )
     else:
         done_ids, initial_progress = set(), {}
     progress_path = Path(args.progress_file) if args.progress_file else None

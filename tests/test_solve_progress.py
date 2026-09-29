@@ -36,13 +36,16 @@ class SolveProgressTests(unittest.TestCase):
                     "candidate_id": "b",
                     "case_id": "pglib_opf_case300_ieee",
                     "success": False,
-                    "termination_status": "LOCALLY_INFEASIBLE",
+                    "termination_status": "process_error",
                 },
             ]
             samples.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
 
-            done, initial = _loaded_sample_progress(root / "runs")
-            self.assertEqual(done, {"a", "b"})
+            done, initial = _loaded_sample_progress(
+                root / "runs",
+                retry_termination_statuses={"process_error"},
+            )
+            self.assertEqual(done, {"a"})
             self.assertEqual(initial["attempted"], 2)
             self.assertEqual(initial["converged_by_case"], {"activsg2000": 1})
 

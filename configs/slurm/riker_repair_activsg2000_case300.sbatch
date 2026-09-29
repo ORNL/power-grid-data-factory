@@ -221,6 +221,7 @@ for ((index=TASK_ID; index<${#SHARDS[@]}; index+=TASK_COUNT)); do
         --solver-id "$SOLVER_ID" \
         --timeout-s "$TIMEOUT_S" \
         --progress-file "$PROGRESS_DIR/shard_${shard_number}.json" \
+        --retry-termination-statuses process_error,exception,server_exception \
         "${SOLVER_ARGS[@]}" \
         --continue-on-error \
         --max-failure-fraction 1.0 \
