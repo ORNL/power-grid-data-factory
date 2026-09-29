@@ -110,6 +110,34 @@ class PersistentSessionTests(unittest.TestCase):
             self.assertTrue(first["runtime_metadata"]["persistent_julia"])
             self.assertEqual(process.stdin.getvalue().count("\n"), 2)
 
+    def test_ac_opf_fallback_tries_default_then_ma27_then_ma57(self) -> None:
+        with TemporaryDirectory() as tmp:
+            adapter = PowerModelsAdapter(repo_root=Path(tmp))
+            session = PersistentPowerModelsSession(
+                adapter,
+                {"timeout_s": 5, "linear_solver_fallbacks": ["ma27", "ma57"]},
+            )
+            results = [
+                {"success": False, "termination_status": "LOCALLY_INFEASIBLE", "solve_time": 1.0},
+                {"success": False, "termination_status": "NUMERICAL_ERROR", "solve_time": 2.0},
+                {"success": True, "termination_status": "LOCALLY_SOLVED", "solve_time": 3.0},
+            ]
+            with patch.dict(os.environ, {"IPOPT_HSL_LIBRARY": "/private/libcoinhsl.so"}):
+                with patch.object(session, "_solve", side_effect=results) as solve:
+                    result = session.solve_ac_opf({"case_id": "case"})
+
+            self.assertTrue(result["success"])
+            self.assertEqual(result["linear_solver"], "ma57")
+            self.assertEqual(result["solver_attempt_count"], 3)
+            self.assertEqual(
+                [attempt["linear_solver"] for attempt in result["solver_attempts"]],
+                ["default", "ma27", "ma57"],
+            )
+            self.assertEqual(
+                [call.args[3]["options"]["linear_solver"] for call in solve.call_args_list],
+                ["", "ma27", "ma57"],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

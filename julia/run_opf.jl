@@ -111,7 +111,7 @@ function to_powermodels_data(case_data)
             "bus_idx" => bus_id,
             "model" => 2,
             "ncost" => 3,
-            "cost" => [c2 * base_mva^2, c1 * base_mva, c0],
+            "cost" => [c2, c1, c0],
             "startup" => 0.0,
             "shutdown" => 0.0,
         )
@@ -199,74 +199,39 @@ function solve_request(case_data, payload)
         return result
     end
 
-    pm_data = try
-        to_powermodels_data(case_data)
+    try
+        pm_data = to_powermodels_data(case_data)
+        options = haskey(payload, :options) ? payload[:options] : Dict{String, Any}()
+        solver_attrs = Pair{String,Any}[
+            "print_level" => 0,
+            "sb" => "yes",
+            "tol" => 1e-8,
+        ]
+        let linear_solver = haskey(options, :linear_solver) ? String(strip(options[:linear_solver])) : String(strip(get(ENV, "IPOPT_LINEAR_SOLVER", "")))
+            !isempty(linear_solver) && push!(solver_attrs, "linear_solver" => linear_solver)
+        end
+        let hsl_library = haskey(options, :hsl_library) ? String(strip(options[:hsl_library])) : String(strip(get(ENV, "IPOPT_HSL_LIBRARY", "")))
+            !isempty(hsl_library) && push!(solver_attrs, "hsllib" => hsl_library)
+        end
+        optimizer = optimizer_with_attributes(Ipopt.Optimizer, solver_attrs...)
+        # Enable dual variables (nodal-balance duals ~ LMPs, branch/bound multipliers).
+        pm_out = solve_opf(
+            pm_data, ACPPowerModel, optimizer;
+            setting = Dict("output" => Dict("duals" => true)),
+        )
+        term = string(pm_out["termination_status"])
+        ok = term in ("LOCALLY_SOLVED", "OPTIMAL", "ALMOST_LOCALLY_SOLVED", "ALMOST_OPTIMAL")
+        result["success"] = ok
+        result["termination_status"] = term
+        result["objective"] = sanitize_json_value(get(pm_out, "objective", nothing))
+        result["solve_time"] = sanitize_json_value(get(pm_out, "solve_time", nothing))
+        result["raw_result"] = sanitize_json_value(pm_out)
     catch err
+        result["success"] = false
         result["termination_status"] = "exception"
         result["error"] = sprint(showerror, err)
         result["stacktrace"] = sprint(showerror, err, catch_backtrace())
-        return result
     end
-
-    options = haskey(payload, :options) ? payload[:options] : Dict{Symbol, Any}()
-    forced_solver = String(strip(get(ENV, "IPOPT_LINEAR_SOLVER", "")))
-    linear_solvers = isempty(forced_solver) ? [""] : [forced_solver]
-    if isempty(forced_solver) && haskey(options, :linear_solver_fallbacks)
-        for fallback in options[:linear_solver_fallbacks]
-            solver = String(strip(String(fallback)))
-            !isempty(solver) && !(solver in linear_solvers) && push!(linear_solvers, solver)
-        end
-    end
-    total_timeout_s = haskey(options, :timeout_s) ? Float64(options[:timeout_s]) : 0.0
-    attempt_timeout_s = total_timeout_s > 0 ? 0.9 * total_timeout_s / length(linear_solvers) : 0.0
-    attempts = Dict{String, Any}[]
-
-    for linear_solver in linear_solvers
-        attempt = Dict{String, Any}(
-            "linear_solver" => isempty(linear_solver) ? "default" : linear_solver,
-            "success" => false,
-        )
-        try
-            solver_attrs = Pair{String,Any}[
-                "print_level" => 0,
-                "sb" => "yes",
-                "tol" => 1e-8,
-            ]
-            !isempty(linear_solver) && push!(solver_attrs, "linear_solver" => linear_solver)
-            attempt_timeout_s > 0 && push!(solver_attrs, "max_cpu_time" => attempt_timeout_s)
-            let hsl_library = String(strip(get(ENV, "IPOPT_HSL_LIBRARY", "")))
-                !isempty(hsl_library) && push!(solver_attrs, "hsllib" => hsl_library)
-            end
-            optimizer = optimizer_with_attributes(Ipopt.Optimizer, solver_attrs...)
-            pm_out = solve_opf(
-                deepcopy(pm_data), ACPPowerModel, optimizer;
-                setting = Dict("output" => Dict("duals" => true)),
-            )
-            term = string(pm_out["termination_status"])
-            ok = term in ("LOCALLY_SOLVED", "OPTIMAL", "ALMOST_LOCALLY_SOLVED", "ALMOST_OPTIMAL")
-            attempt["success"] = ok
-            attempt["termination_status"] = term
-            attempt["solve_time"] = sanitize_json_value(get(pm_out, "solve_time", nothing))
-            push!(attempts, attempt)
-            result["success"] = ok
-            result["termination_status"] = term
-            result["linear_solver_used"] = attempt["linear_solver"]
-            result["objective"] = sanitize_json_value(get(pm_out, "objective", nothing))
-            result["solve_time"] = sanitize_json_value(get(pm_out, "solve_time", nothing))
-            result["raw_result"] = sanitize_json_value(pm_out)
-            ok && break
-        catch err
-            attempt["termination_status"] = "exception"
-            attempt["error"] = sprint(showerror, err)
-            push!(attempts, attempt)
-            result["success"] = false
-            result["termination_status"] = "exception"
-            result["linear_solver_used"] = attempt["linear_solver"]
-            result["error"] = attempt["error"]
-            result["stacktrace"] = sprint(showerror, err, catch_backtrace())
-        end
-    end
-    result["solver_attempts"] = attempts
     return result
 end
 
