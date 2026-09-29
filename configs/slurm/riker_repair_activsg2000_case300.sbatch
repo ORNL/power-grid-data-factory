@@ -99,9 +99,7 @@ if [[ ! -s "$PREPARE_MANIFEST" || ! -s "$CANDIDATES" ]]; then
     }
     mkdir -p "$PREPARE_PARTS_DIR"
     echo "[$(date -u +%FT%TZ)] parallel prepare: sources=$(wc -l < "$SOURCE_LIST") tasks=$SLURM_NTASKS"
-    # kill-on-bad-exit=0: a single task hitting a transient Lustre I/O error must
-    # not discard the other 511 tasks' idempotent per-part output; a resubmit
-    # resumes by only recomputing parts still missing their output+manifest.
+    # Preserve completed parts when a task exhausts its transient-I/O retries.
     srun --ntasks="$SLURM_NTASKS" --nodes="$SLURM_JOB_NUM_NODES" --kill-on-bad-exit=0 bash -lc '
 set -euo pipefail
 ROOT="'$ROOT'"
@@ -132,7 +130,14 @@ else
     read -r -a case_array <<< "$CASES"
     args+=(--cases "${case_array[@]}")
 fi
-PYTHONPATH="$ROOT/src" "$PYBIN" "$PREPARE_SCRIPT" prepare-part "${args[@]}"
+for attempt in 1 2 3 4 5; do
+    if PYTHONPATH="$ROOT/src" "$PYBIN" "$PREPARE_SCRIPT" prepare-part "${args[@]}"; then
+        exit 0
+    fi
+    rm -f "$output.in_progress" "$manifest.in_progress"
+    echo "prepare-part $PART_INDEX failed on attempt $attempt/5" >&2
+done
+exit 1
 '
     FINALIZE_ARGS=(
         --parts-dir "$PREPARE_PARTS_DIR"
