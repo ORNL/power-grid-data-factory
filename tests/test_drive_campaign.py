@@ -42,6 +42,13 @@ class RoundCompletionTests(unittest.TestCase):
             _write_marker(Path(tmp), "camp", 0, ok=False)
             self.assertFalse(_DRV.round_complete(Path(tmp), "camp", 0))
 
+    def test_explicit_complete_marker_overrides_quality_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = _DRV.reduce_marker_path(Path(tmp), "camp", 0)
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text(json.dumps({"complete": True, "ok": False}), encoding="utf-8")
+            self.assertTrue(_DRV.round_complete(Path(tmp), "camp", 0))
+
     def test_corrupt_marker_is_incomplete(self):
         with tempfile.TemporaryDirectory() as tmp:
             marker = _DRV.reduce_marker_path(Path(tmp), "camp", 0)

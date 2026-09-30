@@ -45,7 +45,7 @@ if [[ "${ROUND_SELF_CONTINUE:-0}" == "1" ]]; then
   fi
 fi
 
-if [[ -s "$REDUCE_MARKER" ]] && grep -q '"ok": true' "$REDUCE_MARKER"; then
+if [[ -s "$REDUCE_MARKER" ]] && grep -Eq '"(complete|ok)": true' "$REDUCE_MARKER"; then
   echo "[$(date -u +%FT%TZ)] PF round already reduced successfully: $REDUCE_MARKER"
   exit 0
 fi
