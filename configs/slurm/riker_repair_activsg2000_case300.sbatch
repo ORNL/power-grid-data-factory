@@ -27,6 +27,9 @@ LINEAR_SOLVER_FALLBACKS=${LINEAR_SOLVER_FALLBACKS:-ma27,ma57}
 LINEAR_SOLVERS=${LINEAR_SOLVERS:-}
 CAMPAIGN_PREFIX=${CAMPAIGN_PREFIX:-repair_activsg2000_case300}
 APPLY_MERGE=${APPLY_MERGE:-1}
+RUN_MERGE=${RUN_MERGE:-1}
+SHARD_GROUP_COUNT=${SHARD_GROUP_COUNT:-1}
+SHARD_GROUP_INDEX=${SHARD_GROUP_INDEX:-0}
 PREFLIGHT_ONLY=${PREFLIGHT_ONLY:-0}
 
 PREPARE_SCRIPT=$ROOT/scripts/repair_failed_campaign_cases.py
@@ -53,6 +56,11 @@ export JULIA_NUM_THREADS=1
 
 [[ -x "$PYBIN" ]] || { echo "Missing Python: $PYBIN" >&2; exit 2; }
 [[ -x "$PGDF_JULIA_BIN" ]] || { echo "Missing Julia wrapper: $PGDF_JULIA_BIN" >&2; exit 2; }
+(( SHARD_GROUP_COUNT >= 1 )) || { echo "SHARD_GROUP_COUNT must be at least 1" >&2; exit 2; }
+(( SHARD_GROUP_INDEX >= 0 && SHARD_GROUP_INDEX < SHARD_GROUP_COUNT )) || {
+    echo "SHARD_GROUP_INDEX must be in [0, SHARD_GROUP_COUNT)" >&2
+    exit 2
+}
 PYTHONPATH="$ROOT/src" "$PYBIN" - "$ROUNDS" <<'PY'
 import sys
 
@@ -168,14 +176,19 @@ if ! compgen -G "$SHARD_DIR/repair_*.jsonl" >/dev/null; then
         --full-budget
 fi
 
-mapfile -t SHARDS < <(find "$SHARD_DIR" -maxdepth 1 -name 'repair_*.jsonl' -size +0 -printf '%f\n' | sort)
-if (( ${#SHARDS[@]} == 0 )); then
+mapfile -t ALL_SHARDS < <(find "$SHARD_DIR" -maxdepth 1 -name 'repair_*.jsonl' -size +0 -printf '%f\n' | sort)
+if (( ${#ALL_SHARDS[@]} == 0 )); then
     echo "No failed target-case candidates found; nothing to repair."
     exit 0
 fi
-printf '%s\n' "${SHARDS[@]}" > "$ROOT/$WORK_ROOT/shards.txt"
+SHARDS=()
+for ((index=SHARD_GROUP_INDEX; index<${#ALL_SHARDS[@]}; index+=SHARD_GROUP_COUNT)); do
+    SHARDS+=("${ALL_SHARDS[$index]}")
+done
+SHARD_LIST="$ROOT/$WORK_ROOT/shards_group_${SHARD_GROUP_INDEX}_of_${SHARD_GROUP_COUNT}.txt"
+printf '%s\n' "${SHARDS[@]}" > "$SHARD_LIST"
 
-echo "[$(date -u +%FT%TZ)] repair_id=$REPAIR_ID rounds=$ROUNDS shards=${#SHARDS[@]} tasks=$SLURM_NTASKS"
+echo "[$(date -u +%FT%TZ)] repair_id=$REPAIR_ID rounds=$ROUNDS shards=${#SHARDS[@]} tasks=$SLURM_NTASKS group=$SHARD_GROUP_INDEX/$SHARD_GROUP_COUNT"
 echo "[$(date -u +%FT%TZ)] source=$SOURCE_RUNS_ROOT isolated_retries=$REPAIR_RUNS_ROOT apply_merge=$APPLY_MERGE"
 if [[ -n "$LINEAR_SOLVERS" ]]; then
     echo "[$(date -u +%FT%TZ)] solver_sequence=$LINEAR_SOLVERS"
@@ -198,11 +211,12 @@ SOLVER_ID="'$SOLVER_ID'"
 LINEAR_SOLVER_FALLBACKS="'$LINEAR_SOLVER_FALLBACKS'"
 LINEAR_SOLVERS="'$LINEAR_SOLVERS'"
 CAMPAIGN_PREFIX="'$CAMPAIGN_PREFIX'"
+SHARD_LIST="'$SHARD_LIST'"
 export PGDF_JULIA_BIN="'$PGDF_JULIA_BIN'" PGDF_JULIA_PROJECT_DIR="'$PGDF_JULIA_PROJECT_DIR'" JULIA_DEPOT_PATH="'$JULIA_DEPOT_PATH'"
 export IPOPT_HSL_LIBRARY="'${IPOPT_HSL_LIBRARY:-}'" LD_LIBRARY_PATH="'${LD_LIBRARY_PATH:-}'" OPENBLAS_NUM_THREADS=1 JULIA_NUM_THREADS=1
 TASK_ID=${SLURM_PROCID:-0}
 TASK_COUNT=${SLURM_NTASKS:-1}
-mapfile -t SHARDS < "'$ROOT'/'$WORK_ROOT'/shards.txt"
+mapfile -t SHARDS < "$SHARD_LIST"
 for ((index=TASK_ID; index<${#SHARDS[@]}; index+=TASK_COUNT)); do
     shard=${SHARDS[$index]}
     shard_number=${shard#repair_}
@@ -230,19 +244,22 @@ for ((index=TASK_ID; index<${#SHARDS[@]}; index+=TASK_COUNT)); do
 done
 '
 
-PYTHONPATH="$ROOT/src" "$PYBIN" "$PREPARE_SCRIPT" merge \
-    --repair-runs-root "$REPAIR_RUNS_ROOT" \
-    --work-dir "$ROOT/$WORK_ROOT" \
-    --manifest "$MERGE_MANIFEST"
-
-if [[ "$APPLY_MERGE" == "1" ]]; then
+if [[ "$RUN_MERGE" == "1" ]]; then
     PYTHONPATH="$ROOT/src" "$PYBIN" "$PREPARE_SCRIPT" merge \
         --repair-runs-root "$REPAIR_RUNS_ROOT" \
         --work-dir "$ROOT/$WORK_ROOT" \
-        --manifest "$MERGE_MANIFEST" \
-        --apply
-else
-    echo "Dry-run merge complete. Set APPLY_MERGE=1 to atomically replace converged failures."
-fi
+        --manifest "$MERGE_MANIFEST"
 
-echo "[$(date -u +%FT%TZ)] repair complete; manifest=$MERGE_MANIFEST"
+    if [[ "$APPLY_MERGE" == "1" ]]; then
+        PYTHONPATH="$ROOT/src" "$PYBIN" "$PREPARE_SCRIPT" merge \
+            --repair-runs-root "$REPAIR_RUNS_ROOT" \
+            --work-dir "$ROOT/$WORK_ROOT" \
+            --manifest "$MERGE_MANIFEST" \
+            --apply
+    else
+        echo "Dry-run merge complete. Set APPLY_MERGE=1 to atomically replace converged failures."
+    fi
+    echo "[$(date -u +%FT%TZ)] repair complete; manifest=$MERGE_MANIFEST"
+else
+    echo "[$(date -u +%FT%TZ)] repair compute group complete; merge deferred"
+fi
