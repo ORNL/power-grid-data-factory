@@ -155,6 +155,7 @@ def main() -> None:
                     key = f"{attempt.get('linear_solver', 'unknown')}::{attempt.get('termination_status', 'unknown')}"
                     solver_attempts[key] += 1
     summary = {
+        "complete": not missing_reports,
         "ok": not missing_reports and all(bool(report.get("ok")) for report in reports),
         "campaign_id": args.campaign_id,
         "round_index": args.round_index,

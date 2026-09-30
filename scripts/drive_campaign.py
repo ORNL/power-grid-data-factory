@@ -109,7 +109,8 @@ def round_complete(
     if not marker.exists():
         return False
     try:
-        return bool(json.loads(marker.read_text(encoding="utf-8")).get("ok"))
+        report = json.loads(marker.read_text(encoding="utf-8"))
+        return bool(report["complete"] if "complete" in report else report.get("ok"))
     except (json.JSONDecodeError, OSError):
         return False
 
