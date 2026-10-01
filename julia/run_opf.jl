@@ -185,6 +185,23 @@ function to_powermodels_data(case_data)
     )
 end
 
+function apply_ac_warm_start!(pm_data, solution)
+    PowerModels.update_data!(pm_data, solution)
+    for bus in values(pm_data["bus"])
+        haskey(bus, "vm") && (bus["vm_start"] = bus["vm"])
+        haskey(bus, "va") && (bus["va_start"] = bus["va"])
+    end
+    for gen in values(pm_data["gen"])
+        haskey(gen, "pg") && (gen["pg_start"] = gen["pg"])
+        haskey(gen, "qg") && (gen["qg_start"] = gen["qg"])
+    end
+    for branch in values(pm_data["branch"])
+        for field in ("pf", "qf", "pt", "qt")
+            haskey(branch, field) && (branch[field * "_start"] = branch[field])
+        end
+    end
+end
+
 function solve_request(case_data, payload)
     task = haskey(payload, :task) ? String(payload[:task]) : "ac_opf"
     result = Dict{String, Any}(
@@ -202,6 +219,11 @@ function solve_request(case_data, payload)
     try
         pm_data = to_powermodels_data(case_data)
         options = haskey(payload, :options) ? payload[:options] : Dict{String, Any}()
+        warm_start_applied = false
+        if haskey(payload, :warm_start_solution)
+            apply_ac_warm_start!(pm_data, payload[:warm_start_solution])
+            warm_start_applied = true
+        end
         solver_attrs = Pair{String,Any}[
             "print_level" => 0,
             "sb" => "yes",
@@ -225,6 +247,7 @@ function solve_request(case_data, payload)
         result["termination_status"] = term
         result["objective"] = sanitize_json_value(get(pm_out, "objective", nothing))
         result["solve_time"] = sanitize_json_value(get(pm_out, "solve_time", nothing))
+        result["warm_start_applied"] = warm_start_applied
         result["raw_result"] = sanitize_json_value(pm_out)
     catch err
         result["success"] = false

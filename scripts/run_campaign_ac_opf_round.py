@@ -78,6 +78,28 @@ from grid_data_factory.storage import paths  # noqa: E402
 from grid_data_factory.campaigns.progress import SolveProgress  # noqa: E402
 
 
+def _load_warm_start_solution(repo_root: Path, candidate: dict[str, Any]) -> dict[str, Any] | None:
+    source = candidate.get("warm_start_source")
+    if not source:
+        return None
+    source_path = Path(str(source["samples_path"]))
+    if not source_path.is_absolute():
+        source_path = (repo_root / source_path).resolve()
+    offset = int(source["byte_offset"])
+    length = int(source["byte_length"])
+    with source_path.open("rb") as fh:
+        fh.seek(offset)
+        raw_record = fh.read(length)
+    record = json.loads(raw_record)
+    expected_id = str(candidate.get("candidate_id"))
+    if str(record.get("candidate_id")) != expected_id:
+        raise ValueError(f"warm-start candidate mismatch: expected {expected_id}, found {record.get('candidate_id')}")
+    solution = (((record.get("result") or {}).get("raw_result") or {}).get("solution"))
+    if not isinstance(solution, dict):
+        raise ValueError(f"warm-start source for {expected_id} has no PowerModels solution")
+    return solution
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Run selected adaptive-campaign candidates through AC-OPF and update post-solve ledgers.")
     p.add_argument("--campaign-id", required=True)
@@ -240,7 +262,14 @@ def main() -> None:
                     ]
 
             progress.started(str(cand.get("candidate_id")))
-            result = solver.solve_ac_opf(solver_case_data, timeout_s=case_settings.timeout_s)
+            warm_start_solution = _load_warm_start_solution(repo_root, cand)
+            result = solver.solve_ac_opf(
+                solver_case_data,
+                timeout_s=case_settings.timeout_s,
+                warm_start_solution=warm_start_solution,
+            )
+            if warm_start_solution is not None:
+                result["warm_start_source"] = cand["warm_start_source"]
             samples_path, run_id = sink.append(cand, case_data, result)
             progress.result(case_id, str(cand.get("candidate_id")), result)
             result["_run_id"] = run_id
