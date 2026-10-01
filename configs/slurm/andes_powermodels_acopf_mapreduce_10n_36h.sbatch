@@ -17,6 +17,7 @@ BOOTSTRAP_SCRIPT=$ROOT/scripts/bootstrap_adaptive_campaign.py
 SHARD_SCRIPT=$ROOT/scripts/shard_selected_candidates.py
 MAP_SCRIPT=$ROOT/scripts/run_campaign_ac_opf_round.py
 REDUCE_SCRIPT=$ROOT/scripts/reduce_campaign_shards.py
+RESTART_PREP_SCRIPT=$ROOT/scripts/prepare_powermodels_restart_campaign.py
 
 module load julia/1.8.2 2>/dev/null || true
 module load python/.3.11-anaconda3 2>/dev/null || true
@@ -121,6 +122,8 @@ SEQ_CASCADE_PER_OP=${SEQ_CASCADE_PER_OP:-1}
 SEQ_MAX_LEN=${SEQ_MAX_LEN:-10}
 RESUME=${RESUME:-0}
 BOOTSTRAP_WORKERS=${BOOTSTRAP_WORKERS:-32}
+RESTART_SOURCE_RUNS_ROOT=${RESTART_SOURCE_RUNS_ROOT:-}
+RESTART_TERMINATION_STATUS=${RESTART_TERMINATION_STATUS:-ALMOST_LOCALLY_SOLVED}
 
 # Self-healing round selection. When AUTO_ROUND=1 the passed ROUND_INDEX is
 # ignored and the job (re)targets the furthest INCOMPLETE round at runtime (the
@@ -192,6 +195,7 @@ echo "[$(date -u +%FT%TZ)] contingencies=simultaneous+cascade max_k=$MAX_K seq_c
 echo "[$(date -u +%FT%TZ)] solver_id=$SOLVER_ID timeout_s=$TIMEOUT_S shard_count=$SHARD_COUNT audit_fraction=$AUDIT_FRACTION"
 echo "[$(date -u +%FT%TZ)] linear_solver=${POWER_MODELS_LINEAR_SOLVER:-default} exact_sequence=${POWER_MODELS_LINEAR_SOLVERS:-none} fallbacks=${POWER_MODELS_LINEAR_SOLVER_FALLBACKS:-none}"
 echo "[$(date -u +%FT%TZ)] execution_policy=${EXECUTION_POLICY:-none}"
+echo "[$(date -u +%FT%TZ)] restart_source=${RESTART_SOURCE_RUNS_ROOT:-none} restart_status=$RESTART_TERMINATION_STATUS"
 echo "[$(date -u +%FT%TZ)] coverage_keys=$COVERAGE_KEYS min_per_bucket=$MIN_PER_BUCKET enforce=$ENFORCE_COVERAGE backfill=$BACKFILL_FROM_POOL"
 
 RESUMING=0
@@ -200,7 +204,13 @@ if [[ "$RESUME" == "1" ]] && compgen -G "$SHARD_DIR/${SHARD_PREFIX}_*.jsonl" > /
   echo "[$(date -u +%FT%TZ)] RESUME enabled: reusing existing shards under $SHARD_DIR; completed shards and finalized runs are skipped"
 fi
 
-if [[ "$RESUMING" == "0" && "$RUN_BOOTSTRAP" == "1" ]]; then
+if [[ "$RESUMING" == "0" && -n "$RESTART_SOURCE_RUNS_ROOT" ]]; then
+  echo "[$(date -u +%FT%TZ)] Preparing warm-restart selection from $RESTART_SOURCE_RUNS_ROOT"
+  PYTHONPATH="$ROOT/src" "$PYBIN" "$RESTART_PREP_SCRIPT" \
+    --source-runs-root "$RESTART_SOURCE_RUNS_ROOT" \
+    --termination-status "$RESTART_TERMINATION_STATUS" \
+    --output "$SELECTED_JSONL"
+elif [[ "$RESUMING" == "0" && "$RUN_BOOTSTRAP" == "1" ]]; then
   read -r -a CASE_ARRAY <<< "$CASES"
   echo "[$(date -u +%FT%TZ)] Bootstrapping campaign candidates and round selection"
   PYTHONPATH="$ROOT/src" "$PYBIN" "$BOOTSTRAP_SCRIPT" \

@@ -138,6 +138,22 @@ class PersistentSessionTests(unittest.TestCase):
                 ["", "ma27", "ma57"],
             )
 
+    def test_ac_opf_passes_warm_start_to_each_solver_attempt(self) -> None:
+        with TemporaryDirectory() as tmp:
+            adapter = PowerModelsAdapter(repo_root=Path(tmp))
+            session = PersistentPowerModelsSession(adapter, {"linear_solvers": ["ma27", "ma57"]})
+            warm_start = {"bus": {"1": {"vm": 1.0, "va": 0.0}}}
+            results = [
+                {"success": False, "termination_status": "ITERATION_LIMIT"},
+                {"success": True, "termination_status": "LOCALLY_SOLVED"},
+            ]
+
+            with patch.object(session, "_solve", side_effect=results) as solve:
+                session.solve_ac_opf({"case_id": "case"}, warm_start_solution=warm_start)
+
+            self.assertEqual(solve.call_count, 2)
+            self.assertTrue(all(call.args[3]["warm_start_solution"] is warm_start for call in solve.call_args_list))
+
 
 if __name__ == "__main__":
     unittest.main()

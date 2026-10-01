@@ -73,21 +73,30 @@ class PersistentPowerModelsSession:
         self._stderr.seek(0)
         return self._stderr.read()
 
-    def solve_ac_opf(self, case: dict, timeout_s: float | None = None) -> dict:
+    def solve_ac_opf(
+        self,
+        case: dict,
+        timeout_s: float | None = None,
+        warm_start_solution: dict | None = None,
+    ) -> dict:
         configured = self.options.get("linear_solvers")
         if configured is None:
             fallbacks = self.options.get("linear_solver_fallbacks") or []
             configured = ["default", *fallbacks]
         linear_solvers = [str(solver).strip() for solver in configured if str(solver).strip()]
         if not linear_solvers:
-            return self._solve(case, "ac_opf", timeout_s)
+            payload = {"warm_start_solution": warm_start_solution} if warm_start_solution is not None else None
+            return self._solve(case, "ac_opf", timeout_s, payload)
 
         attempts = []
         result: dict = {}
         for linear_solver in linear_solvers:
             options = dict(self.options)
             options["linear_solver"] = "" if linear_solver == "default" else linear_solver
-            result = self._solve(case, "ac_opf", timeout_s, {"options": options})
+            payload = {"options": options}
+            if warm_start_solution is not None:
+                payload["warm_start_solution"] = warm_start_solution
+            result = self._solve(case, "ac_opf", timeout_s, payload)
             attempts.append(
                 {
                     "linear_solver": linear_solver,
