@@ -11,6 +11,7 @@
 #SBATCH -e /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
 
 set -euo pipefail
+ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 
 ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 PYBIN=${PYBIN:-$ROOT/.venv-riker/bin/python}
@@ -119,6 +120,7 @@ echo 0 > "$INDEX_FILE"
 
 srun --ntasks="${SLURM_NTASKS}" --nodes="${SLURM_JOB_NUM_NODES}" --signal=USR1@120 bash -lc '
 set -euo pipefail
+ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 trap '\''true'\'' USR1
 ROOT="'$ROOT'"; PYBIN="'$PYBIN'"; CAMPAIGN_ID="'$CAMPAIGN_ID'"; ROUND_INDEX="'$ROUND_INDEX'"; ROUND_PAD="'$ROUND_PAD'"
 CONFIG="'$CONFIG'"; SHARD_DIR="'$SHARD_DIR'"; QUEUE_FILE="'$QUEUE_FILE'"; INDEX_FILE="'$INDEX_FILE'"; LOCK_DIR="'$LOCK_DIR'"; DONE_DIR="'$DONE_DIR'"

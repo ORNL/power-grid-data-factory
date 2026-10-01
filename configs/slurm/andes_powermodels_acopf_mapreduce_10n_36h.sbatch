@@ -10,6 +10,7 @@
 #SBATCH -e /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
 
 set -euo pipefail
+ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 
 ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 BOOTSTRAP_SCRIPT=$ROOT/scripts/bootstrap_adaptive_campaign.py
@@ -47,17 +48,23 @@ export JULIA_DEPOT_PATH
 # fallbacks. Set the list empty to disable fallbacks, or set
 # POWER_MODELS_LINEAR_SOLVER to force one backend and disable the chain.
 POWER_MODELS_LINEAR_SOLVER=${POWER_MODELS_LINEAR_SOLVER:-}
+POWER_MODELS_LINEAR_SOLVERS=${POWER_MODELS_LINEAR_SOLVERS:-}
 POWER_MODELS_LINEAR_SOLVER_FALLBACKS=${POWER_MODELS_LINEAR_SOLVER_FALLBACKS-ma27,ma57}
 COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/andes/current/env.sh}
 if [[ -n "$POWER_MODELS_LINEAR_SOLVER" ]]; then
   case "$POWER_MODELS_LINEAR_SOLVER" in ma27|ma57) ;; *) echo "Invalid POWER_MODELS_LINEAR_SOLVER=$POWER_MODELS_LINEAR_SOLVER" >&2; exit 2 ;; esac
+elif [[ -n "$POWER_MODELS_LINEAR_SOLVERS" ]]; then
+  IFS=',' read -r -a _linear_solvers <<< "$POWER_MODELS_LINEAR_SOLVERS"
+  for _solver in "${_linear_solvers[@]}"; do
+    case "${_solver//[[:space:]]/}" in ma27|ma57) ;; *) echo "Invalid PowerModels linear solver: $_solver" >&2; exit 2 ;; esac
+  done
 elif [[ -n "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS" ]]; then
   IFS=',' read -r -a _fallback_solvers <<< "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS"
   for _solver in "${_fallback_solvers[@]}"; do
     case "${_solver//[[:space:]]/}" in ma27|ma57) ;; *) echo "Invalid PowerModels fallback solver: $_solver" >&2; exit 2 ;; esac
   done
 fi
-if [[ -n "$POWER_MODELS_LINEAR_SOLVER" || -n "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS" ]]; then
+if [[ -n "$POWER_MODELS_LINEAR_SOLVER" || -n "$POWER_MODELS_LINEAR_SOLVERS" || -n "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS" ]]; then
   [[ -r "$COINHSL_ENV" ]] || { echo "Missing private Coin-HSL activation: $COINHSL_ENV" >&2; exit 2; }
   source "$COINHSL_ENV"
   [[ -r "${IPOPT_HSL_LIBRARY:-}" ]] || { echo "Missing Coin-HSL library: ${IPOPT_HSL_LIBRARY:-unset}" >&2; exit 2; }
@@ -65,7 +72,7 @@ if [[ -n "$POWER_MODELS_LINEAR_SOLVER" || -n "$POWER_MODELS_LINEAR_SOLVER_FALLBA
 fi
 if [[ -n "$POWER_MODELS_LINEAR_SOLVER" ]]; then
   export IPOPT_LINEAR_SOLVER="$POWER_MODELS_LINEAR_SOLVER"
-elif [[ -n "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS" ]]; then
+elif [[ -n "$POWER_MODELS_LINEAR_SOLVERS" || -n "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS" ]]; then
   unset IPOPT_LINEAR_SOLVER
 fi
 
@@ -183,7 +190,7 @@ echo "[$(date -u +%FT%TZ)] JOB=$SLURM_JOB_ID mode=map_reduce campaign_id=$CAMPAI
 echo "[$(date -u +%FT%TZ)] config=$CONFIG budget=$BUDGET per_case=$PER_CASE seed=$SEED"
 echo "[$(date -u +%FT%TZ)] contingencies=simultaneous+cascade max_k=$MAX_K seq_cascade_per_op=$SEQ_CASCADE_PER_OP seq_max_len=$SEQ_MAX_LEN"
 echo "[$(date -u +%FT%TZ)] solver_id=$SOLVER_ID timeout_s=$TIMEOUT_S shard_count=$SHARD_COUNT audit_fraction=$AUDIT_FRACTION"
-echo "[$(date -u +%FT%TZ)] linear_solver=${POWER_MODELS_LINEAR_SOLVER:-default} fallbacks=${POWER_MODELS_LINEAR_SOLVER_FALLBACKS:-none}"
+echo "[$(date -u +%FT%TZ)] linear_solver=${POWER_MODELS_LINEAR_SOLVER:-default} exact_sequence=${POWER_MODELS_LINEAR_SOLVERS:-none} fallbacks=${POWER_MODELS_LINEAR_SOLVER_FALLBACKS:-none}"
 echo "[$(date -u +%FT%TZ)] execution_policy=${EXECUTION_POLICY:-none}"
 echo "[$(date -u +%FT%TZ)] coverage_keys=$COVERAGE_KEYS min_per_bucket=$MIN_PER_BUCKET enforce=$ENFORCE_COVERAGE backfill=$BACKFILL_FROM_POOL"
 
@@ -296,6 +303,7 @@ echo "[$(date -u +%FT%TZ)] Starting map stage with srun tasks=${SLURM_NTASKS}"
 # warning; children reset it to default, then install their own handler.
 srun --ntasks="${SLURM_NTASKS}" --nodes="${SLURM_JOB_NUM_NODES}" --signal=USR1@120 bash -lc '
 set -euo pipefail
+ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 trap '"'"'true'"'"' USR1
 ROOT="'$ROOT'"
 CAMPAIGN_ID="'$CAMPAIGN_ID'"
@@ -314,6 +322,7 @@ MAX_CANDIDATES="'$MAX_CANDIDATES'"
 CONTINUE_ON_ERROR="'$CONTINUE_ON_ERROR'"
 MAX_FAILURE_FRACTION="'$MAX_FAILURE_FRACTION'"
 POWER_MODELS_LINEAR_SOLVER_FALLBACKS="'$POWER_MODELS_LINEAR_SOLVER_FALLBACKS'"
+POWER_MODELS_LINEAR_SOLVERS="'$POWER_MODELS_LINEAR_SOLVERS'"
 QUEUE_FILE="'$QUEUE_FILE'"
 INDEX_FILE="'$INDEX_FILE'"
 LOCK_DIR="'$LOCK_DIR'"
@@ -371,7 +380,9 @@ while true; do
     --max-failure-fraction "$MAX_FAILURE_FRACTION"
   )
 
-  if [[ -n "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS" ]]; then
+  if [[ -n "$POWER_MODELS_LINEAR_SOLVERS" ]]; then
+    ARGS+=(--linear-solvers "$POWER_MODELS_LINEAR_SOLVERS")
+  elif [[ -n "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS" ]]; then
     ARGS+=(--linear-solver-fallbacks "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS")
   fi
 
