@@ -10,6 +10,7 @@
 #SBATCH -e /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
 
 set -euo pipefail
+ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 
 ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 if [[ -z "${PYBIN:-}" ]]; then
@@ -122,6 +123,7 @@ echo "[$(date -u +%FT%TZ)] source=$SOURCE_RUNS_ROOT isolated_retries=$REPAIR_RUN
 
 srun --ntasks="$SLURM_NTASKS" --nodes="$SLURM_JOB_NUM_NODES" --signal=USR1@120 bash -lc '
 set -euo pipefail
+ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 ROOT="'$ROOT'"
 WORK_ROOT="'$WORK_ROOT'"
 SHARD_DIR="'$SHARD_DIR'"

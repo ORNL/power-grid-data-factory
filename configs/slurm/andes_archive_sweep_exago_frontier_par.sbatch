@@ -13,6 +13,7 @@
 # call with env vars; originals removed only after integrity + file-count checks.
 
 set -euo pipefail
+ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 
 ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 cd "$ROOT"

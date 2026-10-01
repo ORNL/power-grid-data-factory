@@ -10,6 +10,8 @@
 #SBATCH -t 0:30:00
 #SBATCH -o /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.out
 
+ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
+
 ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 OPFLOW="${PGDF_EXAGO_OPFLOW_BIN:-$ROOT/external/ExaGO/install/bin/opflow}"
 PGLIB="$ROOT/external/pglib-opf"

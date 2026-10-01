@@ -20,6 +20,7 @@
 # records the feasible-vs-infeasible split and label definition.
 
 set -euo pipefail
+ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 
 ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 cd "$ROOT"

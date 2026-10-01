@@ -11,6 +11,7 @@
 #SBATCH -e /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
 
 set -euo pipefail
+ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 
 ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 PYBIN=${PYBIN:-$ROOT/.venv-riker/bin/python}
@@ -111,6 +112,7 @@ if [[ ! -s "$PREPARE_MANIFEST" || ! -s "$CANDIDATES" ]]; then
     # Preserve completed parts when a task exhausts its transient-I/O retries.
     srun --ntasks="$SLURM_NTASKS" --nodes="$SLURM_JOB_NUM_NODES" --kill-on-bad-exit=0 bash -lc '
 set -euo pipefail
+ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 ROOT="'$ROOT'"
 PYBIN="'$PYBIN'"
 PREPARE_SCRIPT="'$PREPARE_SCRIPT'"
@@ -198,6 +200,7 @@ fi
 
 srun --ntasks="$SLURM_NTASKS" --nodes="$SLURM_JOB_NUM_NODES" --signal=USR1@120 bash -lc '
 set -euo pipefail
+ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 ROOT="'$ROOT'"
 WORK_ROOT="'$WORK_ROOT'"
 SHARD_DIR="'$SHARD_DIR'"

@@ -10,6 +10,7 @@
 #SBATCH -e /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
 
 set -euo pipefail
+ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 
 ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
 PREPARE_SCRIPT=$ROOT/scripts/prepare_grid_benchmark.py
@@ -77,6 +78,7 @@ fi
 echo "[$(date -u +%FT%TZ)] launching $SHARD_COUNT per-grid benchmark shards across $SLURM_NTASKS tasks"
 srun --ntasks="$SLURM_NTASKS" --nodes=1 bash -lc '
 set -euo pipefail
+ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 ROOT="'$ROOT'"
 QUEUE_FILE="'$QUEUE_FILE'"
 SHARD_COUNT="'$SHARD_COUNT'"
