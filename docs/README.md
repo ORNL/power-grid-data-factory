@@ -27,6 +27,7 @@ This documentation describes the purpose, architecture, setup, and reproducibili
 21. [Campaign Diversity Analysis](diversity_analysis.md)
 22. [Riker Complementary PF Campaign](riker_pf_campaign.md)
 23. [Complementary PF Campaign Plan and Roadmap](complementary_pf_campaign_plan.md)
+24. [Implemented Capabilities and Limitations](implemented_capabilities.md)
 
 ## Intended audience
 
