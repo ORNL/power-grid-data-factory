@@ -36,12 +36,15 @@ The project provides infrastructure to:
 
 ## Production-scale execution
 
-The generator runs as a **resumable, chained map/reduce campaign** designed to
-saturate leadership-class HPC allocations — thousands of concurrent ranks across
-64+ nodes, chained across many walltime windows, with Lustre-aware sharding and
-zstd archiving. Campaigns of billions of configurations are a supported operating
-point. See [Data Generation Capabilities](data_generation_capabilities.md) and
-[Resumable Campaigns](resumable_campaigns.md) for details.
+The generator includes a **resumable, chained map/reduce campaign** designed to
+use leadership-class HPC allocations, with Lustre-aware sharding and zstd
+archiving. The campaign tooling can represent billion-configuration workloads;
+this is a design scale, not a claim that every such campaign has completed or
+been validated end to end. Actual throughput and completion depend on case mix,
+solver behavior, allocation, and filesystem performance. See
+[Data Generation Capabilities](data_generation_capabilities.md) and
+[Resumable Campaigns](resumable_campaigns.md) for details and operational
+requirements.
 
 ## Governing principles
 
