@@ -101,6 +101,17 @@ def canonical_record_hash(record: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def is_complete_pf_record(record: dict[str, Any]) -> bool:
+    return (
+        record.get("task") == "pf"
+        and isinstance(record.get("success"), bool)
+        and isinstance(record.get("candidate_id"), str)
+        and bool(record["candidate_id"].strip())
+        and isinstance(record.get("run_id"), str)
+        and bool(record["run_id"].strip())
+    )
+
+
 def recover_json_suffix(line: str) -> dict[str, Any] | None:
     decoder = json.JSONDecoder()
     for offset in range(len(line) - 1, -1, -1):
@@ -110,7 +121,7 @@ def recover_json_suffix(line: str) -> dict[str, Any] | None:
             record, end = decoder.raw_decode(line, offset)
         except json.JSONDecodeError:
             continue
-        if isinstance(record, dict) and not line[end:].strip():
+        if isinstance(record, dict) and is_complete_pf_record(record) and not line[end:].strip():
             return record
     return None
 
@@ -129,10 +140,19 @@ def parse_sample_lines(lines: list[str]) -> tuple[list[dict[str, Any]], set[str]
             record = recover_json_suffix(line)
             if record is None:
                 continue
-        if isinstance(record, dict):
+        if isinstance(record, dict) and is_complete_pf_record(record):
             records.append(record)
             source_hashes.add(canonical_record_hash(record))
     return records, source_hashes, malformed_lines
+
+
+def source_hashes_for_overlay_file(sample_path: Path, overlay_source_paths: set[Path]) -> set[str]:
+    if sample_path.resolve() not in overlay_source_paths:
+        return set()
+    records, hashes, malformed_lines = parse_sample_lines(sample_path.read_text(encoding="utf-8").splitlines())
+    if malformed_lines:
+        raise ValueError(f"overlay source parsed by jq contains malformed lines: {sample_path}")
+    return hashes
 
 
 def summarize_jq_output(stdout: str) -> tuple[Counter[str], dict[int, Counter[str]], Counter[str]]:
@@ -192,7 +212,7 @@ def audit_records(
 
 def load_recovery_overlay(
     overlay_path: Path, manifest_path: Path
-) -> list[tuple[str, str, dict[str, Any]]]:
+) -> list[tuple[str, Path, str, dict[str, Any]]]:
     overlay_bytes = overlay_path.read_bytes()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     actual_digest = hashlib.sha256(overlay_bytes).hexdigest()
@@ -206,7 +226,7 @@ def load_recovery_overlay(
     if len(lines) != manifest.get("record_count") or len(lines) != len(metadata):
         raise ValueError("recovery overlay row count does not match manifest")
 
-    entries: list[tuple[str, str, dict[str, Any]]] = []
+    entries: list[tuple[str, Path, str, dict[str, Any]]] = []
     for line_number, (line, row_metadata) in enumerate(zip(lines, metadata), start=1):
         record = json.loads(line)
         if not isinstance(record, dict) or canonical_record_hash(record) != row_metadata.get("sha256"):
@@ -216,8 +236,27 @@ def load_recovery_overlay(
             campaign_name = source_parts[source_parts.index("runs") + 1]
         except (ValueError, IndexError) as error:
             raise ValueError(f"invalid source_shard in recovery manifest at line {line_number}") from error
-        entries.append((campaign_name, row_metadata["sha256"], record))
+        entries.append((campaign_name, Path(row_metadata["source_shard"]) / "samples.jsonl", row_metadata["sha256"], record))
     return entries
+
+
+def select_overlay_records(
+    entries: list[tuple[str, Path, str, dict[str, Any]]],
+    existing_hashes: set[str],
+    selected_campaigns: set[str],
+) -> tuple[dict[str, list[dict[str, Any]]], int]:
+    overlay_by_campaign: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    overlay_seen: set[str] = set()
+    deduplicated = 0
+    for campaign_name, _, record_hash, record in entries:
+        if campaign_name not in selected_campaigns:
+            continue
+        if record_hash in existing_hashes or record_hash in overlay_seen:
+            deduplicated += 1
+            continue
+        overlay_by_campaign[campaign_name].append(record)
+        overlay_seen.add(record_hash)
+    return overlay_by_campaign, deduplicated
 
 
 def main() -> int:
@@ -254,6 +293,16 @@ def main() -> int:
     if missing:
         parser.error("campaign not found: " + ", ".join(sorted(missing)))
 
+    overlay_entries: list[tuple[str, Path, str, dict[str, Any]]] = []
+    overlay_source_paths: set[Path] = set()
+    if args.recovery_overlay is not None:
+        manifest_path = args.recovery_manifest or args.recovery_overlay.parent / "recovery_manifest.json"
+        try:
+            overlay_entries = load_recovery_overlay(args.recovery_overlay, manifest_path)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, ValueError) as error:
+            parser.error(f"invalid recovery overlay: {error}")
+        overlay_source_paths = {source_path.resolve() for _, source_path, _, _ in overlay_entries}
+
     totals: dict[tuple[str, int], Counter[str]] = defaultdict(Counter)
     exceptions: Counter[tuple[str, str]] = Counter()
     files_seen = records_seen = successful = unsuccessful = audited = exception_count = 0
@@ -273,7 +322,11 @@ def main() -> int:
             return campaign_name, Counter(), {}, Counter({"sample_file_io_error": 1}), set()
         if result.returncode == 0:
             counts, buses, file_exceptions = summarize_jq_output(result.stdout)
-            return campaign_name, counts, buses, file_exceptions, set()
+            try:
+                source_hashes = source_hashes_for_overlay_file(sample_path, overlay_source_paths)
+            except (OSError, UnicodeDecodeError, ValueError) as error:
+                raise RuntimeError(f"failed to index overlay source hashes: {error}") from error
+            return campaign_name, counts, buses, file_exceptions, source_hashes
 
         try:
             lines = sample_path.read_text(encoding="utf-8").splitlines()
@@ -366,21 +419,11 @@ def main() -> int:
 
     overlay_added = overlay_deduplicated = 0
     if args.recovery_overlay is not None:
-        manifest_path = args.recovery_manifest or args.recovery_overlay.parent / "recovery_manifest.json"
-        try:
-            overlay_entries = load_recovery_overlay(args.recovery_overlay, manifest_path)
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, ValueError) as error:
-            parser.error(f"invalid recovery overlay: {error}")
-        overlay_by_campaign: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        overlay_seen: set[str] = set()
-        for campaign_name, record_hash, record in overlay_entries:
-            if campaign_name not in {campaign.name for campaign in campaigns}:
-                continue
-            if record_hash in recovered_source_hashes or record_hash in overlay_seen:
-                overlay_deduplicated += 1
-                continue
-            overlay_by_campaign[campaign_name].append(record)
-            overlay_seen.add(record_hash)
+        overlay_by_campaign, overlay_deduplicated = select_overlay_records(
+            overlay_entries,
+            recovered_source_hashes,
+            {campaign.name for campaign in campaigns},
+        )
         for campaign_name, records in overlay_by_campaign.items():
             counts, bus_totals, file_exceptions = audit_records(records, jq)
             accumulate(campaign_name, counts, bus_totals, file_exceptions)

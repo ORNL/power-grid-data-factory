@@ -20,8 +20,8 @@ class OrphanPvAuditTests(unittest.TestCase):
         spec.loader.exec_module(cls.module)
 
     def test_parse_sample_lines_recovers_suffix_and_counts_malformed_line(self):
-        valid_record = {"success": True, "candidate_id": "valid"}
-        suffix_record = {"success": False, "candidate_id": "recovered"}
+        valid_record = {"task": "pf", "success": True, "candidate_id": "valid", "run_id": "run-valid"}
+        suffix_record = {"task": "pf", "success": False, "candidate_id": "recovered", "run_id": "run-recovered"}
         records, hashes, malformed_lines = self.module.parse_sample_lines(
             [json.dumps(valid_record), "damaged-prefix" + json.dumps(suffix_record), "not-json"]
         )
@@ -35,6 +35,32 @@ class OrphanPvAuditTests(unittest.TestCase):
             },
         )
         self.assertEqual(malformed_lines, 2)
+
+    def test_parse_sample_lines_rejects_nested_fragment_without_pf_identity(self):
+        records, hashes, malformed_lines = self.module.parse_sample_lines(
+            ['{"success": true, "inputs": {}']
+        )
+
+        self.assertEqual(records, [])
+        self.assertEqual(hashes, set())
+        self.assertEqual(malformed_lines, 1)
+
+    def test_valid_primary_source_hash_deduplicates_overlay_record(self):
+        record = {"task": "pf", "success": True, "candidate_id": "primary", "run_id": "run-primary"}
+        row_hash = self.module.canonical_record_hash(record)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            sample_path = Path(tmp) / "samples.jsonl"
+            sample_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+            source_hashes = self.module.source_hashes_for_overlay_file(sample_path, {sample_path.resolve()})
+
+        overlay_by_campaign, deduplicated = self.module.select_overlay_records(
+            [("riker_pf_test", sample_path, row_hash, record)],
+            source_hashes,
+            {"riker_pf_test"},
+        )
+        self.assertEqual(dict(overlay_by_campaign), {})
+        self.assertEqual(deduplicated, 1)
 
     def test_load_recovery_overlay_checks_manifest_digest_and_record_hash(self):
         record = {"success": False, "candidate_id": "overlay"}
@@ -60,7 +86,7 @@ class OrphanPvAuditTests(unittest.TestCase):
 
             self.assertEqual(
                 self.module.load_recovery_overlay(overlay_path, manifest_path),
-                [("riker_pf_test", row_hash, record)],
+                [("riker_pf_test", Path("data/outputs/runs/riker_pf_test/mapreduce_round_000/shard_00001/pf/samples.jsonl"), row_hash, record)],
             )
 
             overlay_path.write_bytes(overlay_bytes + b" ")
