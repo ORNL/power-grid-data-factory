@@ -37,8 +37,10 @@ echo "[$(date -u +%FT%TZ)] sweep start: campaign=$CAMPAIGN_ID rounds=0..$((TOTAL
 archived=0
 skipped_missing=0
 skipped_already=0
+held=0
 failed=0
 
+# Counters use x=$((x + 1)): under set -e, (( x++ )) from 0 aborts the script.
 for (( r=0; r<TOTAL_ROUNDS; r++ )); do
     printf -v ROUND_PAD "%03d" "$r"
     RUNS_TREE="$ROOT/$RUNS_ROOT/mapreduce_round_${ROUND_PAD}"
@@ -46,7 +48,7 @@ for (( r=0; r<TOTAL_ROUNDS; r++ )); do
 
     # Skip rounds with no runs tree (not yet executed).
     if [[ ! -d "$RUNS_TREE" ]]; then
-        (( skipped_missing++ ))
+        skipped_missing=$((skipped_missing + 1))
         continue
     fi
 
@@ -55,14 +57,14 @@ for (( r=0; r<TOTAL_ROUNDS; r++ )); do
     REDUCE_REPORT="$ROOT/data/outputs/campaigns/$CAMPAIGN_ID/round_summaries/round_${ROUND_PAD}_mapreduce_reduce_report.json"
     if ! grep -q '"ok": true' "$REDUCE_REPORT" 2>/dev/null; then
         echo "[$(date -u +%FT%TZ)] round $r not reduced ok yet, skipping"
-        (( skipped_missing++ ))
+        skipped_missing=$((skipped_missing + 1))
         continue
     fi
 
     # Skip rounds already successfully archived and verified.
     if [[ -s "$ARCHIVE" && -s "${ARCHIVE}.sha256" ]]; then
         echo "[$(date -u +%FT%TZ)] round $r already archived, skipping"
-        (( skipped_already++ ))
+        skipped_already=$((skipped_already + 1))
         continue
     fi
 
@@ -70,20 +72,22 @@ for (( r=0; r<TOTAL_ROUNDS; r++ )); do
     if env CAMPAIGN_ID="$CAMPAIGN_ID" ROUND_INDEX="$r" RUNS_ROOT="$RUNS_ROOT" \
            ARCHIVE_DIR="$ARCHIVE_DIR" ZSTD_LEVEL="$ZSTD_LEVEL" TOTAL_ROUNDS="$TOTAL_ROUNDS" \
            bash configs/slurm/riker_archive_round.sbatch; then
-        (( archived++ ))
+        archived=$((archived + 1))
     else
         rc=$?
         if [[ $rc -eq 2 ]]; then
             # runs tree disappeared between check and archive call (race): harmless
-            (( skipped_missing++ ))
+            skipped_missing=$((skipped_missing + 1))
+        elif [[ $rc -eq 3 ]]; then
+            held=$((held + 1))
         else
             echo "[$(date -u +%FT%TZ)] ERROR: archive of round $r exited $rc" >&2
-            (( failed++ ))
+            failed=$((failed + 1))
         fi
     fi
 done
 
-echo "[$(date -u +%FT%TZ)] sweep done: archived=$archived skipped_already=$skipped_already skipped_missing=$skipped_missing failed=$failed"
+echo "[$(date -u +%FT%TZ)] sweep done: archived=$archived skipped_already=$skipped_already skipped_missing=$skipped_missing held=$held failed=$failed"
 
 # Self-extension: the tail sweep of a submitted chain re-submits one more
 # solve+sweep batch while rounds remain, as long as the previous batch made

@@ -41,6 +41,12 @@ RUNS_TREE="${RUNS_ROOT}/mapreduce_round_${ROUND_PAD}"
 # paths resolve against $ROOT.
 ARCHIVE_DIR=${ARCHIVE_DIR:-data/outputs/archives}
 case "$ARCHIVE_DIR" in /*) : ;; *) ARCHIVE_DIR="$ROOT/$ARCHIVE_DIR" ;; esac
+# A hold file blocks archiving (and raw-tree deletion) while an in-place repair is pending.
+HOLD="$ARCHIVE_DIR/round_${ROUND_PAD}.hold"
+if [[ -e "$HOLD" ]]; then
+  echo "[$(date -u +%FT%TZ)] round $ROUND_INDEX held by $HOLD; not archiving" >&2
+  exit 3
+fi
 ARCHIVE="$ARCHIVE_DIR/round_${ROUND_PAD}_raw.tar.zst"
 SHARD_LIST="$ARCHIVE_DIR/round_${ROUND_PAD}_shard_campaign_dirs.txt"
 # Sibling tarball holding campaign-level provenance and legacy cumulative ledgers.
