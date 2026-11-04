@@ -63,7 +63,7 @@ class OrphanPvAuditTests(unittest.TestCase):
         self.assertEqual(deduplicated, 1)
 
     def test_load_recovery_overlay_checks_manifest_digest_and_record_hash(self):
-        record = {"success": False, "candidate_id": "overlay"}
+        record = {"task": "pf", "success": False, "candidate_id": "overlay", "run_id": "run-overlay"}
         row_hash = self.module.canonical_record_hash(record)
         overlay_bytes = (json.dumps(record, separators=(",", ":")) + "\n").encode("utf-8")
         manifest = {
@@ -81,13 +81,24 @@ class OrphanPvAuditTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             overlay_path = Path(tmp) / "samples.jsonl"
             manifest_path = Path(tmp) / "recovery_manifest.json"
+            runs_root = Path(tmp) / "relocated-runs"
+            source_path = runs_root / "riker_pf_test/mapreduce_round_000/shard_00001/pf/samples.jsonl"
+            source_path.parent.mkdir(parents=True)
+            source_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
             overlay_path.write_bytes(overlay_bytes)
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
+            entries = self.module.load_recovery_overlay(overlay_path, manifest_path, runs_root)
             self.assertEqual(
-                self.module.load_recovery_overlay(overlay_path, manifest_path),
-                [("riker_pf_test", Path("data/outputs/runs/riker_pf_test/mapreduce_round_000/shard_00001/pf/samples.jsonl"), row_hash, record)],
+                entries,
+                [("riker_pf_test", source_path, row_hash, record)],
             )
+            source_hashes = self.module.source_hashes_for_overlay_file(source_path, {source_path.resolve()})
+            overlay_by_campaign, deduplicated = self.module.select_overlay_records(
+                entries, source_hashes, {"riker_pf_test"}
+            )
+            self.assertEqual(dict(overlay_by_campaign), {})
+            self.assertEqual(deduplicated, 1)
 
             overlay_path.write_bytes(overlay_bytes + b" ")
             with self.assertRaisesRegex(ValueError, "digest does not match"):

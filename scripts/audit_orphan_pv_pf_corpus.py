@@ -211,7 +211,7 @@ def audit_records(
 
 
 def load_recovery_overlay(
-    overlay_path: Path, manifest_path: Path
+    overlay_path: Path, manifest_path: Path, runs_root: Path | None = None
 ) -> list[tuple[str, Path, str, dict[str, Any]]]:
     overlay_bytes = overlay_path.read_bytes()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -236,7 +236,10 @@ def load_recovery_overlay(
             campaign_name = source_parts[source_parts.index("runs") + 1]
         except (ValueError, IndexError) as error:
             raise ValueError(f"invalid source_shard in recovery manifest at line {line_number}") from error
-        entries.append((campaign_name, Path(row_metadata["source_shard"]) / "samples.jsonl", row_metadata["sha256"], record))
+        source_path = Path(row_metadata["source_shard"]) / "samples.jsonl"
+        if runs_root is not None:
+            source_path = runs_root / Path(*source_parts[source_parts.index("runs") + 1 :]) / "samples.jsonl"
+        entries.append((campaign_name, source_path, row_metadata["sha256"], record))
     return entries
 
 
@@ -298,7 +301,7 @@ def main() -> int:
     if args.recovery_overlay is not None:
         manifest_path = args.recovery_manifest or args.recovery_overlay.parent / "recovery_manifest.json"
         try:
-            overlay_entries = load_recovery_overlay(args.recovery_overlay, manifest_path)
+            overlay_entries = load_recovery_overlay(args.recovery_overlay, manifest_path, args.runs_root)
         except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, ValueError) as error:
             parser.error(f"invalid recovery overlay: {error}")
         overlay_source_paths = {source_path.resolve() for _, source_path, _, _ in overlay_entries}

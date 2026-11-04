@@ -102,6 +102,35 @@ class ReduceCampaignShardsTests(unittest.TestCase):
             self.assertTrue(resumed["ok"])
             self.assertEqual(resumed["missing_shard_reports"], [])
 
+    def test_force_rewrites_marker_in_place(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            ids = self._fixture(root)
+            REDUCER.reduce_shards(root, "campaign", 5, "configs/campaign.yaml", ids)
+            marker = (
+                root / "data" / "outputs" / "campaigns" / "campaign"
+                / "round_summaries" / "round_005_mapreduce_reduce_report.json"
+            )
+            with self.assertRaises(SystemExit):
+                REDUCER.reduce_shards(root, "campaign", 5, "configs/campaign.yaml", ids)
+            report = root / "data/outputs/campaigns/campaign__s00000/round_summaries/round_005_ac_execution_report.json"
+            report.write_text(json.dumps({"ok": True, "solved_count": 9}))
+            seen = []
+            original = REDUCER._read_json
+
+            def spy(path):
+                seen.append(marker.exists())
+                return original(path)
+
+            REDUCER._read_json = spy
+            try:
+                rebuilt = REDUCER.reduce_shards(root, "campaign", 5, "configs/campaign.yaml", ids, force=True)
+            finally:
+                REDUCER._read_json = original
+            self.assertTrue(all(seen))
+            self.assertEqual(rebuilt["merged_counts"]["solved"], 11)
+            self.assertEqual(json.loads(marker.read_text())["merged_counts"]["solved"], 11)
+
 
 if __name__ == "__main__":
     unittest.main()

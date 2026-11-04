@@ -313,6 +313,77 @@ class LegacyQuadraticResolveTests(unittest.TestCase):
                 self.assertEqual(record["result"]["cost_convention"], "per_unit_scaled_v2")
             self.assertFalse(list(runs_root.rglob("*.repair_in_progress")))
 
+    def test_index_merge_matches_spool_and_resumes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runs_root = root / "data/outputs/runs_3b"
+            sources = []
+            for shard in range(3):
+                source = runs_root / f"mapreduce_round_000/shard_{shard:05d}/ac_opf/samples.jsonl"
+                source.parent.mkdir(parents=True)
+                rows = [_record([[0.5, 20.0, 0]], [1.0], candidate_id=f"q{shard}_{i}", run_id=f"r{shard}_{i}")
+                        for i in range(2)]
+                linear = _record([[0, 20.0, 0]], [1.0], candidate_id=f"l{shard}", run_id=f"l{shard}")
+                source.write_text("".join(json.dumps(row) + "\n" for row in [*rows, linear]))
+                sources.append(source)
+            out = root / "repair/candidates.jsonl"
+            _REPAIR.prepare(root, runs_root, [0], None, out, root / "repair/p.json", shard_count=3,
+                            select="legacy-quadratic")
+            candidates = [json.loads(line) for line in out.read_text().splitlines()]
+            self.assertEqual(len(candidates), 6)
+            # Retries for one source split across two retry files, plus one failed retry.
+            for index, candidate in enumerate(candidates):
+                retry_path = root / f"repair/runs/shard_{index % 2:05d}/ac_opf/samples.jsonl"
+                retry_path.parent.mkdir(parents=True, exist_ok=True)
+                retry = _record([[0.5, 20.0, 0]], [0.8], candidate_id=candidate["candidate_id"],
+                                convention="per_unit_scaled_v2", success=index != 5)
+                retry["objective"] = 1000.0 + index
+                retry["inputs"]["candidate"] = candidate
+                with retry_path.open("a") as handle:
+                    handle.write(json.dumps(retry) + "\n")
+            with (root / "repair/runs/shard_00000/ac_opf/samples.jsonl").open("a") as handle:
+                handle.write("{truncated\n")
+
+            work = root / "repair/work"
+            for part in range(3):
+                index = _REPAIR.build_merge_index(root / "repair/runs", work, part, 3, select="legacy-quadratic")
+                self.assertEqual(index["part_count"], 3)
+            with self.assertRaises(RuntimeError):
+                _REPAIR._index_parts(root / "repair/missing")
+            parts = work / "merge_parts"
+            replaced = 0
+            for part in range(2):
+                manifest = _REPAIR.merge_from_index(root, root / "repair/runs", work, parts / f"part_{part:05d}.json",
+                                                    select="legacy-quadratic", backup=False,
+                                                    part_index=part, part_count=2)
+                replaced += manifest["rows_replaced"]
+            self.assertEqual(replaced, 6)
+            self.assertFalse(_REPAIR.merge_finalize(parts, 3, work / "merge_manifest.json")["complete"])
+            self.assertFalse((work / "merge_manifest.json").exists())
+            final = _REPAIR.merge_finalize(parts, 2, work / "merge_manifest.json")
+            self.assertTrue(final["complete"])
+            self.assertEqual(final["rows_replaced"], 6)
+
+            objectives = {}
+            for source in sources:
+                lines = source.read_text().splitlines()
+                self.assertEqual(len(lines), 3)
+                for record in map(json.loads, lines):
+                    if record["candidate_id"].startswith("q"):
+                        self.assertEqual(record["result"]["cost_convention"], "per_unit_scaled_v2")
+                        objectives[record["candidate_id"]] = record["objective"]
+            self.assertEqual(sorted(objectives.values())[:5], [1000.0, 1001.0, 1002.0, 1003.0, 1004.0])
+
+            snapshot = [source.read_text() for source in sources]
+            again = _REPAIR.merge_from_index(root, root / "repair/runs", work, parts / "part_00000.json",
+                                             select="legacy-quadratic", backup=False, part_index=0, part_count=2)
+            self.assertTrue(again["applied"])
+            (parts / "part_00001.json").unlink()
+            rerun = _REPAIR.merge_from_index(root, root / "repair/runs", work, parts / "part_00001.json",
+                                             select="legacy-quadratic", backup=False, part_index=1, part_count=2)
+            self.assertEqual(rerun["rows_replaced"], 0)
+            self.assertEqual([source.read_text() for source in sources], snapshot)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -465,7 +465,16 @@ def _merge_spool_file(
             retries[str(item["repair_key"])] = item["record"]
     if not retries or not source_relpath:
         return 0, 0
+    return _apply_retries(repo_root, source_relpath, retries, backup_root, select)
 
+
+def _apply_retries(
+    repo_root: Path,
+    source_relpath: str,
+    retries: dict[str, dict[str, Any]],
+    backup_root: Path | None,
+    select: str = "failed",
+) -> tuple[int, int]:
     source = repo_root / source_relpath
     temporary = source.with_suffix(source.suffix + ".repair_in_progress")
     backup = backup_root / source_relpath if backup_root is not None else None
@@ -517,11 +526,13 @@ def _merge_spool_file(
     if backup is not None and not backup.exists():
         backup.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, backup)
-    temporary.replace(source)
 
+    # Report first: if killed before the swap, a rerun redoes both; after the swap the
+    # rows are no longer selected, so a report left behind could never be refreshed.
     retry_candidate = (next(iter(retries.values())).get("inputs") or {}).get("candidate") or {}
     report_relpath = str(retry_candidate.get("_repair_source_report_relpath", ""))
     report_updates = _update_report(repo_root, report_relpath, replacements_for_report) if report_relpath else 0
+    temporary.replace(source)
     return replaced, report_updates
 
 
@@ -574,7 +585,151 @@ def merge(
     return manifest
 
 
-def parse_args() -> argparse.Namespace:
+def _retry_files(repair_runs_root: Path) -> list[Path]:
+    # One readdir of the runs root instead of a recursive glob (Lustre MDS load).
+    names = sorted(name for name in os.listdir(repair_runs_root) if name.startswith("shard_"))
+    return [repair_runs_root / name / "ac_opf" / "samples.jsonl" for name in names]
+
+
+def _bucket(source_hash: str, part_count: int) -> int:
+    return int(source_hash[:15], 16) % part_count
+
+
+def build_merge_index(
+    repair_runs_root: Path,
+    work_dir: Path,
+    part_index: int,
+    part_count: int,
+    select: str = "failed",
+) -> dict[str, Any]:
+    """Index one partition of retry files by byte offset, so the merge never copies records."""
+    index_dir = work_dir / "merge_index"
+    manifest_path = index_dir / f"part_{part_index:05d}.json"
+    if manifest_path.exists():
+        return json.loads(manifest_path.read_text(encoding="utf-8"))
+    include_failed = select == "legacy-quadratic"
+    counts = {"retry_files": 0, "retry_rows": 0, "indexed": 0, "invalid_retry_rows": 0}
+    lines: list[str] = []
+    for retry_path in _retry_files(repair_runs_root)[part_index::part_count]:
+        if not retry_path.exists():
+            continue
+        counts["retry_files"] += 1
+        retry_relpath = str(retry_path.relative_to(repair_runs_root))
+        offset = 0
+        with retry_path.open("rb") as handle:
+            for raw_line in handle:
+                length = len(raw_line)
+                start, offset = offset, offset + length
+                counts["retry_rows"] += 1
+                try:
+                    record = json.loads(raw_line)
+                except json.JSONDecodeError:
+                    counts["invalid_retry_rows"] += 1
+                    continue
+                if not include_failed and not bool(record.get("success", False)):
+                    continue
+                candidate = (record.get("inputs") or {}).get("candidate") or {}
+                source_relpath = str(candidate.get("_repair_source_samples_relpath", ""))
+                key = str(candidate.get("_repair_key", ""))
+                if not source_relpath or not key or "\t" in source_relpath:
+                    counts["invalid_retry_rows"] += 1
+                    continue
+                source_hash = hashlib.sha256(source_relpath.encode()).hexdigest()
+                lines.append(f"{source_hash}\t{source_relpath}\t{key}\t{retry_relpath}\t{start}\t{length}\n")
+                counts["indexed"] += 1
+    _atomic_write_text(index_dir / f"part_{part_index:05d}.tsv", "".join(lines))
+    manifest = {"schema_version": 1, "mode": "merge_index", "select": select,
+                "part_index": part_index, "part_count": part_count, **counts}
+    _atomic_write_json(manifest_path, manifest)
+    return manifest
+
+
+def _index_parts(work_dir: Path) -> list[Path]:
+    index_dir = work_dir / "merge_index"
+    first = index_dir / "part_00000.json"
+    if not first.exists():
+        raise RuntimeError(f"merge index missing: {first}")
+    count = int(json.loads(first.read_text(encoding="utf-8"))["part_count"])
+    missing = [i for i in range(count) if not (index_dir / f"part_{i:05d}.json").exists()]
+    if missing:
+        raise RuntimeError(f"merge index incomplete: {len(missing)} of {count} parts missing")
+    return [index_dir / f"part_{i:05d}.tsv" for i in range(count)]
+
+
+def merge_from_index(
+    repo_root: Path,
+    repair_runs_root: Path,
+    work_dir: Path,
+    manifest_path: Path,
+    select: str = "failed",
+    backup: bool = True,
+    part_index: int = 0,
+    part_count: int = 1,
+) -> dict[str, Any]:
+    """Apply the retries of every source file whose path hashes to this part."""
+    if manifest_path.exists():
+        previous = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if previous.get("applied") is True and previous.get("from_index") and previous.get("part_count") == part_count:
+            return previous
+    by_source: dict[str, list[tuple[str, str, int, int]]] = {}
+    for index_path in _index_parts(work_dir):
+        with index_path.open(encoding="utf-8") as handle:
+            for line in handle:
+                source_hash, source_relpath, key, retry_relpath, offset, length = line.rstrip("\n").split("\t")
+                if _bucket(source_hash, part_count) == part_index:
+                    by_source.setdefault(source_relpath, []).append((key, retry_relpath, int(offset), int(length)))
+    backup_root = work_dir / "backups" if backup else None
+    counts = {"source_files_with_converged_retries": len(by_source), "rows_replaced": 0, "report_rows_updated": 0}
+    for source_relpath in sorted(by_source):
+        retries: dict[str, dict[str, Any]] = {}
+        for key, retry_relpath, offset, length in by_source[source_relpath]:
+            with (repair_runs_root / retry_relpath).open("rb") as handle:
+                handle.seek(offset)
+                retries[key] = json.loads(handle.read(length))
+        replaced, report_updates = _apply_retries(repo_root, source_relpath, retries, backup_root, select)
+        counts["rows_replaced"] += replaced
+        counts["report_rows_updated"] += report_updates
+    manifest = {
+        "schema_version": 1,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "mode": "merge",
+        "from_index": True,
+        "select": select,
+        "applied": True,
+        "part_index": part_index,
+        "part_count": part_count,
+        "repair_runs_root": str(repair_runs_root),
+        "backup_root": str(backup_root) if backup_root is not None else None,
+        **counts,
+    }
+    _atomic_write_json(manifest_path, manifest)
+    return manifest
+
+
+def merge_finalize(parts_dir: Path, part_count: int, manifest_path: Path) -> dict[str, Any]:
+    """Write the merge manifest only when every index-based apply part is recorded as applied."""
+    totals = {"source_files_with_converged_retries": 0, "rows_replaced": 0, "report_rows_updated": 0}
+    missing = []
+    for index in range(part_count):
+        path = parts_dir / f"part_{index:05d}.json"
+        part = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        if not (part.get("applied") is True and part.get("from_index") and part.get("part_count") == part_count):
+            missing.append(index)
+            continue
+        for key in totals:
+            totals[key] += int(part.get(key, 0))
+    manifest = {
+        "schema_version": 1,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "mode": "merge_finalize",
+        "complete": not missing,
+        "part_count": part_count,
+        "missing_parts": missing,
+        **totals,
+    }
+    if not missing:
+        _atomic_write_json(manifest_path, manifest)
+    return manifest
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -626,7 +781,25 @@ def parse_args() -> argparse.Namespace:
     merge_parser.add_argument("--no-backup", action="store_true", help="Do not copy originals before replacing them.")
     merge_parser.add_argument("--part-index", type=int, default=0)
     merge_parser.add_argument("--part-count", type=int, default=1)
+    merge_parser.add_argument("--from-index", action="store_true", help="Apply from merge-index output (requires --apply).")
+
+    index_parser = subparsers.add_parser("merge-index", help="Index one partition of retry files for --from-index.")
+    index_parser.add_argument("--repair-runs-root", required=True)
+    index_parser.add_argument("--work-dir", required=True)
+    index_parser.add_argument("--select", choices=SELECT_MODES, default="failed")
+    index_parser.add_argument("--part-index", type=int, required=True)
+    index_parser.add_argument("--part-count", type=int, required=True)
+
+    final_parser = subparsers.add_parser("merge-finalize", help="Verify all --from-index apply parts.")
+    final_parser.add_argument("--parts-dir", required=True)
+    final_parser.add_argument("--part-count", type=int, required=True)
+    final_parser.add_argument("--manifest", required=True)
     return parser.parse_args()
+
+
+def _abs(repo_root: Path, value: str) -> Path:
+    path = Path(value)
+    return path if path.is_absolute() else (repo_root / path).resolve()
 
 
 def main() -> None:
@@ -680,6 +853,23 @@ def main() -> None:
             None if args.all_cases else set(args.cases or DEFAULT_CASES),
             (repo_root / output).resolve() if not output.is_absolute() else output,
             (repo_root / manifest).resolve() if not manifest.is_absolute() else manifest,
+        )
+    elif args.command == "merge-index":
+        result = build_merge_index(
+            _abs(repo_root, args.repair_runs_root), _abs(repo_root, args.work_dir),
+            args.part_index, args.part_count, args.select,
+        )
+    elif args.command == "merge-finalize":
+        result = merge_finalize(_abs(repo_root, args.parts_dir), args.part_count, _abs(repo_root, args.manifest))
+        if not result["complete"]:
+            print(json.dumps(result, indent=2, sort_keys=True))
+            raise SystemExit(1)
+    elif args.from_index:
+        if not args.apply:
+            raise SystemExit("--from-index requires --apply")
+        result = merge_from_index(
+            repo_root, _abs(repo_root, args.repair_runs_root), _abs(repo_root, args.work_dir),
+            _abs(repo_root, args.manifest), args.select, not args.no_backup, args.part_index, args.part_count,
         )
     else:
         repair_runs_root = Path(args.repair_runs_root)

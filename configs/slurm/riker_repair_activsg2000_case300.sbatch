@@ -266,25 +266,39 @@ if [[ "$RUN_MERGE" == "1" ]]; then
         echo "[$(date -u +%FT%TZ)] $missing_done shards unfinished; merge deferred to a later submission" >&2
         exit 1
     fi
-    PYTHONPATH="$ROOT/src" "$PYBIN" "$PREPARE_SCRIPT" merge \
-        --repair-runs-root "$REPAIR_RUNS_ROOT" \
-        --work-dir "$ROOT/$WORK_ROOT" \
-        --select "$SELECT" \
-        --manifest "$MERGE_MANIFEST"
 
     if [[ "$APPLY_MERGE" == "1" ]]; then
+        # Parallel byte-offset index, then hash-partitioned apply; both resume per part.
         mkdir -p "$ROOT/$WORK_ROOT/merge_parts"
+        echo "[$(date -u +%FT%TZ)] merge: indexing retries with $SLURM_NTASKS tasks"
+        srun --ntasks="$SLURM_NTASKS" --nodes="$SLURM_JOB_NUM_NODES" --kill-on-bad-exit=0 bash -c '
+PYTHONPATH="'"$ROOT"'/src" "'"$PYBIN"'" "'"$PREPARE_SCRIPT"'" merge-index \
+    --repair-runs-root "'"$REPAIR_RUNS_ROOT"'" \
+    --work-dir "'"$ROOT/$WORK_ROOT"'" \
+    --select "'"$SELECT"'" \
+    --part-index "$SLURM_PROCID" --part-count "$SLURM_NTASKS" >/dev/null
+' || echo "some merge-index parts failed; resubmit to resume" >&2
+        echo "[$(date -u +%FT%TZ)] merge: applying with $SLURM_NTASKS tasks"
         srun --ntasks="$SLURM_NTASKS" --nodes="$SLURM_JOB_NUM_NODES" --kill-on-bad-exit=0 bash -c '
 part=$(printf "%05d" "$SLURM_PROCID")
-PYTHONPATH="'"$ROOT"'/src" "'"$PYBIN"'" "'"$PREPARE_SCRIPT"'" merge \
+PYTHONPATH="'"$ROOT"'/src" "'"$PYBIN"'" "'"$PREPARE_SCRIPT"'" merge --from-index --apply \
     --repair-runs-root "'"$REPAIR_RUNS_ROOT"'" \
     --work-dir "'"$ROOT/$WORK_ROOT"'" \
     --select "'"$SELECT"'" \
     --manifest "'"$ROOT/$WORK_ROOT"'/merge_parts/part_${part}.json" \
     --part-index "$SLURM_PROCID" --part-count "$SLURM_NTASKS" \
-    '"${MERGE_EXTRA[*]}"' --apply >/dev/null
-'
+    '"${MERGE_EXTRA[*]}"' >/dev/null
+' || echo "some merge apply parts failed; resubmit to resume" >&2
+        PYTHONPATH="$ROOT/src" "$PYBIN" "$PREPARE_SCRIPT" merge-finalize \
+            --parts-dir "$ROOT/$WORK_ROOT/merge_parts" \
+            --part-count "$SLURM_NTASKS" \
+            --manifest "$MERGE_MANIFEST"
     else
+        PYTHONPATH="$ROOT/src" "$PYBIN" "$PREPARE_SCRIPT" merge \
+            --repair-runs-root "$REPAIR_RUNS_ROOT" \
+            --work-dir "$ROOT/$WORK_ROOT" \
+            --select "$SELECT" \
+            --manifest "$MERGE_MANIFEST"
         echo "Dry-run merge complete. Set APPLY_MERGE=1 to atomically replace converged failures."
     fi
     echo "[$(date -u +%FT%TZ)] repair complete; manifest=$MERGE_MANIFEST"
