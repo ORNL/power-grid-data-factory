@@ -140,6 +140,48 @@ class ScopfAttemptTests(unittest.TestCase):
             self.assertIn('"task": "scopf"', registry)
             self.assertIn('"contingency_set_id": "n1_set"', registry)
 
+    def test_screening_labels_are_persisted(self) -> None:
+        screening = [
+            {"contingency_id": "ok", "screening_outcome": "admitted_to_scopf", "infeasibility_class": None},
+            {
+                "contingency_id": "bad",
+                "screening_outcome": "excluded_from_scopf",
+                "infeasibility_class": "post_contingency_thermal_overload",
+            },
+        ]
+
+        class _ScreeningAdapter(_FakeAdapter):
+            def solve_scopf(self, case, contingencies, options=None):
+                out = super().solve_scopf(case, contingencies, options)
+                out["contingency_screening"] = screening
+                out["admitted_contingency_count"] = 1
+                return out
+
+        with TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            case_file = repo_root / "case.m"
+            case_file.write_text("function mpc = case\n", encoding="utf-8")
+            args = SimpleNamespace(
+                runs_root="runs", topology_id="t", operating_point_id="o", solver_id="pmsc_ipopt",
+                source="pglib", contingency_set="set.json", timeout_s=30.0, tol=1e-7, max_iter=None,
+                screen_contingencies=True,
+            )
+            contingencies = [
+                {"contingency_id": cid, "event_type": "simultaneous", "order": 1,
+                 "components": [{"type": "branch", "id": f"branch_00000{i}"}]}
+                for i, cid in enumerate(["ok", "bad"], start=1)
+            ]
+            case_data = {"case_id": "case", "buses": [], "generators": [], "loads": [], "branches": []}
+            adapter = _ScreeningAdapter()
+            with patch.object(run_scopf, "parse_matpower_case", return_value=case_data):
+                result = run_scopf._run_one_case(repo_root, args, "case", case_file, "n1_set", contingencies, adapter)
+
+            self.assertTrue(adapter.calls[0][2]["screen_contingencies"])
+            self.assertEqual(result["excluded_contingencies"], {"bad": "post_contingency_thermal_overload"})
+            attempt = Path(result["attempt_dir"])
+            doc = json.loads((attempt / "normalized" / "contingency_screening.json").read_text(encoding="utf-8"))
+            self.assertEqual((doc["admitted_count"], doc["excluded_count"]), (1, 1))
+
 
 if __name__ == "__main__":
     unittest.main()

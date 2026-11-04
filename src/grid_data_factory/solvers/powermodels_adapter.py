@@ -14,6 +14,11 @@ from pathlib import Path
 from grid_data_factory.runtime_metadata import collect_execution_context
 
 
+def _as_text(value: str | bytes | None) -> str | None:
+    # TimeoutExpired carries bytes even when the process ran with text=True.
+    return value.decode("utf-8", errors="replace") if isinstance(value, bytes) else value
+
+
 class PersistentPowerModelsSession:
     def __init__(self, adapter: "PowerModelsAdapter", options: dict | None = None):
         self.adapter = adapter
@@ -409,8 +414,8 @@ class PowerModelsAdapter:
                 "success": False,
                 "termination_status": "preflight_timeout",
                 "solver_name": "powermodels",
-                "stdout": exc.stdout,
-                "stderr": exc.stderr,
+                "stdout": _as_text(exc.stdout),
+                "stderr": _as_text(exc.stderr),
                 "note": "Julia dependency preflight timed out before solve attempt.",
             }
 
@@ -511,8 +516,8 @@ class PowerModelsAdapter:
                     "success": False,
                     "termination_status": "timeout",
                     "solver_name": "powermodels",
-                    "stdout": exc.stdout,
-                    "stderr": exc.stderr,
+                    "stdout": _as_text(exc.stdout),
+                    "stderr": _as_text(exc.stderr),
                 })
             if proc.returncode != 0:
                 return _finalize({
