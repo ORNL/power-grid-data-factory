@@ -63,6 +63,30 @@ function apply_payload_contingency!(pm_data, raw_contingency)
     end
 end
 
+function normalize_pf_generator_buses!(pm_data)
+    for generator in values(pm_data["gen"])
+        if generator["gen_status"] != 0 && all(iszero, (generator["pmin"], generator["pmax"], generator["qmin"], generator["qmax"]))
+            generator["gen_status"] = 0
+        end
+    end
+
+    for bus in values(pm_data["bus"])
+        bus["bus_type"] == 3 && continue
+        generators = [
+            generator for generator in values(pm_data["gen"])
+            if generator["gen_status"] != 0 && generator["gen_bus"] == bus["bus_i"]
+        ]
+        if isempty(generators)
+            bus["bus_type"] == 2 && (bus["bus_type"] = 1)
+            continue
+        end
+        if bus["bus_type"] == 1
+            bus["bus_type"] = 2
+            bus["vm"] = Float64(first(generators)["vg"])
+        end
+    end
+end
+
 function build_pf_with_pq_limits(pm::AbstractPowerModel)
     variable_bus_voltage(pm, bounded = false)
     variable_gen_power(pm, bounded = false)
@@ -193,6 +217,7 @@ function solve_pf_request(case_data, payload)
         pm_data = to_powermodels_data(case_data)
         controls = haskey(payload, :controls) ? apply_pf_controls!(pm_data, payload[:controls]) : Dict{String, Any}()
         haskey(payload, :contingency) && apply_payload_contingency!(pm_data, payload[:contingency])
+        normalize_pf_generator_buses!(pm_data)
         options = haskey(payload, :options) ? payload[:options] : Dict{String, Any}()
         tolerance = haskey(options, :tol) ? Float64(options[:tol]) : 1e-8
         enforce_q_limits = haskey(options, :enforce_q_limits) ? Bool(options[:enforce_q_limits]) : true

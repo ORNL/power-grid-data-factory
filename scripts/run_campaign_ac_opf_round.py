@@ -2,9 +2,7 @@
 from __future__ import annotations
 
 import argparse
-import copy
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -248,23 +246,10 @@ def main() -> None:
             case_data = apply_operating_point(case_data, op_params)
             case_data = apply_contingency(case_data, cand.get("contingency"))
 
-            solver_case_data = case_data
-            if os.environ.get("PGDF_PRE_SCALE_COSTS_FOR_PER_UNIT") == "1":
-                solver_case_data = copy.deepcopy(case_data)
-                base_mva = float(solver_case_data.get("base_mva", 100.0))
-                for generator in solver_case_data.get("generators", []):
-                    cost = list(generator.get("cost") or [0.0, 1.0, 0.0])
-                    cost.extend([0.0] * (3 - len(cost)))
-                    generator["cost"] = [
-                        float(cost[0]) * base_mva**2,
-                        float(cost[1]) * base_mva,
-                        float(cost[2]),
-                    ]
-
             progress.started(str(cand.get("candidate_id")))
             warm_start_solution = _load_warm_start_solution(repo_root, cand)
             result = solver.solve_ac_opf(
-                solver_case_data,
+                case_data,
                 timeout_s=case_settings.timeout_s,
                 warm_start_solution=warm_start_solution,
             )

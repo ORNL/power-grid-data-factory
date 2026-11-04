@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+ROOT=/lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory
 ANCHOR_INDEX=${ANCHOR_INDEX:-$ROOT/data/derived/pf_anchors/andes_acopf_anchors.parquet}
 CAMPAIGN_ID=${CAMPAIGN_ID:-riker_pf_smoke}
 CONFIG=${CONFIG:-configs/pf_campaign_riker.yaml}
@@ -11,7 +11,7 @@ NTASKS_PER_NODE=${NTASKS_PER_NODE:-32}
 WALLTIME=${WALLTIME:-00:30:00}
 MAX_FAILURE_FRACTION=${MAX_FAILURE_FRACTION:-1.0}
 RESUME=${RESUME:-0}
-COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/current/env.sh}
+COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/riker/env.sh}
 
 [[ -r "$COINHSL_ENV" ]] || { echo "Missing private Coin-HSL activation: $COINHSL_ENV" >&2; exit 2; }
 source "$COINHSL_ENV"

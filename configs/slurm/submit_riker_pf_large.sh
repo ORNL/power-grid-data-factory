@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+ROOT=/lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory
 SUPERVISOR=$ROOT/configs/slurm/riker_pf_campaign_supervisor.sbatch
 
 ANCHOR_INDEX=${ANCHOR_INDEX:-$ROOT/data/derived/pf_anchors/andes_acopf_anchors.parquet}
@@ -17,13 +17,13 @@ SHARD_COUNT=${SHARD_COUNT:-$((NODES * NTASKS_PER_NODE * SHARD_MULTIPLIER))}
 WALLTIME=${WALLTIME:-36:00:00}
 RUNS_ROOT=${RUNS_ROOT:-data/outputs/runs/$CAMPAIGN_ID}
 MAX_FAILURE_FRACTION=${MAX_FAILURE_FRACTION:-0.5}
-ACCOUNT=${ACCOUNT:-lrn070}
+ACCOUNT=${ACCOUNT:-LRN116}
 QOS=${QOS:-normal}
 DEP_TYPE=${DEP_TYPE:-afterany}
 MAX_CYCLES=${MAX_CYCLES:-500}
 AFTER=${AFTER:-}
 DRY_RUN=${DRY_RUN:-0}
-COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/current/env.sh}
+COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/riker/env.sh}
 
 [[ -s "$ANCHOR_INDEX" ]] || {
   echo "Missing PF anchor index: $ANCHOR_INDEX" >&2

@@ -1,0 +1,435 @@
+#!/bin/bash
+#SBATCH -J pgdf_campaign_mr
+#SBATCH -A LRN116
+#SBATCH -p batch
+#SBATCH --qos=normal
+#SBATCH -N 16
+#SBATCH --ntasks-per-node=64
+#SBATCH --cpus-per-task=1
+#SBATCH -t 36:00:00
+#SBATCH -o /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.out
+#SBATCH -e /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
+
+set -euo pipefail
+ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
+
+ROOT=/lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory
+BOOTSTRAP_SCRIPT=$ROOT/scripts/bootstrap_adaptive_campaign.py
+SHARD_SCRIPT=$ROOT/scripts/shard_selected_candidates.py
+MAP_SCRIPT=$ROOT/scripts/run_campaign_ac_opf_round.py
+REDUCE_SCRIPT=$ROOT/scripts/reduce_campaign_shards.py
+RESTART_PREP_SCRIPT=$ROOT/scripts/prepare_powermodels_restart_campaign.py
+
+unset PYTHONUSERBASE PYTHONNOUSERSITE
+export PGDF_JULIA_BIN=${PGDF_JULIA_BIN:-$ROOT/.software/bin/julia}
+export PGDF_JULIA_PROJECT_DIR=${PGDF_JULIA_PROJECT_DIR:-$ROOT/julia/lockfiles/riker}
+export OPENBLAS_NUM_THREADS=1
+export JULIA_NUM_THREADS=1
+[[ -x "$PGDF_JULIA_BIN" ]] || { echo "Missing Julia wrapper: $PGDF_JULIA_BIN" >&2; exit 2; }
+
+PYBIN=${PYBIN:-$ROOT/.venv-riker/bin/python}
+if [[ ! -x "$PYBIN" ]]; then
+  echo "Python interpreter is not executable: $PYBIN" >&2
+  exit 2
+fi
+if ! PYTHONPATH="$ROOT/src" "$PYBIN" -c 'import grid_data_factory, pydantic, yaml, pandas, pyarrow' >/dev/null 2>&1; then
+  echo "Python preflight failed for $PYBIN: required campaign packages are unavailable" >&2
+  exit 2
+fi
+echo "[$(date -u +%FT%TZ)] python=$($PYBIN -c 'import sys; print(sys.executable)') version=$($PYBIN -c 'import platform; print(platform.python_version())')"
+
+# Prefer a prebuilt PackageCompiler sysimage so solves skip first-run compilation.
+# Explicit path avoids relying on per-node hostname detection; a missing file
+# cleanly falls back to the normal compile path in the solver adapter.
+PGDF_JULIA_SYSIMAGE=${PGDF_JULIA_SYSIMAGE:-$ROOT/julia/sysimages/riker/pgdf_sysimage.so}
+export PGDF_JULIA_SYSIMAGE
+
+# The sysimage was built against this Lustre depot; ranks MUST use the same one.
+# Without it every rank falls back to ~/.julia on NFS home, and 1024 concurrent
+# Julia startups storm NFS and stall at ~0 CPU. Lustre serves concurrent reads.
+JULIA_DEPOT_PATH=${JULIA_DEPOT_PATH:-$ROOT/.julia_depot_riker}
+export JULIA_DEPOT_PATH
+
+# PowerModels tries Ipopt's standard linear solver first, then these Coin-HSL
+# fallbacks. Set the list empty to disable fallbacks, or set
+# POWER_MODELS_LINEAR_SOLVER to force one backend and disable the chain.
+POWER_MODELS_LINEAR_SOLVER=${POWER_MODELS_LINEAR_SOLVER:-}
+POWER_MODELS_LINEAR_SOLVERS=${POWER_MODELS_LINEAR_SOLVERS:-}
+POWER_MODELS_LINEAR_SOLVER_FALLBACKS=${POWER_MODELS_LINEAR_SOLVER_FALLBACKS-ma27,ma57}
+COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/riker/env.sh}
+if [[ -n "$POWER_MODELS_LINEAR_SOLVER" ]]; then
+  case "$POWER_MODELS_LINEAR_SOLVER" in ma27|ma57) ;; *) echo "Invalid POWER_MODELS_LINEAR_SOLVER=$POWER_MODELS_LINEAR_SOLVER" >&2; exit 2 ;; esac
+elif [[ -n "$POWER_MODELS_LINEAR_SOLVERS" ]]; then
+  IFS=',' read -r -a _linear_solvers <<< "$POWER_MODELS_LINEAR_SOLVERS"
+  for _solver in "${_linear_solvers[@]}"; do
+    case "${_solver//[[:space:]]/}" in ma27|ma57) ;; *) echo "Invalid PowerModels linear solver: $_solver" >&2; exit 2 ;; esac
+  done
+elif [[ -n "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS" ]]; then
+  IFS=',' read -r -a _fallback_solvers <<< "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS"
+  for _solver in "${_fallback_solvers[@]}"; do
+    case "${_solver//[[:space:]]/}" in ma27|ma57) ;; *) echo "Invalid PowerModels fallback solver: $_solver" >&2; exit 2 ;; esac
+  done
+fi
+if [[ -n "$POWER_MODELS_LINEAR_SOLVER" || -n "$POWER_MODELS_LINEAR_SOLVERS" || -n "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS" ]]; then
+  [[ -r "$COINHSL_ENV" ]] || { echo "Missing private Coin-HSL activation: $COINHSL_ENV" >&2; exit 2; }
+  source "$COINHSL_ENV"
+  [[ -r "${IPOPT_HSL_LIBRARY:-}" ]] || { echo "Missing Coin-HSL library: ${IPOPT_HSL_LIBRARY:-unset}" >&2; exit 2; }
+  case "$(readlink -f "$IPOPT_HSL_LIBRARY")" in "$ROOT"|"$ROOT"/*) echo "Coin-HSL must not be loaded from the shared repository: $IPOPT_HSL_LIBRARY" >&2; exit 2 ;; esac
+fi
+if [[ -n "$POWER_MODELS_LINEAR_SOLVER" ]]; then
+  export IPOPT_LINEAR_SOLVER="$POWER_MODELS_LINEAR_SOLVER"
+elif [[ -n "$POWER_MODELS_LINEAR_SOLVERS" || -n "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS" ]]; then
+  unset IPOPT_LINEAR_SOLVER
+fi
+
+CAMPAIGN_ID=${CAMPAIGN_ID:-pilot_pglib_14_57_118}
+ROUND_INDEX=${ROUND_INDEX:-0}
+CONFIG=${CONFIG:-configs/campaign_default.yaml}
+CASES=${CASES:-"pglib_opf_case14_ieee pglib_opf_case57_ieee pglib_opf_case118_ieee"}
+# Operating points per case. With screening bypassed (~24 contingencies/op) this
+# gives 3 cases x PER_CASE x ~24 candidates: 20000 -> ~1.44M pool, comfortably
+# above BUDGET so all 1024 ranks stay busy for the full 36h.
+PER_CASE=${PER_CASE:-20000}
+SAMPLER=${SAMPLER:-latin_hypercube}
+# Total AC-OPF solves selected for the round (drained across all tasks). Sized to
+# keep 64 nodes x 16 tasks = 1024 ranks busy for the full 36h even at the fast
+# (~2 min) end of the solve-time range: 1024 * 36h*3600 / 120s ~= 1.1M. Slight
+# overshoot is safe: the shard queue is bounded and RESUME=1 finishes leftovers.
+BUDGET=${BUDGET:-1200000}
+SEED=${SEED:-7}
+# Screening bypass: 1.0 sends every enumerated candidate to AC solve (the audit
+# sample becomes 100% of the pool). Lower it (e.g. 0.10) to re-enable selective
+# screening once the escalation features actually reflect post-contingency risk.
+AUDIT_FRACTION=${AUDIT_FRACTION:-1.0}
+SOLVER_ID=${SOLVER_ID:-powermodels_ac_opf_ipopt_campaign}
+TIMEOUT_S=${TIMEOUT_S:-1200}
+EXECUTION_POLICY=${EXECUTION_POLICY:-}
+RUNS_ROOT=${RUNS_ROOT:-data/outputs/runs}
+MAX_CANDIDATES=${MAX_CANDIDATES:-0}
+RUN_BOOTSTRAP=${RUN_BOOTSTRAP:-1}
+CONTINUE_ON_ERROR=${CONTINUE_ON_ERROR:-1}
+# More shards than tasks so the dynamic work-queue hands each rank many small
+# shards instead of one large one; faster ranks pull extra shards, keeping every
+# task busy until walltime instead of idling on load imbalance.
+SHARD_COUNT=${SHARD_COUNT:-$(( ${SLURM_NTASKS:-1} * 8 ))}
+COVERAGE_KEYS=${COVERAGE_KEYS:-dataset,topology_id,operating_regime,contingency_class}
+MIN_PER_BUCKET=${MIN_PER_BUCKET:-1}
+ENFORCE_COVERAGE=${ENFORCE_COVERAGE:-1}
+BACKFILL_FROM_POOL=${BACKFILL_FROM_POOL:-1}
+MAX_BACKFILL_ADDITIONS=${MAX_BACKFILL_ADDITIONS:-0}
+SCORE_KEY=${SCORE_KEY:-novelty_score}
+MAX_FAILURE_FRACTION=${MAX_FAILURE_FRACTION:-0.5}
+TOPOLOGIES_PER_CASE=${TOPOLOGIES_PER_CASE:-6}
+MAX_SWITCHED_BRANCHES=${MAX_SWITCHED_BRANCHES:-3}
+MAX_K=${MAX_K:-10}
+# Cascades on by default alongside the always-on simultaneous N-1/N-2/N-k streams: mixed dataset.
+SEQ_CASCADE_PER_OP=${SEQ_CASCADE_PER_OP:-1}
+SEQ_MAX_LEN=${SEQ_MAX_LEN:-10}
+RESUME=${RESUME:-0}
+BOOTSTRAP_WORKERS=${BOOTSTRAP_WORKERS:-32}
+RESTART_SOURCE_RUNS_ROOT=${RESTART_SOURCE_RUNS_ROOT:-}
+RESTART_TERMINATION_STATUS=${RESTART_TERMINATION_STATUS:-ALMOST_LOCALLY_SOLVED}
+
+# Self-healing round selection. When AUTO_ROUND=1 the passed ROUND_INDEX is
+# ignored and the job (re)targets the furthest INCOMPLETE round at runtime (the
+# lowest round whose reduce marker is missing or not "ok"). Combined with an
+# afterany-chained pool of identical jobs this lets the campaign grind through
+# every round across many walltime windows: a round that times out is simply
+# resumed by the next job instead of being skipped, and rounds that need several
+# 36h windows get them. SEED stays tied to the round via SEED_BASE + round so
+# per-round sampling matches the original fixed-index launch.
+AUTO_ROUND=${AUTO_ROUND:-0}
+TOTAL_ROUNDS=${TOTAL_ROUNDS:-1}
+SEED_BASE=${SEED_BASE:-$SEED}
+if [[ "$AUTO_ROUND" == "1" ]]; then
+  _detected=""
+  for ((_r=0; _r<TOTAL_ROUNDS; _r++)); do
+    printf -v _rp "%03d" "$_r"
+    _marker="$ROOT/data/outputs/campaigns/$CAMPAIGN_ID/round_summaries/round_${_rp}_mapreduce_reduce_report.json"
+    if [[ -s "$_marker" ]] && grep -q '"ok": true' "$_marker" 2>/dev/null; then
+      continue
+    fi
+    _detected="$_r"; break
+  done
+  if [[ -z "$_detected" ]]; then
+    echo "[$(date -u +%FT%TZ)] [auto-round] all $TOTAL_ROUNDS rounds already complete; nothing to do"
+    exit 0
+  fi
+  ROUND_INDEX="$_detected"
+  RESUME=1
+  SEED=$(( SEED_BASE + ROUND_INDEX ))
+  echo "[$(date -u +%FT%TZ)] [auto-round] furthest incomplete round=$ROUND_INDEX seed=$SEED (RESUME=1, total_rounds=$TOTAL_ROUNDS)"
+fi
+
+printf -v ROUND_PAD "%03d" "$ROUND_INDEX"
+CAMPAIGN_ROOT="$ROOT/data/outputs/campaigns/$CAMPAIGN_ID"
+SELECTED_JSONL="$CAMPAIGN_ROOT/round_summaries/round_${ROUND_PAD}_selected_candidates.jsonl"
+SHARD_DIR="$CAMPAIGN_ROOT/round_summaries/round_${ROUND_PAD}_shards"
+SHARD_PREFIX="selected"
+SHARD_IDS_FILE="$SHARD_DIR/shard_campaign_ids.txt"
+POOL_JSONL_DEFAULT="$CAMPAIGN_ROOT/round${ROUND_INDEX}_screened_candidates.jsonl"
+# Screening always writes round0_screened_candidates.jsonl regardless of round index.
+if [[ ! -s "$POOL_JSONL_DEFAULT" ]]; then
+  POOL_JSONL_DEFAULT="$CAMPAIGN_ROOT/round0_screened_candidates.jsonl"
+fi
+POOL_JSONL=${POOL_JSONL:-$POOL_JSONL_DEFAULT}
+QUEUE_DIR="$SHARD_DIR/queue"
+QUEUE_FILE="$QUEUE_DIR/shards.txt"
+INDEX_FILE="$QUEUE_DIR/next_index.txt"
+LOCK_DIR="$QUEUE_DIR/lock"
+DONE_DIR="$QUEUE_DIR/done"
+
+mkdir -p "$ROOT/data/scratch/logs"
+
+# --- Lustre layout applied before any files land (setstripe sets the directory
+# default for new files). The per-round bootstrap writes a few multi-GB candidate
+# JSONLs (operating/contingency/selected) plus thousands of tiny shard/sample
+# files. Give the big files a wide stripe for aggregate bandwidth, and keep the
+# small files on a single OST each to avoid spraying the OSTs/MDS with tiny
+# objects and inflating metadata load. ---
+if command -v lfs >/dev/null 2>&1; then
+  mkdir -p "$CAMPAIGN_ROOT" "$SHARD_DIR" "$ROOT/$RUNS_ROOT"
+  lfs setstripe -c 8 "$CAMPAIGN_ROOT" 2>/dev/null || true
+  lfs setstripe -c 1 "$SHARD_DIR" 2>/dev/null || true
+  lfs setstripe -c 1 "$ROOT/$RUNS_ROOT" 2>/dev/null || true
+fi
+
+echo "[$(date -u +%FT%TZ)] JOB=$SLURM_JOB_ID mode=map_reduce campaign_id=$CAMPAIGN_ID round_index=$ROUND_INDEX"
+echo "[$(date -u +%FT%TZ)] config=$CONFIG budget=$BUDGET per_case=$PER_CASE seed=$SEED"
+echo "[$(date -u +%FT%TZ)] contingencies=simultaneous+cascade max_k=$MAX_K seq_cascade_per_op=$SEQ_CASCADE_PER_OP seq_max_len=$SEQ_MAX_LEN"
+echo "[$(date -u +%FT%TZ)] solver_id=$SOLVER_ID timeout_s=$TIMEOUT_S shard_count=$SHARD_COUNT audit_fraction=$AUDIT_FRACTION"
+echo "[$(date -u +%FT%TZ)] linear_solver=${POWER_MODELS_LINEAR_SOLVER:-default} exact_sequence=${POWER_MODELS_LINEAR_SOLVERS:-none} fallbacks=${POWER_MODELS_LINEAR_SOLVER_FALLBACKS:-none}"
+echo "[$(date -u +%FT%TZ)] execution_policy=${EXECUTION_POLICY:-none}"
+echo "[$(date -u +%FT%TZ)] restart_source=${RESTART_SOURCE_RUNS_ROOT:-none} restart_status=$RESTART_TERMINATION_STATUS"
+echo "[$(date -u +%FT%TZ)] coverage_keys=$COVERAGE_KEYS min_per_bucket=$MIN_PER_BUCKET enforce=$ENFORCE_COVERAGE backfill=$BACKFILL_FROM_POOL"
+
+RESUMING=0
+if [[ "$RESUME" == "1" ]] && compgen -G "$SHARD_DIR/${SHARD_PREFIX}_*.jsonl" > /dev/null; then
+  RESUMING=1
+  echo "[$(date -u +%FT%TZ)] RESUME enabled: reusing existing shards under $SHARD_DIR; completed shards and finalized runs are skipped"
+fi
+
+if [[ "$RESUMING" == "0" && -n "$RESTART_SOURCE_RUNS_ROOT" ]]; then
+  echo "[$(date -u +%FT%TZ)] Preparing warm-restart selection from $RESTART_SOURCE_RUNS_ROOT"
+  PYTHONPATH="$ROOT/src" "$PYBIN" "$RESTART_PREP_SCRIPT" \
+    --source-runs-root "$RESTART_SOURCE_RUNS_ROOT" \
+    --termination-status "$RESTART_TERMINATION_STATUS" \
+    --output "$SELECTED_JSONL"
+elif [[ "$RESUMING" == "0" && "$RUN_BOOTSTRAP" == "1" ]]; then
+  read -r -a CASE_ARRAY <<< "$CASES"
+  echo "[$(date -u +%FT%TZ)] Bootstrapping campaign candidates and round selection"
+  PYTHONPATH="$ROOT/src" "$PYBIN" "$BOOTSTRAP_SCRIPT" \
+    --campaign-id "$CAMPAIGN_ID" \
+    --config "$CONFIG" \
+    --cases "${CASE_ARRAY[@]}" \
+    --per-case "$PER_CASE" \
+    --sampler "$SAMPLER" \
+    --topologies-per-case "$TOPOLOGIES_PER_CASE" \
+    --max-switched-branches "$MAX_SWITCHED_BRANCHES" \
+    --max-k "$MAX_K" \
+    --sequential-cascade-per-operating-point "$SEQ_CASCADE_PER_OP" \
+    --sequential-max-len "$SEQ_MAX_LEN" \
+    --budget "$BUDGET" \
+    --audit-fraction "$AUDIT_FRACTION" \
+    --round-index "$ROUND_INDEX" \
+    --seed "$SEED" \
+    --workers "$BOOTSTRAP_WORKERS"
+else
+  echo "[$(date -u +%FT%TZ)] Skipping bootstrap (RESUMING=$RESUMING RUN_BOOTSTRAP=$RUN_BOOTSTRAP)"
+fi
+
+if [[ ! -s "$SELECTED_JSONL" ]]; then
+  echo "Selected candidate file not found or empty: $SELECTED_JSONL" >&2
+  echo "Set RUN_BOOTSTRAP=1 or provide a precomputed selected-candidates file for this campaign round." >&2
+  exit 2
+fi
+
+SHARD_ARGS=(
+  --input "$SELECTED_JSONL"
+  --num-shards "$SHARD_COUNT"
+  --out-dir "$SHARD_DIR"
+  --prefix "$SHARD_PREFIX"
+  --coverage-keys "$COVERAGE_KEYS"
+  --min-per-bucket "$MIN_PER_BUCKET"
+  --max-backfill-additions "$MAX_BACKFILL_ADDITIONS"
+  --score-key "$SCORE_KEY"
+  --stream
+)
+# Full-budget selection (every candidate selected) already covers every bucket,
+# so the pool universe scan + backfill are redundant; skip them and the full read
+# of the 30+ GB pool JSONL they require.
+ROUND_SUMMARY="$CAMPAIGN_ROOT/round_summaries/round_${ROUND_PAD}.json"
+FULL_BUDGET=0
+if [[ -s "$ROUND_SUMMARY" ]]; then
+  FULL_BUDGET=$("$PYBIN" -c "import json,sys;d=json.load(open(sys.argv[1]));cc=int(d.get('candidate_count',0));sc=int(d.get('selected_count',-1));print(1 if cc>0 and cc==sc else 0)" "$ROUND_SUMMARY" 2>/dev/null || echo 0)
+fi
+if [[ "$FULL_BUDGET" == "1" ]]; then
+  echo "[$(date -u +%FT%TZ)] full-budget selection detected; skipping pool universe scan + backfill (coverage complete by construction)"
+  SHARD_ARGS+=(--full-budget)
+else
+  if [[ "$ENFORCE_COVERAGE" == "1" ]]; then
+    SHARD_ARGS+=(--enforce-coverage)
+  fi
+  # --backfill-from-pool requires --pool-jsonl, so gate both on the pool file existing.
+  if [[ "$BACKFILL_FROM_POOL" == "1" && -s "$POOL_JSONL" ]]; then
+    SHARD_ARGS+=(--backfill-from-pool --pool-jsonl "$POOL_JSONL")
+  elif [[ -s "$POOL_JSONL" ]]; then
+    SHARD_ARGS+=(--pool-jsonl "$POOL_JSONL")
+  fi
+fi
+
+if [[ "$RESUMING" == "0" ]]; then
+  PYTHONPATH="$ROOT/src" "$PYBIN" "$SHARD_SCRIPT" "${SHARD_ARGS[@]}"
+else
+  echo "[$(date -u +%FT%TZ)] Skipping re-sharding (resume): reusing existing shard files"
+fi
+
+: > "$SHARD_IDS_FILE"
+mkdir -p "$QUEUE_DIR" "$DONE_DIR"
+: > "$QUEUE_FILE"
+for ((i=0; i<SHARD_COUNT; i++)); do
+  shard_file="$SHARD_DIR/${SHARD_PREFIX}_$(printf "%05d" "$i").jsonl"
+  if [[ -s "$shard_file" ]]; then
+    printf "%s__r%s__s%05d\n" "$CAMPAIGN_ID" "$ROUND_PAD" "$i" >> "$SHARD_IDS_FILE"
+    printf "%05d\n" "$i" >> "$QUEUE_FILE"
+  fi
+done
+
+if [[ -d "$LOCK_DIR" ]]; then
+  if rmdir "$LOCK_DIR"; then
+    echo "[$(date -u +%FT%TZ)] Removed stale queue lock: $LOCK_DIR"
+  else
+    echo "Queue lock exists and is not empty: $LOCK_DIR" >&2
+    exit 2
+  fi
+fi
+echo 0 > "$INDEX_FILE"
+
+if [[ ! -s "$SHARD_IDS_FILE" ]]; then
+  echo "No non-empty shard files were generated." >&2
+  exit 2
+fi
+
+echo "[$(date -u +%FT%TZ)] Starting map stage with srun tasks=${SLURM_NTASKS}"
+
+# --signal=USR1@120: slurmstepd signals each task's process group 120s before
+# the walltime, so python's SampleSink flushes early (SIGTERM before SIGKILL is
+# the automatic backstop). The picker bash traps USR1 as a no-op to survive the
+# warning; children reset it to default, then install their own handler.
+srun --ntasks="${SLURM_NTASKS}" --nodes="${SLURM_JOB_NUM_NODES}" --signal=USR1@120 bash -lc '
+set -euo pipefail
+ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
+trap '"'"'true'"'"' USR1
+ROOT="'$ROOT'"
+CAMPAIGN_ID="'$CAMPAIGN_ID'"
+ROUND_INDEX="'$ROUND_INDEX'"
+ROUND_PAD="'$ROUND_PAD'"
+CONFIG="'$CONFIG'"
+SHARD_DIR="'$SHARD_DIR'"
+SHARD_PREFIX="'$SHARD_PREFIX'"
+MAP_SCRIPT="'$MAP_SCRIPT'"
+SOLVER_ID="'$SOLVER_ID'"
+TIMEOUT_S="'$TIMEOUT_S'"
+RUNS_ROOT="'$RUNS_ROOT'"
+EXECUTION_POLICY="'$EXECUTION_POLICY'"
+PYBIN="'$PYBIN'"
+MAX_CANDIDATES="'$MAX_CANDIDATES'"
+CONTINUE_ON_ERROR="'$CONTINUE_ON_ERROR'"
+MAX_FAILURE_FRACTION="'$MAX_FAILURE_FRACTION'"
+POWER_MODELS_LINEAR_SOLVER_FALLBACKS="'$POWER_MODELS_LINEAR_SOLVER_FALLBACKS'"
+POWER_MODELS_LINEAR_SOLVERS="'$POWER_MODELS_LINEAR_SOLVERS'"
+QUEUE_FILE="'$QUEUE_FILE'"
+INDEX_FILE="'$INDEX_FILE'"
+LOCK_DIR="'$LOCK_DIR'"
+DONE_DIR="'$DONE_DIR'"
+RESUMING="'$RESUMING'"
+PGDF_JULIA_SYSIMAGE="'$PGDF_JULIA_SYSIMAGE'"
+export PGDF_JULIA_SYSIMAGE
+JULIA_DEPOT_PATH="'$JULIA_DEPOT_PATH'"
+export JULIA_DEPOT_PATH
+# bash -l can reset these via Riker profile/module init.
+export PGDF_JULIA_BIN="'$PGDF_JULIA_BIN'" PGDF_JULIA_PROJECT_DIR="'$PGDF_JULIA_PROJECT_DIR'"
+export IPOPT_HSL_LIBRARY="'${IPOPT_HSL_LIBRARY:-}'" LD_LIBRARY_PATH="'${LD_LIBRARY_PATH:-}'" OPENBLAS_NUM_THREADS=1 JULIA_NUM_THREADS=1
+TOTAL_SHARDS=$(wc -l < "$QUEUE_FILE")
+
+TASK_ID=${SLURM_PROCID:-0}
+
+echo "[$(date -u +%FT%TZ)] task=$TASK_ID dynamic shard pickup enabled total_shards=$TOTAL_SHARDS"
+while true; do
+  while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+    sleep 0.05
+  done
+
+  next_idx=$(cat "$INDEX_FILE")
+  if (( next_idx >= TOTAL_SHARDS )); then
+    rmdir "$LOCK_DIR"
+    break
+  fi
+
+  echo $((next_idx + 1)) > "$INDEX_FILE"
+  rmdir "$LOCK_DIR"
+
+  shard_number=$(sed -n "$((next_idx + 1))p" "$QUEUE_FILE")
+  if [[ -z "${shard_number:-}" ]]; then
+    continue
+  fi
+
+  SHARD_FILE="$SHARD_DIR/${SHARD_PREFIX}_${shard_number}.jsonl"
+  if [[ ! -s "$SHARD_FILE" ]]; then
+    continue
+  fi
+
+  if [[ "$RESUMING" == "1" && -f "$DONE_DIR/$shard_number" ]]; then
+    echo "[$(date -u +%FT%TZ)] task=$TASK_ID shard_number=$shard_number already complete (resume) skipping"
+    continue
+  fi
+
+  SHARD_CAMPAIGN_ID="${CAMPAIGN_ID}__r${ROUND_PAD}__s${shard_number}"
+  SHARD_RUNS_ROOT="${RUNS_ROOT}/mapreduce_round_${ROUND_PAD}/shard_${shard_number}"
+
+  ARGS=(
+    --campaign-id "$SHARD_CAMPAIGN_ID"
+    --round-index "$ROUND_INDEX"
+    --selected-candidates-jsonl "$SHARD_FILE"
+    --config "$CONFIG"
+    --runs-root "$SHARD_RUNS_ROOT"
+    --solver-id "$SOLVER_ID"
+    --timeout-s "$TIMEOUT_S"
+    --max-failure-fraction "$MAX_FAILURE_FRACTION"
+  )
+
+  if [[ -n "$POWER_MODELS_LINEAR_SOLVERS" ]]; then
+    ARGS+=(--linear-solvers "$POWER_MODELS_LINEAR_SOLVERS")
+  elif [[ -n "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS" ]]; then
+    ARGS+=(--linear-solver-fallbacks "$POWER_MODELS_LINEAR_SOLVER_FALLBACKS")
+  fi
+
+  if [[ -n "$EXECUTION_POLICY" ]]; then
+    ARGS+=(--execution-policy "$EXECUTION_POLICY")
+  fi
+
+  if [[ "$MAX_CANDIDATES" != "0" ]]; then
+    ARGS+=(--max-candidates "$MAX_CANDIDATES")
+  fi
+  if [[ "$CONTINUE_ON_ERROR" == "1" ]]; then
+    ARGS+=(--continue-on-error)
+  fi
+  if [[ "$RESUMING" == "1" ]]; then
+    ARGS+=(--resume)
+  fi
+
+  echo "[$(date -u +%FT%TZ)] task=$TASK_ID shard_number=$shard_number shard_campaign_id=$SHARD_CAMPAIGN_ID"
+  PYTHONPATH="$ROOT/src" "$PYBIN" "$MAP_SCRIPT" "${ARGS[@]}"
+  touch "$DONE_DIR/$shard_number"
+done
+'
+
+echo "[$(date -u +%FT%TZ)] Map stage complete. Starting deterministic reduce stage"
+
+PYTHONPATH="$ROOT/src" "$PYBIN" "$REDUCE_SCRIPT" \
+  --campaign-id "$CAMPAIGN_ID" \
+  --round-index "$ROUND_INDEX" \
+  --config "$CONFIG" \
+  --shard-campaign-ids-file "$SHARD_IDS_FILE"
+
+echo "[$(date -u +%FT%TZ)] Completed map/reduce campaign round job $SLURM_JOB_ID"

@@ -1,19 +1,19 @@
 #!/bin/bash
 #SBATCH -J pgdf_riker_pf
-#SBATCH -A lrn070
+#SBATCH -A LRN116
 #SBATCH -p batch
 #SBATCH --qos=normal
 #SBATCH -N 1
 #SBATCH --ntasks-per-node=32
 #SBATCH --cpus-per-task=1
 #SBATCH -t 02:00:00
-#SBATCH -o /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.out
-#SBATCH -e /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
+#SBATCH -o /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.out
+#SBATCH -e /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
 
 set -euo pipefail
 ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 
-ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+ROOT=/lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory
 PYBIN=${PYBIN:-$ROOT/.venv-riker/bin/python}
 ANCHOR_INDEX=${ANCHOR_INDEX:-$ROOT/data/derived/pf_anchors/andes_acopf_anchors.parquet}
 CAMPAIGN_ID=${CAMPAIGN_ID:-riker_pf_complement_v1}
@@ -27,6 +27,8 @@ SOLVER_ID=${SOLVER_ID:-powermodels_pf_ipopt}
 TIMEOUT_S=${TIMEOUT_S:-1200}
 SHARD_COUNT=${SHARD_COUNT:-$(( ${SLURM_NTASKS:-32} * 8 ))}
 MAX_FAILURE_FRACTION=${MAX_FAILURE_FRACTION:-0.25}
+PF_LINEAR_SOLVERS=${PF_LINEAR_SOLVERS:-default,ma27,ma57}
+PF_QUALITY_METRIC=${PF_QUALITY_METRIC:-failure}
 RESUME=${RESUME:-0}
 
 export PGDF_JULIA_BIN=${PGDF_JULIA_BIN:-$ROOT/.software/bin/julia}
@@ -35,16 +37,18 @@ export JULIA_DEPOT_PATH=${JULIA_DEPOT_PATH:-$ROOT/.julia_depot_riker}
 export OPENBLAS_NUM_THREADS=1
 export JULIA_NUM_THREADS=1
 
-COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/current/env.sh}
+COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/riker/env.sh}
 [[ -r "$COINHSL_ENV" ]] || { echo "Missing private Coin-HSL activation: $COINHSL_ENV" >&2; exit 2; }
 source "$COINHSL_ENV"
-[[ -r "${IPOPT_HSL_LIBRARY:-}" ]] || { echo "Missing Coin-HSL library: ${IPOPT_HSL_LIBRARY:-unset}" >&2; exit 2; }
+if [[ ",$PF_LINEAR_SOLVERS," == *",ma"* ]]; then
+  [[ -r "${IPOPT_HSL_LIBRARY:-}" ]] || { echo "Missing Coin-HSL library: ${IPOPT_HSL_LIBRARY:-unset}" >&2; exit 2; }
+fi
 
 [[ -x "$PYBIN" ]] || { echo "Missing Python: $PYBIN" >&2; exit 2; }
 [[ -x "$PGDF_JULIA_BIN" ]] || { echo "Missing Julia wrapper: $PGDF_JULIA_BIN" >&2; exit 2; }
 [[ -s "$ANCHOR_INDEX" ]] || { echo "Missing anchor index: $ANCHOR_INDEX" >&2; exit 2; }
 PYTHONPATH="$ROOT/src" "$PYBIN" -c 'import grid_data_factory, pydantic, pyarrow, yaml'
-echo "IPOPT_LINEAR_SOLVER_FALLBACK=default,ma27,ma57"
+echo "PF_LINEAR_SOLVERS=$PF_LINEAR_SOLVERS PF_QUALITY_METRIC=$PF_QUALITY_METRIC TIMEOUT_S=$TIMEOUT_S MAX_FAILURE_FRACTION=$MAX_FAILURE_FRACTION"
 
 printf -v ROUND_PAD "%03d" "$ROUND_INDEX"
 CAMPAIGN_ROOT="$ROOT/data/outputs/campaigns/$CAMPAIGN_ID"
@@ -66,7 +70,7 @@ if [[ "${ROUND_SELF_CONTINUE:-0}" == "1" ]]; then
   FINALIZER_SCRIPT=${FINALIZER_SCRIPT:-$ROOT/configs/slurm/riker_pf_finalize.sbatch}
   FINALIZER_FILE="$ROUND_DIR/finalizer_after_job_${SLURM_JOB_ID}.txt"
   if [[ ! -s "$FINALIZER_FILE" ]]; then
-    FINALIZER_CMD=(sbatch --parsable -A "${ACCOUNT:-lrn070}")
+    FINALIZER_CMD=(sbatch --parsable -A "${ACCOUNT:-LRN116}")
     [[ -n "${QOS:-normal}" ]] && FINALIZER_CMD+=(-q "${QOS:-normal}")
     FINALIZER_CMD+=(--dependency="afterany:${SLURM_JOB_ID}" --export="ALL,CAMPAIGN_ID=$CAMPAIGN_ID,ROUND_INDEX=$ROUND_INDEX,CONFIG=$CONFIG,RUNS_ROOT=$RUNS_ROOT,SHARD_IDS_FILE=$IDS_FILE,CYCLE=${CYCLE:-1}" "$FINALIZER_SCRIPT")
     finalizer_job=$("${FINALIZER_CMD[@]}")
@@ -124,7 +128,7 @@ ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 trap '\''true'\'' USR1
 ROOT="'$ROOT'"; PYBIN="'$PYBIN'"; CAMPAIGN_ID="'$CAMPAIGN_ID'"; ROUND_INDEX="'$ROUND_INDEX'"; ROUND_PAD="'$ROUND_PAD'"
 CONFIG="'$CONFIG'"; SHARD_DIR="'$SHARD_DIR'"; QUEUE_FILE="'$QUEUE_FILE'"; INDEX_FILE="'$INDEX_FILE'"; LOCK_DIR="'$LOCK_DIR'"; DONE_DIR="'$DONE_DIR'"
-RUNS_ROOT="'$RUNS_ROOT'"; SOLVER_ID="'$SOLVER_ID'"; TIMEOUT_S="'$TIMEOUT_S'"; MAX_FAILURE_FRACTION="'$MAX_FAILURE_FRACTION'"; RESUME="'$RESUME'"
+RUNS_ROOT="'$RUNS_ROOT'"; SOLVER_ID="'$SOLVER_ID'"; TIMEOUT_S="'$TIMEOUT_S'"; MAX_FAILURE_FRACTION="'$MAX_FAILURE_FRACTION'"; RESUME="'$RESUME'"; PF_LINEAR_SOLVERS="'$PF_LINEAR_SOLVERS'"; PF_QUALITY_METRIC="'$PF_QUALITY_METRIC'"
 export PGDF_JULIA_BIN="'$PGDF_JULIA_BIN'" PGDF_JULIA_PROJECT_DIR="'$PGDF_JULIA_PROJECT_DIR'" JULIA_DEPOT_PATH="'$JULIA_DEPOT_PATH'" OPENBLAS_NUM_THREADS=1 JULIA_NUM_THREADS=1
 export IPOPT_HSL_LIBRARY="'${IPOPT_HSL_LIBRARY:-}'" LD_LIBRARY_PATH="'${LD_LIBRARY_PATH:-}'"
 total=$(wc -l < "$QUEUE_FILE")
@@ -136,7 +140,7 @@ while true; do
   shard=$(sed -n "$((next + 1))p" "$QUEUE_FILE")
   [[ "$RESUME" == "1" && -f "$DONE_DIR/$shard" ]] && continue
   shard_campaign="${CAMPAIGN_ID}__r${ROUND_PAD}__s${shard}"
-  args=(--campaign-id "$shard_campaign" --round-index "$ROUND_INDEX" --candidates-jsonl "$SHARD_DIR/selected_${shard}.jsonl" --config "$ROOT/$CONFIG" --runs-root "$ROOT/$RUNS_ROOT/mapreduce_round_${ROUND_PAD}/shard_${shard}" --solver-id "$SOLVER_ID" --timeout-s "$TIMEOUT_S" --max-failure-fraction "$MAX_FAILURE_FRACTION" --record-quality-failure --continue-on-error)
+  args=(--campaign-id "$shard_campaign" --round-index "$ROUND_INDEX" --candidates-jsonl "$SHARD_DIR/selected_${shard}.jsonl" --config "$ROOT/$CONFIG" --runs-root "$ROOT/$RUNS_ROOT/mapreduce_round_${ROUND_PAD}/shard_${shard}" --solver-id "$SOLVER_ID" --timeout-s "$TIMEOUT_S" --max-failure-fraction "$MAX_FAILURE_FRACTION" --linear-solvers "$PF_LINEAR_SOLVERS" --quality-metric "$PF_QUALITY_METRIC" --record-quality-failure --continue-on-error)
   [[ "$RESUME" == "1" ]] && args+=(--resume)
   PYTHONPATH="$ROOT/src" "$PYBIN" "$ROOT/scripts/run_campaign_pf_round.py" "${args[@]}"
   touch "$DONE_DIR/$shard"

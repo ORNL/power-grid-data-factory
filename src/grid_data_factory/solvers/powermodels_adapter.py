@@ -140,9 +140,10 @@ class PersistentPowerModelsSession:
         controls: dict | None = None,
         hsl_library: str,
         timeout_s: float | None = None,
+        linear_solvers: tuple[str, ...] = ("default", "ma27", "ma57"),
     ) -> dict:
         attempts = []
-        for linear_solver in ("default", "ma27", "ma57"):
+        for linear_solver in linear_solvers:
             options = {
                 "linear_solver": "" if linear_solver == "default" else linear_solver,
                 "hsl_library": "" if linear_solver == "default" else hsl_library,

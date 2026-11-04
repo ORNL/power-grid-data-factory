@@ -25,6 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--count", type=int, default=0)
     parser.add_argument("--seed", type=int, default=-1)
     parser.add_argument("--prior-samples", nargs="*", default=[])
+    parser.add_argument("--prior-samples-list", default="", help="File with one prior samples.jsonl path per line.")
     return parser.parse_args()
 
 
@@ -39,7 +40,10 @@ def main() -> None:
     seed = args.seed if args.seed >= 0 else int(generation.get("seed", 20260925))
     anchor_path = Path(args.anchor_index)
     anchor_path = anchor_path if anchor_path.is_absolute() else repo_root / anchor_path
-    prior_paths = [Path(path) if Path(path).is_absolute() else repo_root / path for path in args.prior_samples]
+    prior_entries = list(args.prior_samples)
+    if args.prior_samples_list:
+        prior_entries.extend(line.strip() for line in Path(args.prior_samples_list).read_text(encoding="utf-8").splitlines() if line.strip())
+    prior_paths = [Path(path) if Path(path).is_absolute() else repo_root / path for path in prior_entries]
     anchors = load_anchor_pool(
         anchor_path,
         maximum=int(generation.get("maximum_anchors", max(count, 1))),

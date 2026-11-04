@@ -19,6 +19,27 @@ from pathlib import Path
 from typing import Any, TextIO
 
 DEFAULT_CASES = ("activsg2000", "pglib_opf_case300_ieee")
+SELECT_MODES = ("failed", "legacy-quadratic")
+LEGACY_QUADRATIC_REASON = "cost_convention_quadratic_resolve"
+
+
+def _is_legacy_quadratic(record: dict[str, Any]) -> bool:
+    """PowerModels AC-OPF record solved before the per-unit cost fix with c2 != 0."""
+    result = record.get("result")
+    if record.get("task") != "ac_opf" or not isinstance(result, dict):
+        return False
+    if result.get("solver_name") != "powermodels" or result.get("cost_convention"):
+        return False
+    generators = ((record.get("inputs") or {}).get("resolved_case") or {}).get("generators") or []
+    return any(
+        int(gen.get("status", 1)) != 0 and float((gen.get("cost") or [0.0])[0]) != 0.0 for gen in generators
+    )
+
+
+def _selected(record: dict[str, Any], select: str) -> bool:
+    if select == "legacy-quadratic":
+        return _is_legacy_quadratic(record)
+    return not bool(record.get("success", False))
 
 
 def _atomic_write_text(path: Path, text: str) -> None:
@@ -77,11 +98,30 @@ def _source_files(runs_root: Path, rounds: list[int], shard_count: int = 8192) -
     return sources
 
 
+def _parse_source_line(line: str) -> tuple[Path, str | None]:
+    # Optional "samples<TAB>report" form; an empty report means the root has none.
+    samples, tab, report = line.partition("\t")
+    return Path(samples.strip()), (report.strip() if tab else None)
+
+
+def _source_metadata(repo_root: Path, source: Path, report: str | None) -> tuple[int, str]:
+    round_name = source.parents[2].name
+    round_index = int(round_name.removeprefix("mapreduce_round_")) if round_name.startswith("mapreduce_round_") else 0
+    if report is not None:
+        report_path = Path(report)
+        if report and report_path.is_absolute():
+            report = str(report_path.relative_to(repo_root))
+        return round_index, report
+    shard_id = source.parents[1].name.removeprefix("shard_")
+    return round_index, _report_relpath(f"ultrascale_3b__r{round_index:03d}__s{shard_id}", round_index)
+
+
 def _extract_sources(
     repo_root: Path,
-    sources: list[Path],
+    sources: list[Path | tuple[Path, str | None]],
     cases: set[str] | None,
     destination: TextIO,
+    select: str = "failed",
 ) -> dict[str, Any]:
     counts = {case_id: 0 for case_id in sorted(cases or set())}
     malformed_rows = 0
@@ -89,12 +129,10 @@ def _extract_sources(
     processed_sources = 0
     missing_sources = 0
 
-    for source in sources:
+    for item in sources:
+        source, report = item if isinstance(item, tuple) else (item, None)
         source_relpath = str(source.relative_to(repo_root))
-        round_index = int(source.parents[2].name.removeprefix("mapreduce_round_"))
-        shard_id = source.parents[1].name.removeprefix("shard_")
-        campaign_id = f"ultrascale_3b__r{round_index:03d}__s{shard_id}"
-        report_relpath = _report_relpath(campaign_id, round_index)
+        round_index, report_relpath = _source_metadata(repo_root, source, report)
         # Deterministic source lists are not existence-checked up front, so a
         # missing shard (e.g. one that never produced ac_opf output) is expected.
         try:
@@ -111,7 +149,7 @@ def _extract_sources(
                     malformed_rows += 1
                     continue
                 case_id = str(record.get("case_id", ""))
-                if (cases is not None and case_id not in cases) or bool(record.get("success", False)):
+                if (cases is not None and case_id not in cases) or not _selected(record, select):
                     continue
                 candidate = dict((record.get("inputs") or {}).get("candidate") or {})
                 candidate_id = str(record.get("candidate_id", candidate.get("candidate_id", "")))
@@ -130,8 +168,13 @@ def _extract_sources(
                         "_repair_source_round": round_index,
                         "_repair_original_run_id": run_id,
                         "_repair_original_status": str(record.get("termination_status", "unknown")),
+                        "_repair_select": select,
                     }
                 )
+                # A legacy warm start would come from the wrong-cost solution and
+                # its byte offsets may be stale after the linear backfill.
+                if select == "legacy-quadratic":
+                    candidate.pop("warm_start_source", None)
                 destination.write(json.dumps(candidate, separators=(",", ":")) + "\n")
                 counts[case_id] = counts.get(case_id, 0) + 1
                 extracted += 1
@@ -153,12 +196,15 @@ def prepare(
     output: Path,
     manifest_path: Path,
     shard_count: int = 8192,
+    select: str = "failed",
 ) -> dict[str, Any]:
     if output.exists():
         output.unlink()
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8") as destination:
-        counts = _extract_sources(repo_root, _source_files(runs_root, rounds, shard_count), cases, destination)
+        counts = _extract_sources(
+            repo_root, _source_files(runs_root, rounds, shard_count), cases, destination, select
+        )
         destination.flush()
         os.fsync(destination.fileno())
 
@@ -170,6 +216,7 @@ def prepare(
         "rounds": rounds,
         "cases": sorted(cases) if cases is not None else None,
         "all_cases": cases is None,
+        "select": select,
         **counts,
         "candidates_jsonl": str(output),
     }
@@ -191,16 +238,17 @@ def prepare_part(
     cases: set[str] | None,
     output: Path,
     manifest_path: Path,
+    select: str = "failed",
 ) -> dict[str, Any]:
     if part_count <= 0 or not 0 <= part_index < part_count:
         raise ValueError("part index must satisfy 0 <= part_index < part_count")
-    sources = [Path(line.strip()) for line in source_list.read_text(encoding="utf-8").splitlines() if line.strip()]
+    sources = [_parse_source_line(line) for line in source_list.read_text(encoding="utf-8").splitlines() if line.strip()]
     start = len(sources) * part_index // part_count
     end = len(sources) * (part_index + 1) // part_count
     temporary = output.with_suffix(output.suffix + ".in_progress")
     output.parent.mkdir(parents=True, exist_ok=True)
     with temporary.open("w", encoding="utf-8") as destination:
-        counts = _extract_sources(repo_root, sources[start:end], cases, destination)
+        counts = _extract_sources(repo_root, sources[start:end], cases, destination, select)
         destination.flush()
         os.fsync(destination.fileno())
     temporary.replace(output)
@@ -213,6 +261,7 @@ def prepare_part(
         "source_end": end,
         "total_source_files": len(sources),
         "cases": sorted(cases) if cases is not None else None,
+        "select": select,
         **counts,
         "candidates_jsonl": str(output),
     }
@@ -306,7 +355,9 @@ class _HandleCache:
         self.handles.clear()
 
 
-def _spool_successes(repo_root: Path, repair_runs_root: Path, spool_root: Path) -> dict[str, int]:
+def _spool_successes(
+    repo_root: Path, repair_runs_root: Path, spool_root: Path, include_failed: bool = False
+) -> dict[str, int]:
     if spool_root.exists():
         shutil.rmtree(spool_root)
     cache = _HandleCache()
@@ -321,7 +372,7 @@ def _spool_successes(repo_root: Path, repair_runs_root: Path, spool_root: Path) 
                     except json.JSONDecodeError:
                         counts["invalid_retry_rows"] += 1
                         continue
-                    if not bool(record.get("success", False)):
+                    if not include_failed and not bool(record.get("success", False)):
                         continue
                     candidate = (record.get("inputs") or {}).get("candidate") or {}
                     source_relpath = str(candidate.get("_repair_source_samples_relpath", ""))
@@ -348,7 +399,7 @@ def _clean_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in candidate.items() if not key.startswith("_repair_")}
 
 
-def _replacement_record(original: dict[str, Any], retry: dict[str, Any]) -> dict[str, Any]:
+def _replacement_record(original: dict[str, Any], retry: dict[str, Any], reason: str = "") -> dict[str, Any]:
     replacement = dict(retry)
     retry_inputs = dict(retry.get("inputs") or {})
     original_inputs = dict(original.get("inputs") or {})
@@ -364,6 +415,9 @@ def _replacement_record(original: dict[str, Any], retry: dict[str, Any]) -> dict
         "previous_feasibility_label": original.get("feasibility_label"),
         "repair_solver_id": retry.get("solver_id"),
     }
+    if reason:
+        replacement["repair_provenance"]["reason"] = reason
+        replacement["repair_provenance"]["previous_objective_legacy"] = original.get("objective")
     return replacement
 
 
@@ -378,24 +432,30 @@ def _update_report(repo_root: Path, report_relpath: str, replacements: dict[tupl
         replacement = replacements.get(key)
         if replacement is None:
             continue
+        success = bool(replacement.get("success", False))
         row.update(
             {
-                "success": True,
+                "success": success,
                 "termination_status": replacement.get("termination_status"),
-                "feasibility_label": replacement.get("feasibility_label", "feasible"),
+                "feasibility_label": replacement.get("feasibility_label", "feasible" if success else "error"),
                 "objective": replacement.get("objective"),
                 "runtime": replacement.get("solve_time"),
                 "wallclock_seconds": replacement.get("wallclock_seconds"),
                 "repaired": True,
             }
         )
+        cost_convention = (replacement.get("result") or {}).get("cost_convention")
+        if cost_convention:
+            row["cost_convention"] = cost_convention
         updated += 1
     if updated:
         _atomic_write_json(report_path, report)
     return updated
 
 
-def _merge_spool_file(repo_root: Path, spool_path: Path, backup_root: Path) -> tuple[int, int]:
+def _merge_spool_file(
+    repo_root: Path, spool_path: Path, backup_root: Path | None, select: str = "failed"
+) -> tuple[int, int]:
     retries: dict[str, dict[str, Any]] = {}
     source_relpath = ""
     with spool_path.open(encoding="utf-8") as handle:
@@ -408,8 +468,7 @@ def _merge_spool_file(repo_root: Path, spool_path: Path, backup_root: Path) -> t
 
     source = repo_root / source_relpath
     temporary = source.with_suffix(source.suffix + ".repair_in_progress")
-    backup = backup_root / source_relpath
-    backup.parent.mkdir(parents=True, exist_ok=True)
+    backup = backup_root / source_relpath if backup_root is not None else None
     replacements_for_report: dict[tuple[str, str], dict[str, Any]] = {}
     replaced = 0
 
@@ -424,10 +483,23 @@ def _merge_spool_file(repo_root: Path, spool_path: Path, backup_root: Path) -> t
             run_id = str(original.get("run_id", ""))
             key = _repair_key(source_relpath, candidate_id, run_id)
             retry = retries.get(key)
-            if retry is None or bool(original.get("success", False)):
+            if retry is None or not _selected(original, select):
                 output_handle.write(raw_line)
                 continue
-            replacement = _replacement_record(original, retry)
+            reason = ""
+            if select == "legacy-quadratic":
+                reason = LEGACY_QUADRATIC_REASON
+                retry_result = retry.get("result")
+                if not isinstance(retry_result, dict) or not retry_result.get("cost_convention"):
+                    # Python-side failures (timeouts, process errors) carry no
+                    # Julia marker; a converged retry without it used old code.
+                    if bool(retry.get("success", False)) or not isinstance(retry_result, dict):
+                        output_handle.close()
+                        temporary.unlink(missing_ok=True)
+                        raise RuntimeError(f"retry for {candidate_id} in {source_relpath} lacks cost_convention")
+                    retry = dict(retry)
+                    retry["result"] = {**retry_result, "cost_convention": "per_unit_scaled_v2"}
+            replacement = _replacement_record(original, retry, reason)
             output_handle.write(json.dumps(replacement, separators=(",", ":")) + "\n")
             replacements_for_report[(candidate_id, run_id)] = replacement
             replaced += 1
@@ -442,7 +514,8 @@ def _merge_spool_file(repo_root: Path, spool_path: Path, backup_root: Path) -> t
         raise RuntimeError(
             f"matched {len(replacements_for_report)} of {len(retries)} converged retries in {source_relpath}"
         )
-    if not backup.exists():
+    if backup is not None and not backup.exists():
+        backup.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, backup)
     temporary.replace(source)
 
@@ -458,17 +531,30 @@ def merge(
     work_dir: Path,
     manifest_path: Path,
     apply: bool,
+    select: str = "failed",
+    backup: bool = True,
+    part_index: int = 0,
+    part_count: int = 1,
 ) -> dict[str, Any]:
     spool_root = work_dir / "merge_spool"
-    backup_root = work_dir / "backups"
-    counts = _spool_successes(repo_root, repair_runs_root, spool_root)
-    source_files = sorted(spool_root.glob("*.jsonl"))
+    backup_root = work_dir / "backups" if backup else None
+    if part_count > 1:
+        # Parallel apply reuses the spool written by a prior single-process dry run.
+        if not 0 <= part_index < part_count or not spool_root.is_dir():
+            raise RuntimeError("partitioned merge needs a valid part index and an existing merge_spool")
+        counts: dict[str, int] = {}
+        source_files = sorted(spool_root.glob("*.jsonl"))[part_index::part_count]
+    else:
+        # Legacy-quadratic originals are invalid regardless of outcome, so every
+        # new-convention retry (converged or not) replaces its original.
+        counts = _spool_successes(repo_root, repair_runs_root, spool_root, include_failed=select == "legacy-quadratic")
+        source_files = sorted(spool_root.glob("*.jsonl"))
     counts["source_files_with_converged_retries"] = len(source_files)
     counts["rows_replaced"] = 0
     counts["report_rows_updated"] = 0
     if apply:
         for spool_path in source_files:
-            replaced, report_updates = _merge_spool_file(repo_root, spool_path, backup_root)
+            replaced, report_updates = _merge_spool_file(repo_root, spool_path, backup_root, select)
             counts["rows_replaced"] += replaced
             counts["report_rows_updated"] += report_updates
 
@@ -476,9 +562,12 @@ def merge(
         "schema_version": 1,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "mode": "merge",
+        "select": select,
         "applied": apply,
+        "part_index": part_index,
+        "part_count": part_count,
         "repair_runs_root": str(repair_runs_root),
-        "backup_root": str(backup_root),
+        "backup_root": str(backup_root) if backup_root is not None else None,
         **counts,
     }
     _atomic_write_json(manifest_path, manifest)
@@ -498,6 +587,7 @@ def parse_args() -> argparse.Namespace:
     case_group.add_argument("--all-cases", action="store_true", help="Extract failures for every case.")
     prepare_parser.add_argument("--output", required=True)
     prepare_parser.add_argument("--manifest", required=True)
+    prepare_parser.add_argument("--select", choices=SELECT_MODES, default="failed")
 
     source_parser = subparsers.add_parser("list-sources", help="Write the deterministic repair source-file list.")
     source_parser.add_argument("--runs-root", default="data/outputs/runs_3b")
@@ -514,6 +604,7 @@ def parse_args() -> argparse.Namespace:
     part_case_group.add_argument("--all-cases", action="store_true")
     part_parser.add_argument("--output", required=True)
     part_parser.add_argument("--manifest", required=True)
+    part_parser.add_argument("--select", choices=SELECT_MODES, default="failed")
 
     finalize_parser = subparsers.add_parser("finalize-prepare", help="Combine deterministic parallel prepare parts.")
     finalize_parser.add_argument("--parts-dir", required=True)
@@ -531,6 +622,10 @@ def parse_args() -> argparse.Namespace:
     merge_parser.add_argument("--work-dir", required=True)
     merge_parser.add_argument("--manifest", required=True)
     merge_parser.add_argument("--apply", action="store_true", help="Apply atomic replacements; default is a dry run.")
+    merge_parser.add_argument("--select", choices=SELECT_MODES, default="failed")
+    merge_parser.add_argument("--no-backup", action="store_true", help="Do not copy originals before replacing them.")
+    merge_parser.add_argument("--part-index", type=int, default=0)
+    merge_parser.add_argument("--part-count", type=int, default=1)
     return parser.parse_args()
 
 
@@ -549,6 +644,7 @@ def main() -> None:
             (repo_root / args.output).resolve() if not Path(args.output).is_absolute() else Path(args.output),
             (repo_root / args.manifest).resolve() if not Path(args.manifest).is_absolute() else Path(args.manifest),
             args.shard_count,
+            args.select,
         )
     elif args.command == "list-sources":
         output = Path(args.output)
@@ -570,6 +666,7 @@ def main() -> None:
             None if args.all_cases else set(args.cases or DEFAULT_CASES),
             (repo_root / output).resolve() if not output.is_absolute() else output,
             (repo_root / manifest).resolve() if not manifest.is_absolute() else manifest,
+            args.select,
         )
     elif args.command == "finalize-prepare":
         parts_dir = Path(args.parts_dir)
@@ -594,6 +691,10 @@ def main() -> None:
             (repo_root / work_dir).resolve() if not work_dir.is_absolute() else work_dir,
             (repo_root / manifest).resolve() if not manifest.is_absolute() else manifest,
             args.apply,
+            args.select,
+            not args.no_backup,
+            args.part_index,
+            args.part_count,
         )
     print(json.dumps(result, indent=2, sort_keys=True))
 

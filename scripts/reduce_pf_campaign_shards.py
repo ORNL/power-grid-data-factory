@@ -30,6 +30,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", default="configs/pf_campaign_riker.yaml")
     parser.add_argument("--shard-campaign-ids-file", required=True)
     parser.add_argument("--runs-root", default="", help="PF runs root used to aggregate per-sample solver provenance.")
+    parser.add_argument(
+        "--additional-runs-root",
+        action="append",
+        default=[],
+        help="Additional PF runs root to include when replayed shards are stored separately.",
+    )
     parser.add_argument("--force", action="store_true")
     return parser.parse_args()
 
@@ -68,6 +74,25 @@ def write_atomic_jsonl(path: Path, rows: Iterable[dict[str, Any]], retain_existi
     return count
 
 
+def sample_files_for_roots(runs_root: Path, additional_runs_roots: Iterable[Path], round_index: int) -> list[Path]:
+    sample_pattern = f"mapreduce_round_{round_index:03d}/shard_*/pf/samples.jsonl"
+    original_files = sorted(runs_root.glob(sample_pattern))
+    replacement_files = sorted(
+        sample_path
+        for root in additional_runs_roots
+        for sample_path in root.glob(sample_pattern)
+    )
+    replacement_indices = {sample_path.parents[1].name.removeprefix("shard_") for sample_path in replacement_files}
+    staged_indices = [sample_path.parents[1].name.removeprefix("shard_") for sample_path in replacement_files]
+    if len(staged_indices) != len(set(staged_indices)):
+        raise ValueError("Additional runs roots contain duplicate replay shard indices")
+    return [
+        sample_path
+        for sample_path in original_files
+        if sample_path.parents[1].name.removeprefix("shard_") not in replacement_indices
+    ] + replacement_files
+
+
 def main() -> None:
     args = parse_args()
     repo_root = Path(__file__).resolve().parents[1]
@@ -101,14 +126,11 @@ def main() -> None:
         ledger_counts[ledger] = write_atomic_jsonl(
             output,
             (row for shard_root in shard_roots for row in iter_rows(shard_root, ledger)),
+            retain_existing=False,
         )
 
     active: dict[tuple[str, str], dict[str, Any]] = {}
     active_output = (campaign_root / "active_constraint_ledger.parquet").with_suffix(".parquet.jsonl")
-    if active_output.exists():
-        for row in iter_rows(campaign_root, "active_constraint_ledger.parquet"):
-            key = (str(row.get("constraint_family", "unknown")), str(row.get("component_id", "unknown")))
-            active[key] = dict(row)
     for shard_root in shard_roots:
         for row in iter_rows(shard_root, "active_constraint_ledger.parquet"):
             key = (str(row.get("constraint_family", "unknown")), str(row.get("component_id", "unknown")))
@@ -142,8 +164,11 @@ def main() -> None:
     runs_root = runs_root if runs_root.is_absolute() else repo_root / runs_root
     linear_solvers: Counter[str] = Counter()
     solver_attempts: Counter[str] = Counter()
-    sample_pattern = f"mapreduce_round_{args.round_index:03d}/shard_*/pf/samples.jsonl"
-    for samples_path in sorted(runs_root.glob(sample_pattern)):
+    additional_runs_roots = [
+        (Path(root) if Path(root).is_absolute() else repo_root / root)
+        for root in args.additional_runs_root
+    ]
+    for samples_path in sample_files_for_roots(runs_root, additional_runs_roots, args.round_index):
         with samples_path.open("r", encoding="utf-8") as handle:
             for line in handle:
                 try:
@@ -167,6 +192,9 @@ def main() -> None:
         "failed": sum(int(report.get("failed", 0)) for report in reports),
         "skipped": sum(int(report.get("skipped", 0)) for report in reports),
         "outcome_counts": dict(outcomes),
+        "valid_fraction": outcomes.get("converged_valid", 0) / max(1, sum(outcomes.values())),
+        "software_error_fraction": outcomes.get("software_model_error", 0) / max(1, sum(outcomes.values())),
+        "shards_not_ok": sum(not bool(report.get("ok")) for report in reports),
         "filter_label_counts": {
             label: dict(counts)
             for label, counts in filter_labels.items()
