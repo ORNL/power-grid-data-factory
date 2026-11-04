@@ -134,16 +134,17 @@ def reduce_shards(
     round_pad = f"{round_index:03d}"
     marker_path = campaign_root / "round_summaries" / f"round_{round_pad}_mapreduce_reduce_report.json"
     state_path = campaign_root / "round_summaries" / f"round_{round_pad}_reduce_state.json"
-    if marker_path.exists() and not force:
+    if force:
+        # Keep an existing marker until the atomic rewrite below: AUTO_ROUND jobs and
+        # archive sweeps treat a missing marker as an unfinished round.
+        state_path.unlink(missing_ok=True)
+    elif marker_path.exists():
         try:
             if json.loads(marker_path.read_text(encoding="utf-8")).get("ok") is True:
                 raise SystemExit(f"Reduce marker already exists: {marker_path}. Use --force to rebuild it.")
         except json.JSONDecodeError:
             pass
         marker_path.unlink()
-    if force:
-        marker_path.unlink(missing_ok=True)
-        state_path.unlink(missing_ok=True)
 
     create_campaign_layout(campaign_root, _load_config(repo_root, config_rel))
     shard_ids = sorted(line.strip() for line in ids_file.read_text(encoding="utf-8").splitlines() if line.strip())

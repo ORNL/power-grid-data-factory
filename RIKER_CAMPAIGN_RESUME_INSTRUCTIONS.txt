@@ -1,0 +1,120 @@
+RESUMING THE 3 RIKER CAMPAIGNS UNDER THE NEW ALLOCATION (LRN116)
+==================================================================
+New root: /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory
+Old root: /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+
+STATUS CHECK RESULT:
+- Campaign 2 (ultrascale_3b PowerModels AC-OPF, includes activsg70k/activsg82k)
+  is ALREADY migrated: riker_3b_round.sbatch, riker_campaign_reduce.sbatch,
+  riker_archive_round.sbatch, riker_archive_sweep_3b.sbatch, and
+  scripts/riker_submit_3b_rounds.sh already use LRN116 and the new path.
+  No edits needed for this one.
+
+- Campaign 1 (Riker PF complement campaign) and Campaign 3 (repair of
+  activsg2000 + pglib_opf_case300_ieee) still have the OLD lrn070 path/account
+  hardcoded in these files:
+    configs/slurm/riker_pf_campaign_supervisor.sbatch
+    configs/slurm/riker_pf_finalize.sbatch
+    configs/slurm/riker_pf_mapreduce.sbatch
+    configs/slurm/riker_pf_prepare.sbatch
+    configs/slurm/submit_riker_pf_large.sh
+    configs/slurm/submit_riker_pf_smoke.sh
+    configs/slurm/riker_repair_activsg2000_case300.sbatch
+    configs/slurm/riker_repair_prepare.sbatch
+    configs/slurm/riker_repair_all_failed_r000_r005.sbatch
+
+  They also default to the STALE Coin-HSL activation
+  ($HOME/.local/coinhsl/current/env.sh), which still points at the old lrn070
+  Julia depot path. Use $HOME/.local/coinhsl/riker/env.sh instead (already
+  built and correct).
+
+STEP 1 — Fix the 9 stale files (run once from the new repo root):
+-------------------------------------------------------------------
+cd /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory
+
+FILES="configs/slurm/riker_pf_campaign_supervisor.sbatch \
+configs/slurm/riker_pf_finalize.sbatch \
+configs/slurm/riker_pf_mapreduce.sbatch \
+configs/slurm/riker_pf_prepare.sbatch \
+configs/slurm/submit_riker_pf_large.sh \
+configs/slurm/submit_riker_pf_smoke.sh \
+configs/slurm/riker_repair_activsg2000_case300.sbatch \
+configs/slurm/riker_repair_prepare.sbatch \
+configs/slurm/riker_repair_all_failed_r000_r005.sbatch"
+
+for f in $FILES; do
+  sed -i \
+    -e 's#/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory#/lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory#g' \
+    -e 's/#SBATCH -A lrn070/#SBATCH -A LRN116/' \
+    -e 's/#SBATCH -A LRN070/#SBATCH -A LRN116/' \
+    -e 's/\${ACCOUNT:-lrn070}/${ACCOUNT:-LRN116}/' \
+    -e 's#\$HOME/.local/coinhsl/current/env.sh#$HOME/.local/coinhsl/riker/env.sh#' \
+    "$f"
+done
+
+Verify nothing stale remains:
+grep -rlE 'lrn070|LRN070' configs/slurm/riker_pf_*.sbatch configs/slurm/submit_riker_pf_*.sh configs/slurm/riker_repair_*.sbatch
+(should print nothing)
+
+STEP 2 — Resume Campaign 1: Riker PF complement campaign
+-------------------------------------------------------------------
+Anchor index already exists at data/derived/pf_anchors/andes_acopf_anchors.parquet
+(no need to rebuild it).
+
+Smoke test (optional, quick sanity check):
+  cd /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory
+  CAMPAIGN_ID=riker_pf_smoke_lrn116 WALLTIME=00:30:00 configs/slurm/submit_riker_pf_smoke.sh
+
+Resume/continue the large production run (auto-detects and resumes whatever
+round is incomplete; safe to rerun — it skips finished shards):
+  CAMPAIGN_ID=riker_pf_complement_large_v1 \
+  ROUNDS=5 COUNT=100000 NODES=64 NTASKS_PER_NODE=32 WALLTIME=36:00:00 \
+    configs/slurm/submit_riker_pf_large.sh
+
+Check status any time:
+  python3 scripts/monitor_campaign.py --campaign-id riker_pf_complement_large_v1 --round-index 0
+
+STEP 3 — Resume Campaign 3: repair activsg2000 + pglib_opf_case300_ieee
+-------------------------------------------------------------------
+There is already a partially-completed repair at:
+  data/outputs/repairs/riker_activsg2000_case300_r000_r005_parallel_v1
+(shards, prepare_parts, progress, and runs subfolders already exist).
+
+Just resubmit the SAME sbatch — it is resumable and will skip finished shards
+and reuse the already-prepared candidate/shard files:
+
+  cd /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory
+  sbatch configs/slurm/riker_repair_activsg2000_case300.sbatch
+
+(Defaults already match the existing work: REPAIR_ID=riker_activsg2000_case300_r000_r005_parallel_v1,
+ROUNDS=0-5, CASES="activsg2000 pglib_opf_case300_ieee".)
+
+Check merge status when the job finishes:
+  cat data/outputs/repairs/riker_activsg2000_case300_r000_r005_parallel_v1/merge_manifest.json
+
+If you instead want to repair ALL failed cases (not just these two), use:
+  sbatch configs/slurm/riker_repair_all_failed_r000_r005.sbatch
+
+STEP 4 — Continue Campaign 2: ultrascale_3b (PowerModels, incl. activsg70k/82k)
+-------------------------------------------------------------------
+No file edits needed. Just keep extending the rolling batch chain:
+
+  cd /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory
+  bash scripts/riker_submit_3b_rounds.sh 20 none 3
+  (args: N_SLOTS=20 solve-slots per batch, FIRST_DEP=none to start now
+   or a running job id to chain after, N_BATCHES=3 batches)
+
+NOTES
+-------------------------------------------------------------------
+- Files left untouched on purpose (unrelated to these 3 campaigns, still
+  reference LRN070/LRN087 or old paths): all andes_*.sbatch, frontier_*.sbatch,
+  exago_frontier_*.sbatch, run_exago_*.sh, scripts/setup_andes_venv.sh,
+  scripts/setup_frontier_venv.sh, scripts/submit_archives.sh,
+  scripts/submit_exago_frontier_campaign.sh,
+  scripts/submit_exago_frontier_parallel_campaigns.sh, scripts/submit_3b_rounds.sh
+  (superseded by scripts/riker_submit_3b_rounds.sh). Ask if you want those
+  migrated too.
+- .venv-riker and the Julia wrapper (.software/bin/julia) were already
+  re-pointed correctly to the lrn116 path and verified working.
+- $HOME/.local/coinhsl/riker/env.sh is the correct Coin-HSL activation for
+  this project; $HOME/.local/coinhsl/current/env.sh is stale (old lrn070 path).

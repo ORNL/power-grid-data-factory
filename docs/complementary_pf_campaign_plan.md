@@ -17,6 +17,7 @@
 | Exact-anchor and physical validation with outcome partitions | Implemented |
 | Persistent Julia map workers, contiguous shards, resume, and reduction | Implemented |
 | Distance-stratum adaptation from prior valid PF samples | Implemented |
+| Local fixed-mode PF sensitivity post-processing pilot | Validated, bounded pilot only; not production |
 | Gradient/trajectory boundary targeting and continuation/bisection | Future work |
 | PTDF/LODF, centrality, islanding-risk, and multi-mechanism N-2 ranking | Future work |
 | Adaptive retargeting of topology, policy, and rare-signature quotas | Future work |
@@ -236,6 +237,64 @@ Add these fields to the existing sample contract:
 Keep four outcome classes separate: converged-valid, converged-invalid,
 nonconvergent, and software/model error. Only converged-valid records enter PF
 state regression.
+
+## Fixed-Mode PF Sensitivity Pilot
+
+A separate local post-processing pilot labels derivatives at saved AC-OPF
+operating points. It does not launch a PF solve, alter a source record, or
+differentiate the AC-OPF optimizer. For fixed PV/PQ mode and controls $u$, it
+forms the polar PF residual $F(z,u)=0$, assembles sparse $A=\partial F/\partial z$
+and $B=\partial F/\partial u$, and solves
+
+$$
+A S_z=-B,
+\qquad
+S_z=\frac{\partial z}{\partial u}
+$$
+
+through sparse factorization and linear solves, without forming an explicit
+inverse. The current label outputs are bus voltage magnitude (p.u.) and
+non-reference bus
+angle (radians) with respect to non-slack generator $P_g$ (MW) and PV-bus
+voltage setpoint (p.u.). The slack generator $P_g$ is dependent and excluded.
+For these state outputs, the direct output term is zero; future derived outputs
+must include the full chain rule $S_y=H_zS_z+H_u$ and document units and stable
+IDs. Branch-flow derivatives are not part of this pilot. Aggregate bus reactive
+injection may be added only with its bus-level meaning explicit; individual
+generator $Q_g$ allocation is not implied by the PF equations.
+
+The bounded driver streams at most 500 records from one existing AC-OPF shard
+and accepts at most eight. It verifies candidate-declared outages against the
+resolved branch IDs from the intact MATPOWER case, stable bus/generator solution
+IDs, one-reference supported bus types, finite derivatives, direct fixed-mode
+PF residual, and central finite differences of each input-Jacobian column.
+Labels retain the raw source-line checksum, source-file checksum, checksum of
+the pristine source `inputs.resolved_case` (before saved solution values are
+applied), topology and contingency IDs, control/state ordering, units, mode and
+Q-limit proximity, QA values, runtime, Julia/PowerModels versions, and solver
+convention. Each output matrix includes explicit dimensions and its control
+column names. The saved AC-OPF primals are only operating points for PF
+differentiation, not optimizer sensitivities or evidence of general
+state-transition derivatives.
+
+The initial measured run processed five accepted 14-bus records from a
+500-line scan of one 922,262,750-byte shard. It took about 44 seconds and wrote
+about 32 kB of JSONL labels. Maximum fixed-mode residual and input-Jacobian
+finite-difference error were each below $10^{-11}$ in their respective units.
+Two successful records were excluded because their resolved topology disagreed
+with candidate outage metadata; failed solves and other case IDs were also
+excluded. Q-limit-near and solver-tolerance headroom values are recorded
+separately from the fixed PV/PQ mode.
+
+The final corrected artifact is stored in
+`data/derived/pf_sensitivities_pilot_v4/`; source JSONL and historical pilot
+artifacts are immutable. The current dense
+state-by-control matrix is suitable only for small cases. Large networks need
+selected-control directions or adjoint output queries; sparse $A$ alone does
+not make the full sensitivity matrix sparse. This pilot is not a production
+campaign, does not define a complete sensitivity training corpus, and does not
+cover PV-to-PQ transitions, active-limit mode changes, branch outputs, or
+validation on PF-only records.
 
 ## Novelty and Adaptive Selection
 

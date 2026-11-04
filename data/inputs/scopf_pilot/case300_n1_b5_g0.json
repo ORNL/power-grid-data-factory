@@ -1,0 +1,62 @@
+{
+  "contingency_set_id": "n1_b5_g0_s0",
+  "case_id": "pglib_opf_case300_ieee",
+  "bridge_branches_excluded": 89,
+  "contingencies": [
+    {
+      "contingency_id": "n1_branch_branch_000249",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000249"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000269",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000269"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000053",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000053"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000179",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000179"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000324",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000324"
+        }
+      ]
+    }
+  ]
+}

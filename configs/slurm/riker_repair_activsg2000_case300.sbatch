@@ -1,19 +1,19 @@
 #!/bin/bash
 #SBATCH -J pgdf_repair_2cases
-#SBATCH -A lrn070
+#SBATCH -A LRN116
 #SBATCH -p batch
 #SBATCH --qos=normal
 #SBATCH -N 16
 #SBATCH --ntasks-per-node=32
 #SBATCH --cpus-per-task=1
 #SBATCH -t 36:00:00
-#SBATCH -o /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.out
-#SBATCH -e /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
+#SBATCH -o /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.out
+#SBATCH -e /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
 
 set -euo pipefail
 ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 
-ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+ROOT=/lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory
 PYBIN=${PYBIN:-$ROOT/.venv-riker/bin/python}
 REPAIR_ID=${REPAIR_ID:-riker_activsg2000_case300_r000_r005_parallel_v1}
 ROUNDS=${ROUNDS:-0-5}
@@ -32,6 +32,10 @@ RUN_MERGE=${RUN_MERGE:-1}
 SHARD_GROUP_COUNT=${SHARD_GROUP_COUNT:-1}
 SHARD_GROUP_INDEX=${SHARD_GROUP_INDEX:-0}
 PREFLIGHT_ONLY=${PREFLIGHT_ONLY:-0}
+# failed: retry unsuccessful rows; legacy-quadratic: re-solve every pre-fix
+# quadratic-cost PowerModels row and replace it regardless of outcome.
+SELECT=${SELECT:-failed}
+MAX_ROUND=${MAX_ROUND:-6}
 
 PREPARE_SCRIPT=$ROOT/scripts/repair_failed_campaign_cases.py
 SHARD_SCRIPT=$ROOT/scripts/shard_selected_candidates.py
@@ -62,7 +66,7 @@ export JULIA_NUM_THREADS=1
     echo "SHARD_GROUP_INDEX must be in [0, SHARD_GROUP_COUNT)" >&2
     exit 2
 }
-PYTHONPATH="$ROOT/src" "$PYBIN" - "$ROUNDS" <<'PY'
+PYTHONPATH="$ROOT/src" "$PYBIN" - "$ROUNDS" "$MAX_ROUND" <<'PY'
 import sys
 
 rounds = set()
@@ -73,8 +77,9 @@ for token in sys.argv[1].split(","):
         rounds.update(range(start, end + 1))
     elif token:
         rounds.add(int(token))
-if not rounds or min(rounds) < 0 or max(rounds) > 5:
-    raise SystemExit(f"repair is restricted to completed rounds 000-005, got {sorted(rounds)}")
+max_round = int(sys.argv[2])
+if not rounds or min(rounds) < 0 or max(rounds) > max_round:
+    raise SystemExit(f"repair is restricted to completed rounds 000-{max_round:03d}, got {sorted(rounds)}")
 print(f"repair rounds={sorted(rounds)}; later rounds excluded")
 PY
 
@@ -88,7 +93,7 @@ grep -qF 'request_payload = {"task": task, "options": self.options' src/grid_dat
 }
 PYTHONPATH="$ROOT/src" "$PYBIN" -c 'import grid_data_factory, pydantic, pyarrow, yaml'
 
-COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/current/env.sh}
+COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/riker/env.sh}
 [[ -r "$COINHSL_ENV" ]] || { echo "Missing private Coin-HSL activation: $COINHSL_ENV" >&2; exit 2; }
 source "$COINHSL_ENV"
 [[ -r "${IPOPT_HSL_LIBRARY:-}" ]] || { echo "Missing Coin-HSL library" >&2; exit 2; }
@@ -120,6 +125,7 @@ SOURCE_LIST="'$SOURCE_LIST'"
 PREPARE_PARTS_DIR="'$PREPARE_PARTS_DIR'"
 CASES="'"$CASES"'"
 ALL_CASES="'$ALL_CASES'"
+SELECT="'$SELECT'"
 PART_INDEX=${SLURM_PROCID:?}
 PART_COUNT=${SLURM_NTASKS:?}
 part=$(printf "%05d" "$PART_INDEX")
@@ -134,6 +140,7 @@ args=(
     --part-count "$PART_COUNT"
     --output "$output"
     --manifest "$manifest"
+    --select "$SELECT"
 )
 if [[ "$ALL_CASES" == "1" ]]; then
     args+=(--all-cases)
@@ -247,19 +254,51 @@ for ((index=TASK_ID; index<${#SHARDS[@]}; index+=TASK_COUNT)); do
 done
 '
 
+MERGE_EXTRA=()
+[[ "${MERGE_NO_BACKUP:-0}" == "1" ]] && MERGE_EXTRA+=(--no-backup)
 if [[ "$RUN_MERGE" == "1" ]]; then
-    PYTHONPATH="$ROOT/src" "$PYBIN" "$PREPARE_SCRIPT" merge \
-        --repair-runs-root "$REPAIR_RUNS_ROOT" \
-        --work-dir "$ROOT/$WORK_ROOT" \
-        --manifest "$MERGE_MANIFEST"
+    missing_done=0
+    for shard in "${ALL_SHARDS[@]}"; do
+        shard_number=${shard#repair_}
+        [[ -f "$DONE_DIR/${shard_number%.jsonl}" ]] || missing_done=$((missing_done + 1))
+    done
+    if (( missing_done > 0 )); then
+        echo "[$(date -u +%FT%TZ)] $missing_done shards unfinished; merge deferred to a later submission" >&2
+        exit 1
+    fi
 
     if [[ "$APPLY_MERGE" == "1" ]]; then
+        # Parallel byte-offset index, then hash-partitioned apply; both resume per part.
+        mkdir -p "$ROOT/$WORK_ROOT/merge_parts"
+        echo "[$(date -u +%FT%TZ)] merge: indexing retries with $SLURM_NTASKS tasks"
+        srun --ntasks="$SLURM_NTASKS" --nodes="$SLURM_JOB_NUM_NODES" --kill-on-bad-exit=0 bash -c '
+PYTHONPATH="'"$ROOT"'/src" "'"$PYBIN"'" "'"$PREPARE_SCRIPT"'" merge-index \
+    --repair-runs-root "'"$REPAIR_RUNS_ROOT"'" \
+    --work-dir "'"$ROOT/$WORK_ROOT"'" \
+    --select "'"$SELECT"'" \
+    --part-index "$SLURM_PROCID" --part-count "$SLURM_NTASKS" >/dev/null
+' || echo "some merge-index parts failed; resubmit to resume" >&2
+        echo "[$(date -u +%FT%TZ)] merge: applying with $SLURM_NTASKS tasks"
+        srun --ntasks="$SLURM_NTASKS" --nodes="$SLURM_JOB_NUM_NODES" --kill-on-bad-exit=0 bash -c '
+part=$(printf "%05d" "$SLURM_PROCID")
+PYTHONPATH="'"$ROOT"'/src" "'"$PYBIN"'" "'"$PREPARE_SCRIPT"'" merge --from-index --apply \
+    --repair-runs-root "'"$REPAIR_RUNS_ROOT"'" \
+    --work-dir "'"$ROOT/$WORK_ROOT"'" \
+    --select "'"$SELECT"'" \
+    --manifest "'"$ROOT/$WORK_ROOT"'/merge_parts/part_${part}.json" \
+    --part-index "$SLURM_PROCID" --part-count "$SLURM_NTASKS" \
+    '"${MERGE_EXTRA[*]}"' >/dev/null
+' || echo "some merge apply parts failed; resubmit to resume" >&2
+        PYTHONPATH="$ROOT/src" "$PYBIN" "$PREPARE_SCRIPT" merge-finalize \
+            --parts-dir "$ROOT/$WORK_ROOT/merge_parts" \
+            --part-count "$SLURM_NTASKS" \
+            --manifest "$MERGE_MANIFEST"
+    else
         PYTHONPATH="$ROOT/src" "$PYBIN" "$PREPARE_SCRIPT" merge \
             --repair-runs-root "$REPAIR_RUNS_ROOT" \
             --work-dir "$ROOT/$WORK_ROOT" \
-            --manifest "$MERGE_MANIFEST" \
-            --apply
-    else
+            --select "$SELECT" \
+            --manifest "$MERGE_MANIFEST"
         echo "Dry-run merge complete. Set APPLY_MERGE=1 to atomically replace converged failures."
     fi
     echo "[$(date -u +%FT%TZ)] repair complete; manifest=$MERGE_MANIFEST"

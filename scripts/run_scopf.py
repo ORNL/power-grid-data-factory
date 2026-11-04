@@ -44,13 +44,18 @@ def parse_args() -> argparse.Namespace:
         help="JSON/JSONL file containing N-1 contingencies or candidate rows with nested contingency objects.",
     )
     parser.add_argument("--contingency-set-id", default="", help="Override the set ID inferred from the input file.")
-    parser.add_argument("--runs-root", default="data/outputs/runs")
+    parser.add_argument("--runs-root", default="data/outputs/runs_scopf/adhoc")
     parser.add_argument("--solver-id", default="powermodels_scopf_pmsc_ipopt")
     parser.add_argument("--topology-id", default="topology_000000_baseline")
     parser.add_argument("--operating-point-id", default="op_000000_baseline")
     parser.add_argument("--timeout-s", type=float, default=1800.0)
     parser.add_argument("--tol", type=float, default=1e-8)
     parser.add_argument("--max-iter", type=int)
+    parser.add_argument(
+        "--screen-contingencies",
+        action="store_true",
+        help="Solve each contingency alone first; exclude and label the ones that cannot be secured, then run SCOPF on the rest.",
+    )
     parser.add_argument("--continue-on-error", action="store_true")
     parser.add_argument("--out", default="", help="Optional JSON report path.")
     return parser.parse_args()
@@ -165,6 +170,22 @@ def _write_result_artifacts(
         (root / "solver_provenance.json").write_text(json.dumps(solver_provenance, indent=2), encoding="utf-8")
 
     (in_progress / "timing" / "runtime_metadata.json").write_text(json.dumps(runtime_meta, indent=2), encoding="utf-8")
+    screening = result.get("contingency_screening")
+    excluded = [row for row in screening or [] if row.get("screening_outcome") == "excluded_from_scopf"]
+    if screening is not None:
+        (in_progress / "normalized" / "contingency_screening.json").write_text(
+            json.dumps(
+                {
+                    "contingency_set_id": contingency_set_id,
+                    "screened_count": len(screening),
+                    "admitted_count": len(screening) - len(excluded),
+                    "excluded_count": len(excluded),
+                    "contingencies": screening,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
     normalized = {
         "task": "scopf",
         "solver_name": solver_provenance["solver_name"],
@@ -177,6 +198,8 @@ def _write_result_artifacts(
         "wallclock_seconds": wallclock_seconds,
         "contingency_set_id": contingency_set_id,
         "contingency_count": result.get("contingency_count"),
+        "admitted_contingency_count": result.get("admitted_contingency_count"),
+        "excluded_contingencies": {row["contingency_id"]: row["infeasibility_class"] for row in excluded},
         "mpi_processes": exec_ctx.get("mpi_processes"),
         "gpu_enabled": exec_ctx.get("gpu_enabled"),
         "gpu_type": exec_ctx.get("gpu_type"),
@@ -263,6 +286,8 @@ def _run_one_case(
     options: dict[str, Any] = {"timeout_s": args.timeout_s, "tol": args.tol}
     if args.max_iter is not None:
         options["max_iter"] = args.max_iter
+    if getattr(args, "screen_contingencies", False):
+        options["screen_contingencies"] = True
     result = adapter.solve_scopf(case_data, contingencies, options=options)
     summary = _write_result_artifacts(in_progress, args, case_id, contingency_set_id, result)
 
@@ -290,6 +315,7 @@ def _run_one_case(
         "numerical_status": summary["status"],
         "preservation_status": "complete",
         "objective": summary["objective"],
+        "admitted_contingency_count": result.get("admitted_contingency_count"),
         "runtime": summary["runtime"],
         "wallclock_seconds": summary["wallclock_seconds"],
         "mpi_processes": exec_ctx.get("mpi_processes"),
@@ -311,6 +337,12 @@ def _run_one_case(
         "run_id": run_id,
         "termination_status": summary["status"],
         "objective": summary["objective"],
+        "admitted_contingency_count": result.get("admitted_contingency_count"),
+        "excluded_contingencies": {
+            row["contingency_id"]: row["infeasibility_class"]
+            for row in result.get("contingency_screening") or []
+            if row.get("screening_outcome") == "excluded_from_scopf"
+        },
     }
 
 
@@ -324,6 +356,11 @@ def main() -> None:
     contingency_path = _resolve_path(repo_root, args.contingency_set)
     if not contingency_path.is_file():
         raise SystemExit(f"Contingency set file does not exist: {contingency_path}")
+    runs_root = _resolve_path(repo_root, args.runs_root)
+    allowed = {"scopf", "run_registry.jsonl", "run_registry.parquet", ".run_registry.lock"}
+    foreign = sorted(p.name for p in runs_root.iterdir() if p.name not in allowed) if runs_root.is_dir() else []
+    if foreign:
+        raise SystemExit(f"--runs-root {runs_root} holds non-SCOPF entries {foreign[:5]}; use a SCOPF-only runs root")
     adapter = PowerModelsAdapter(repo_root=repo_root)
     results: list[dict[str, Any]] = []
     for case_id, case_file in plan:

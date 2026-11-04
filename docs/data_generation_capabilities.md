@@ -200,6 +200,32 @@ nonconvergent, islanded, and software/model outcomes are retained separately.
 See [Riker Complementary PF Campaign](riker_pf_campaign.md) for exact quotas,
 commands, limitations, and data layout.
 
+### 2.8 SCOPF with contingency screening and explained exclusions
+
+The PowerModels SCOPF path (`scripts/run_scopf.py`, PMSC `c1` formulation)
+solves coupled nonlinear AC security-constrained OPF over static branch and
+generator N-1 sets. In screen-then-solve mode (`--screen-contingencies`), each
+contingency is first solved alone. Any contingency that cannot be secured by
+preventive dispatch is excluded from the coupled problem, so one unsecurable
+outage no longer makes the whole SCOPF infeasible. Excluded contingencies are
+kept as labelled data with:
+
+- **`security_status`**: `securable_by_preventive_dispatch` or
+  `not_securable_by_preventive_dispatch`.
+- **`infeasibility_class`**, found by re-solving with constraint groups removed:
+  `post_contingency_thermal_overload`, `generator_voltage_setpoint_lock`,
+  `thermal_or_voltage_lock`, `coupled_thermal_and_voltage_limits`,
+  `post_contingency_angle_limit`, or `unresolved_infeasibility`.
+- **`sufficient_relaxations`** and a plain-language **`explanation`**.
+- **`evidence`**: the most overloaded branches with their loading percentage
+  against emergency ratings, and the generator buses whose voltage would have to
+  move, with base and post-contingency values.
+
+Each SCOPF sample therefore records which outages the dispatch secures, which
+ones it cannot secure, and why. These labels can be used for
+security-assessment and contingency-ranking tasks, alongside the secured
+dispatch itself.
+
 ---
 
 ## 3. HPC scalability
@@ -300,7 +326,8 @@ outcome, and **both feasible and infeasible results are retained**:
 Because **infeasible and non-converged solves are never filtered out**, the
 corpus is directly usable as a **feasibility-classification dataset**, and each
 archived round ships a convergence sidecar recording the feasible/infeasible
-split and label definition.
+split and label definition. SCOPF attempts add contingency-level security labels
+with cause classes (§2.8).
 
 ---
 

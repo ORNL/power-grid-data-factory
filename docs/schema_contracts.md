@@ -157,6 +157,53 @@ Core execution fields include:
 - gpu_enabled
 - gpu_type
 
+SCOPF records also carry `contingency_set_id`, `contingency_count`, and (when
+screening is enabled) `admitted_contingency_count`.
+
+## SCOPF Contingency Screening Contract
+
+Written to `normalized/contingency_screening.json` in a SCOPF attempt when
+`--screen-contingencies` is set:
+
+- contingency_set_id, screened_count, admitted_count, excluded_count
+- contingencies: one row per input contingency, in input order
+
+Per-contingency row fields:
+
+| Field | Values / meaning |
+|---|---|
+| `contingency_id` | Input contingency id |
+| `components` | Outaged component(s), `{type, id}` |
+| `screening_outcome` | `admitted_to_scopf` or `excluded_from_scopf` |
+| `security_status` | `securable_by_preventive_dispatch` or `not_securable_by_preventive_dispatch` |
+| `infeasibility_class` | `null` when admitted; otherwise one of the classes below |
+| `sufficient_relaxations` | Relaxed variants that solve (excluded rows only) |
+| `explanation` | One-sentence plain-language cause (excluded rows only) |
+| `evidence.overloaded_branches` | `[{branch_id, loading_pct}]`, top 10, against `rate_c`, from the `no_post_contingency_thermal` solve |
+| `evidence.generator_voltage_shifts` | `[{bus_id, vm_base, vm_post}]`, top 10, from the `no_generator_voltage_link` solve |
+| `variants` | `[{variant, termination_status, objective, solve_time}]` for `full` and each relaxation tried |
+
+Relaxation variants (tried only when `full` fails):
+
+- `no_post_contingency_thermal`: drop post-contingency emergency ratings (`rate_c`).
+- `no_generator_voltage_link`: let generator-bus voltages move away from base-case setpoints.
+- `no_post_contingency_angle`: drop post-contingency angle-difference limits.
+- `no_thermal_no_voltage_link`: drop both the emergency ratings and the voltage link.
+
+Infeasibility classes, checked in this order:
+
+| Class | Assigned when |
+|---|---|
+| `thermal_or_voltage_lock` | Both `no_post_contingency_thermal` and `no_generator_voltage_link` solve |
+| `post_contingency_thermal_overload` | Only `no_post_contingency_thermal` solves (of those two) |
+| `generator_voltage_setpoint_lock` | Only `no_generator_voltage_link` solves (of those two) |
+| `post_contingency_angle_limit` | Neither of the above solves, but `no_post_contingency_angle` does |
+| `coupled_thermal_and_voltage_limits` | Only `no_thermal_no_voltage_link` solves |
+| `unresolved_infeasibility` | No relaxation solves (e.g. power/reactive shortfall or islanding) |
+
+The normalized result and the run report add `admitted_contingency_count` and
+`excluded_contingencies` (`{contingency_id: infeasibility_class}`).
+
 ## Round Summary Contract
 
 Round summary directory:

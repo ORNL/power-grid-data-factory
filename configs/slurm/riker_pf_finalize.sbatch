@@ -1,19 +1,19 @@
 #!/bin/bash
 #SBATCH -J pgdf_pf_reduce
-#SBATCH -A lrn070
+#SBATCH -A LRN116
 #SBATCH -p batch
 #SBATCH --qos=normal
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH --cpus-per-task=1
 #SBATCH -t 12:00:00
-#SBATCH -o /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.out
-#SBATCH -e /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
+#SBATCH -o /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.out
+#SBATCH -e /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
 
 set -euo pipefail
 ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 
-ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+ROOT=/lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory
 PYBIN=${PYBIN:-$ROOT/.venv-riker/bin/python}
 CAMPAIGN_ID=${CAMPAIGN_ID:?Set CAMPAIGN_ID}
 ROUND_INDEX=${ROUND_INDEX:?Set ROUND_INDEX}
@@ -36,7 +36,7 @@ if [[ "${ROUND_SELF_CONTINUE:-0}" == "1" ]]; then
   [[ "${SLURM_JOB_ID:-}" =~ ^[0-9]+$ ]] || { echo "Missing SLURM_JOB_ID for self-continuation" >&2; exit 2; }
   CONTINUATION_FILE="$ROUND_DIR/continuation_after_finalizer_${SLURM_JOB_ID}.txt"
   if [[ ! -s "$CONTINUATION_FILE" ]]; then
-    CONTINUE_CMD=(sbatch --parsable -A "${ACCOUNT:-lrn070}")
+    CONTINUE_CMD=(sbatch --parsable -A "${ACCOUNT:-LRN116}")
     [[ -n "${QOS:-normal}" ]] && CONTINUE_CMD+=(-q "${QOS:-normal}")
     CONTINUE_CMD+=(--dependency="afterany:${SLURM_JOB_ID}" --export="ALL,CYCLE=$(( ${CYCLE:-1} + 1 ))" "$SUPERVISOR_SCRIPT")
     continuation_job=$("${CONTINUE_CMD[@]}")

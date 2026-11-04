@@ -173,6 +173,92 @@ The contingency file may be JSONL campaign rows or a JSON object such as:
 }
 ```
 
+### Screen-then-solve mode
+
+The PMSC `c1` formulation has no corrective redispatch: after an outage, the
+generators in the affected area respond only through participation factors
+(`pg = pg_base + alpha * delta`), and generator-bus voltages stay at their
+base-case setpoints. A single contingency that cannot be secured under these
+rules makes the whole coupled SCOPF locally infeasible. On `pglib_opf_case300_ieee`
+this happens for 5 of 50 N-1 events.
+
+Add `--screen-contingencies` (or `SCREEN=1` with
+`configs/slurm/riker_scopf_pilot.sbatch`) to:
+
+1. Solve each contingency alone with the base case (`full` variant).
+2. Admit every contingency that solves (`admitted_to_scopf`).
+3. For each one that fails, re-solve it with constraint groups removed to find
+   which group causes the failure, then exclude it and label it
+   (`excluded_from_scopf`).
+4. Run the coupled SCOPF on the admitted contingencies only.
+
+```bash
+python scripts/run_scopf.py \
+	--case-file external/pglib-opf/pglib_opf_case300_ieee.m \
+	--contingency-set data/inputs/scopf_pilot/case300_n1_b40_g10.json \
+	--screen-contingencies --timeout-s 3000
+```
+
+The labels are written to `normalized/contingency_screening.json` in the attempt
+directory (see [Schema Contracts](schema_contracts.md#scopf-contingency-screening-contract)).
+Screening costs one extra single-contingency solve per contingency, plus up to
+four relaxed solves for each contingency that fails. If no contingency is
+admitted, the attempt ends with `termination_status = no_admissible_contingencies`.
+
+### SCOPF campaigns (isolated output tree)
+
+`scripts/scopf_campaign.py` runs a resumable multi-case SCOPF campaign defined in
+`configs/scopf_campaign_riker.yaml`. All of its outputs go under two SCOPF-only
+roots, kept separate from the PF (`data/outputs/runs/riker_pf_*`) and AC-OPF
+(`data/outputs/runs*/mapreduce_round_*`) trees:
+
+- `data/outputs/runs_scopf/<campaign_id>/`: attempt directories (`scopf/...`) and
+  `run_registry.{jsonl,parquet}`.
+- `data/outputs/campaigns_scopf/<campaign_id>/`: frozen contingency sets, the task
+  manifest, `tasks/{claims,done,failed}`, per-task reports and logs.
+
+Several safeguards keep these outputs isolated:
+
+- The campaign refuses any configured root outside these two bases.
+- `run_scopf.py` refuses a `--runs-root` that contains anything other than SCOPF
+  entries. Its default root is `data/outputs/runs_scopf/adhoc`.
+- Registry appends are serialized with `flock`.
+
+Once a contingency set is written, it is never regenerated. Tasks are claimed
+with an atomic `mkdir`. A task is final once it has either solved or been
+classified; crashes are retried up to `max_attempts_per_task` times.
+
+```bash
+python scripts/scopf_campaign.py prepare          # contingency sets + manifest
+sbatch configs/slurm/riker_scopf_campaign.sbatch  # WORKERS=$SLURM_CPUS_PER_TASK parallel solves
+python scripts/scopf_campaign.py status
+```
+
+To continue a campaign, resubmit the same sbatch. It clears the claims that a
+killed job left behind, so only one campaign job should run at a time.
+
+The campaign covers every topology in the workspace: 66 pglib cases, RTS-GMLC, and
+the TAMU/EPIGRIDS cases, for 77 cases in total. Cases are grouped into size tiers.
+Settings resolve in the order case keys, then tier keys, then `defaults`:
+
+| Tier | Buses | Seeds | Sets | Timeout |
+|---|---|---|---|---|
+| `tiny` | ≤ 60 | 1 | exhaustive N-1 | 2 h |
+| `small` | 57 – ~1k | 3 | {15,5}, {40,10} | 2 h |
+| `medium` | ~1k – 10k | 2 | {15,5}, {40,10} | 6 h |
+| `large` | 10k – 30k | 1 | {15,5} | 24 h |
+| `xlarge` | > 30k | 1 | {15,5} | 72 h |
+
+Each task records its tier. Setting `TIERS` makes a job claim tasks only from the
+listed tiers. A second job that runs at the same time must set
+`CLEAR_STALE_CLAIMS=0`:
+
+```bash
+sbatch --export=ALL,TIERS="tiny small medium" configs/slurm/riker_scopf_campaign.sbatch
+sbatch -t 4-00:00:00 -c 16 --export=ALL,TIERS="large xlarge",CLEAR_STALE_CLAIMS=0 \
+  configs/slurm/riker_scopf_campaign.sbatch
+```
+
 If your environment has precompile instability, use conservative runtime settings:
 
 ```bash

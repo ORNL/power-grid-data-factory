@@ -1,0 +1,557 @@
+{
+  "contingency_set_id": "n1_b40_g10_s0",
+  "case_id": "pglib_opf_case300_ieee",
+  "bridge_branches_excluded": 89,
+  "contingencies": [
+    {
+      "contingency_id": "n1_branch_branch_000249",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000249"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000269",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000269"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000053",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000053"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000179",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000179"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000324",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000324"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000304",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000304"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000259",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000259"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000202",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000202"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000300",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000300"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000232",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000232"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000364",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000364"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000156",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000156"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000319",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000319"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000107",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000107"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000191",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000191"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000083",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000083"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000382",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000382"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000175",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000175"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000337",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000337"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000374",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000374"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000111",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000111"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000205",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000205"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000085",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000085"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000072",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000072"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000218",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000218"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000297",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000297"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000352",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000352"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000086",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000086"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000230",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000230"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000277",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000277"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000209",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000209"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000378",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000378"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000149",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000149"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000348",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000348"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000281",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000281"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000329",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000329"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000180",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000180"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000064",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000064"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000346",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000346"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_branch_branch_000040",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "branch",
+          "id": "branch_000040"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_generator_gen_000011",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "generator",
+          "id": "gen_000011"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_generator_gen_000056",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "generator",
+          "id": "gen_000056"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_generator_gen_000063",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "generator",
+          "id": "gen_000063"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_generator_gen_000035",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "generator",
+          "id": "gen_000035"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_generator_gen_000055",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "generator",
+          "id": "gen_000055"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_generator_gen_000060",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "generator",
+          "id": "gen_000060"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_generator_gen_000052",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "generator",
+          "id": "gen_000052"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_generator_gen_000050",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "generator",
+          "id": "gen_000050"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_generator_gen_000006",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "generator",
+          "id": "gen_000006"
+        }
+      ]
+    },
+    {
+      "contingency_id": "n1_generator_gen_000049",
+      "event_type": "simultaneous",
+      "order": 1,
+      "components": [
+        {
+          "type": "generator",
+          "id": "gen_000049"
+        }
+      ]
+    }
+  ]
+}

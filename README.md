@@ -76,6 +76,11 @@ See `docs/adaptive_campaign_strategy.md` and `configs/campaign_default.yaml`.
   operating point.
 - **Labeled for classification**: both feasible and infeasible solves are
   preserved, with a per-round feasible/infeasible convergence sidecar.
+- **Explained SCOPF security labels**: screen-then-solve SCOPF admits the
+  contingencies that preventive dispatch can secure, then solves the coupled
+  problem over those. Each excluded outage is labelled with its cause (thermal
+  overload, generator-voltage lock, angle limit, coupled limits or unresolved),
+  together with the overloaded branches and voltage shifts behind that cause.
 
 Deterministic naming/run-layout APIs, atomic attempt finalization, artifact
 manifests, checksums, integrity/preservation audits, and append-only run

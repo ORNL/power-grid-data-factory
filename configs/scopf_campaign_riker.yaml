@@ -1,0 +1,133 @@
+campaign_id: riker_scopf_n1_v1
+
+# SCOPF outputs live in their own top-level tree, disjoint from the PF
+# (data/outputs/runs/riker_pf_*) and AC-OPF (data/outputs/runs*/mapreduce_*) trees.
+storage:
+  runs_root: data/outputs/runs_scopf/riker_scopf_n1_v1
+  campaign_root: data/outputs/campaigns_scopf/riker_scopf_n1_v1
+
+solver:
+  solver_id: powermodels_scopf_pmsc_ipopt
+  screen_contingencies: true
+  linear_solver: ma57
+  timeout_s: 7200
+  max_attempts_per_task: 2
+
+# Each case gets one contingency set per (size, seed). A negative size takes every
+# eligible component (non-bridge branches; generators with pmax > 0).
+# Settings resolve as case keys > tier keys > defaults. Tasks record their tier so
+# workers can be pointed at a tier with `scopf_campaign.py run --tier <name>`.
+# Case ids are the file stems (run_scopf.py derives them the same way).
+defaults:
+  seeds: [0, 1, 2]
+  sets:
+    - {branches: 15, generators: 5}
+    - {branches: 40, generators: 10}
+
+tiers:
+  # <= 60 buses: exhaustive N-1.
+  tiny:
+    seeds: [0]
+    sets: [{branches: -1, generators: -1}]
+    cases:
+      - external/pglib-opf/pglib_opf_case3_lmbd.m
+      - external/pglib-opf/pglib_opf_case5_pjm.m
+      - external/pglib-opf/pglib_opf_case14_ieee.m
+      - external/pglib-opf/pglib_opf_case24_ieee_rts.m
+      - external/pglib-opf/pglib_opf_case30_as.m
+      - external/pglib-opf/pglib_opf_case30_ieee.m
+      - external/pglib-opf/pglib_opf_case39_epri.m
+      - external/pglib-opf/pglib_opf_case60_c.m
+
+  # 57 - ~1k buses: defaults (3 seeds x 2 set sizes).
+  small:
+    cases:
+      - external/pglib-opf/pglib_opf_case57_ieee.m
+      - external/pglib-opf/pglib_opf_case73_ieee_rts.m
+      - external/RTS-GMLC/RTS_Data/FormattedData/MATPOWER/RTS_GMLC.m
+      - external/pglib-opf/pglib_opf_case89_pegase.m
+      - external/pglib-opf/pglib_opf_case118_ieee.m
+      - external/pglib-opf/pglib_opf_case162_ieee_dtc.m
+      - external/pglib-opf/pglib_opf_case179_goc.m
+      - external/pglib-opf/pglib_opf_case197_snem.m
+      - external/pglib-opf/pglib_opf_case200_activ.m
+      - external/pglib-opf/pglib_opf_case240_pserc.m
+      - external/tamu/epigrids_new_england_250/extracted/case_epigrids_new_england_250.m
+      - external/pglib-opf/pglib_opf_case300_ieee.m
+      - external/pglib-opf/pglib_opf_case500_goc.m
+      - external/tamu/activsg500/extracted/case_ACTIVSg500.m
+      - external/pglib-opf/pglib_opf_case588_sdet.m
+      - external/pglib-opf/pglib_opf_case793_goc.m
+      - external/tamu/memphis2026/extracted/MemphisCase2026_Mar7.m
+
+  # ~1k - 10k buses: 2 seeds x 2 set sizes, 6 h per task.
+  medium:
+    seeds: [0, 1]
+    timeout_s: 21600
+    cases:
+      - external/pglib-opf/pglib_opf_case1354_pegase.m
+      - external/tamu/epigrids_wisconsin_1664/extracted/Wisconsin_1664.m
+      - external/pglib-opf/pglib_opf_case1803_snem.m
+      - external/pglib-opf/pglib_opf_case1888_rte.m
+      - external/pglib-opf/pglib_opf_case1951_rte.m
+      - external/pglib-opf/pglib_opf_case2000_goc.m
+      - external/tamu/activsg2000/extracted/case_ACTIVSg2000.m
+      - external/pglib-opf/pglib_opf_case2312_goc.m
+      - external/pglib-opf/pglib_opf_case2383wp_k.m
+      - external/pglib-opf/pglib_opf_case2736sp_k.m
+      - external/pglib-opf/pglib_opf_case2737sop_k.m
+      - external/pglib-opf/pglib_opf_case2742_goc.m
+      - external/pglib-opf/pglib_opf_case2746wop_k.m
+      - external/pglib-opf/pglib_opf_case2746wp_k.m
+      - external/pglib-opf/pglib_opf_case2848_rte.m
+      - external/pglib-opf/pglib_opf_case2853_sdet.m
+      - external/pglib-opf/pglib_opf_case2868_rte.m
+      - external/pglib-opf/pglib_opf_case2869_pegase.m
+      - external/pglib-opf/pglib_opf_case3012wp_k.m
+      - external/pglib-opf/pglib_opf_case3022_goc.m
+      - external/pglib-opf/pglib_opf_case3120sp_k.m
+      - external/pglib-opf/pglib_opf_case3375wp_k.m
+      - external/pglib-opf/pglib_opf_case3970_goc.m
+      - external/pglib-opf/pglib_opf_case4020_goc.m
+      - external/pglib-opf/pglib_opf_case4601_goc.m
+      - external/pglib-opf/pglib_opf_case4619_goc.m
+      - external/pglib-opf/pglib_opf_case4661_sdet.m
+      - external/pglib-opf/pglib_opf_case4837_goc.m
+      - external/pglib-opf/pglib_opf_case4917_goc.m
+      - external/pglib-opf/pglib_opf_case5658_epigrids.m
+      - external/pglib-opf/pglib_opf_case6468_rte.m
+      - external/pglib-opf/pglib_opf_case6470_rte.m
+      - external/pglib-opf/pglib_opf_case6495_rte.m
+      - external/pglib-opf/pglib_opf_case6515_rte.m
+      - external/pglib-opf/pglib_opf_case7336_epigrids.m
+      - external/pglib-opf/pglib_opf_case8387_pegase.m
+      - external/pglib-opf/pglib_opf_case9241_pegase.m
+      - external/pglib-opf/pglib_opf_case9591_goc.m
+
+  # 10k - 30k buses: one 15+5 set, 24 h per task.
+  large:
+    seeds: [0]
+    sets: [{branches: 15, generators: 5}]
+    timeout_s: 86400
+    cases:
+      - external/pglib-opf/pglib_opf_case10000_goc.m
+      - external/tamu/activsg10k/extracted/case_ACTIVSg10k.m
+      - external/pglib-opf/pglib_opf_case10192_epigrids.m
+      - external/pglib-opf/pglib_opf_case10480_goc.m
+      - external/pglib-opf/pglib_opf_case13659_pegase.m
+      - external/pglib-opf/pglib_opf_case19402_goc.m
+      - external/pglib-opf/pglib_opf_case20758_epigrids.m
+      - external/pglib-opf/pglib_opf_case24464_goc.m
+      - external/tamu/activsg25k/extracted/case_ACTIVSg25k.m
+      - external/pglib-opf/pglib_opf_case30000_goc.m
+
+  # > 30k buses: one 15+5 set, 44 h per task (fits Riker's 48 h job cap).
+  xlarge:
+    seeds: [0]
+    sets: [{branches: 15, generators: 5}]
+    timeout_s: 158400
+    cases:
+      - external/tamu/activsg70k/extracted/case_ACTIVSg70k.m
+      - external/pglib-opf/pglib_opf_case78484_epigrids.m
+      - external/tamu/epigrids_eastern/extracted/Base_Eastern_Interconnect_515GW.m
+      - external/tamu/activsg82k/extracted/case_SyntheticUSA.m

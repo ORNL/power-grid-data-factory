@@ -1,19 +1,19 @@
 #!/bin/bash
 #SBATCH -J pgdf_repair_prep
-#SBATCH -A lrn070
+#SBATCH -A LRN116
 #SBATCH -p batch
 #SBATCH --qos=normal
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH --cpus-per-task=1
 #SBATCH -t 04:00:00
-#SBATCH -o /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.out
-#SBATCH -e /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
+#SBATCH -o /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.out
+#SBATCH -e /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
 
 set -euo pipefail
 ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 
-ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+ROOT=/lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory
 PYBIN=${PYBIN:-$ROOT/.venv-riker/bin/python}
 REPAIR_ID=${REPAIR_ID:-riker_activsg2000_case300_r000_r005_parallel_v1}
 ROUNDS=${ROUNDS:-0-5}
@@ -36,7 +36,7 @@ if [[ ! -s "$SOURCE_LIST" ]]; then
         --output "$SOURCE_LIST"
 fi
 
-COMPUTE_CMD=(sbatch --parsable -A "${ACCOUNT:-lrn070}")
+COMPUTE_CMD=(sbatch --parsable -A "${ACCOUNT:-LRN116}")
 [[ -n "${QOS:-normal}" ]] && COMPUTE_CMD+=(-q "${QOS:-normal}")
 COMPUTE_CMD+=(--export=ALL,REPAIR_ID="$REPAIR_ID",ROUNDS="$ROUNDS",SOURCE_RUNS_ROOT="$SOURCE_RUNS_ROOT",WORK_ROOT="$WORK_ROOT" "$COMPUTE_SCRIPT")
 compute_job=$("${COMPUTE_CMD[@]}")

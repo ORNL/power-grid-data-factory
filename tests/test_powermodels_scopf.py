@@ -52,6 +52,23 @@ class PowerModelsScopfTests(unittest.TestCase):
             command = run.call_args.args[0][-1]
             self.assertNotIn("PowerModelsSecurityConstrained", command)
 
+    def test_solve_timeout_result_is_json_serializable(self) -> None:
+        import json
+
+        with TemporaryDirectory() as tmp:
+            adapter = PowerModelsAdapter(repo_root=Path(tmp))
+            (adapter.julia_scripts_dir).mkdir(parents=True, exist_ok=True)
+            (adapter.julia_scripts_dir / "run_batch.jl").write_text("", encoding="utf-8")
+            timeout = subprocess.TimeoutExpired(["julia"], 1.0, output=b"partial \xff", stderr=b"err")
+            with patch.object(adapter, "_run_preflight", return_value=None), patch(
+                "grid_data_factory.solvers.powermodels_adapter.subprocess.run", side_effect=timeout
+            ):
+                result = adapter.solve_scopf({"case_id": "case"}, [], {"timeout_s": 1.0})
+
+            self.assertEqual(result["termination_status"], "timeout")
+            self.assertEqual(result["stderr"], "err")
+            json.dumps(result)
+
 
 if __name__ == "__main__":
     unittest.main()

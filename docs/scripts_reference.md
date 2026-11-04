@@ -71,6 +71,9 @@ Implemented workflow command:
   - Accepts a JSON contingency-set object, a JSON array, or campaign JSONL rows with nested `contingency` objects; case-tagged JSONL rows are filtered for each selected case.
   - Requires static branch or generator N-1 events and rejects sequential or simultaneous N-k inputs before allocating an attempt.
   - Preserves the resolved case and contingency set, raw and normalized results, solver provenance, logs, timing, checksums, terminal marker, and SCOPF run-registry record.
+  - `--screen-contingencies` solves each contingency alone first. Contingencies that cannot be secured by preventive dispatch are excluded from the coupled SCOPF and labelled with a cause class, the relaxations that make them solvable, a plain-language explanation and numeric evidence (overloaded branches, generator-voltage shifts). The labels go to `normalized/contingency_screening.json`; `admitted_contingency_count` and `excluded_contingencies` are added to the normalized result and the report.
+- `julia/diag_scopf.jl`
+  - Standalone diagnostic: solves the base AC-OPF, then each contingency alone under five constraint-group ablations (`full`, `no_vm_link`, `no_cont_thermal`, `no_cont_angle`, `no_vm_no_thermal`). Usage: `diag_scopf.jl <resolved_case.json> <resolved_contingency_set.json> <out.json>`; Slurm wrapper `configs/slurm/riker_scopf_diag.sbatch` (`SET=<contingency_set_id>`).
 - `scripts/run_exago_ac_opf.py`
   - Runs AC-OPF through ExaGO OPFLOW for selected MATPOWER cases.
   - Parses OPFLOW text output into structured `raw_result.solution` fields (`bus`, `branch`, `gen`) for downstream HydraGNN-style OPF training conversion.

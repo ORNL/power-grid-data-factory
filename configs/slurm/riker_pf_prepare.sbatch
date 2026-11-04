@@ -1,19 +1,19 @@
 #!/bin/bash
 #SBATCH -J pgdf_pf_prep
-#SBATCH -A lrn070
+#SBATCH -A LRN116
 #SBATCH -p batch
 #SBATCH --qos=normal
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH --cpus-per-task=1
 #SBATCH -t 04:00:00
-#SBATCH -o /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.out
-#SBATCH -e /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
+#SBATCH -o /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.out
+#SBATCH -e /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
 
 set -euo pipefail
 ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 
-ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+ROOT=/lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory
 PYBIN=${PYBIN:-$ROOT/.venv-riker/bin/python}
 ANCHOR_INDEX=${ANCHOR_INDEX:-$ROOT/data/derived/pf_anchors/andes_acopf_anchors.parquet}
 CAMPAIGN_ID=${CAMPAIGN_ID:-riker_pf_complement_v1}
@@ -46,10 +46,10 @@ mkdir -p data/scratch/logs "$QUEUE_DIR"
 [[ -s "$ANCHOR_INDEX" ]] || { echo "Missing anchor index: $ANCHOR_INDEX" >&2; exit 2; }
 
 if [[ "$RESUME" != "1" || ! -s "$CANDIDATES" ]]; then
-  PRIOR_ARGS=()
-  while IFS= read -r prior; do PRIOR_ARGS+=("$prior"); done < <(find "$ROOT/$RUNS_ROOT" -path '*/pf/samples.jsonl' -type f 2>/dev/null | sort)
-  CMD=("$PYBIN" scripts/generate_pf_candidates.py --anchor-index "$ANCHOR_INDEX" --config "$ROOT/$CONFIG" --output "$CANDIDATES" --count "$COUNT" --seed "$SEED")
-  if (( ${#PRIOR_ARGS[@]} > 0 )); then CMD+=(--prior-samples "${PRIOR_ARGS[@]}"); fi
+  PRIOR_LIST="${CANDIDATES}.prior_samples.txt"
+  find "$ROOT/$RUNS_ROOT" -path '*/pf/samples.jsonl' -type f 2>/dev/null | sort > "$PRIOR_LIST"
+  echo "prior samples files: $(wc -l < "$PRIOR_LIST")"
+  CMD=("$PYBIN" scripts/generate_pf_candidates.py --anchor-index "$ANCHOR_INDEX" --config "$ROOT/$CONFIG" --output "$CANDIDATES" --count "$COUNT" --seed "$SEED" --prior-samples-list "$PRIOR_LIST")
   PYTHONPATH="$ROOT/src" "${CMD[@]}"
   PYTHONPATH="$ROOT/src" "$PYBIN" scripts/shard_selected_candidates.py \
     --input "$CANDIDATES" --num-shards "$SHARD_COUNT" --out-dir "$SHARD_DIR" \
@@ -72,7 +72,7 @@ fi
 [[ -s "$QUEUE_FILE" ]] || { echo "No nonempty PF shards" >&2; exit 2; }
 
 if [[ ! -s "$MAP_JOB_FILE" ]]; then
-  MAP_CMD=(sbatch --parsable -A "${ACCOUNT:-lrn070}")
+  MAP_CMD=(sbatch --parsable -A "${ACCOUNT:-LRN116}")
   [[ -n "${QOS:-normal}" ]] && MAP_CMD+=(-q "${QOS:-normal}")
   MAP_CMD+=(--nodes "$ROUND_NODES" --ntasks-per-node "$ROUND_TASKS_PER_NODE" --cpus-per-task 1 --time "$ROUND_TIME")
   MAP_CMD+=(--export="ALL,CAMPAIGN_ID=$CAMPAIGN_ID,ROUND_INDEX=$ROUND_INDEX,CONFIG=$CONFIG,COUNT=$COUNT,SEED_BASE=$SEED_BASE,RUNS_ROOT=$RUNS_ROOT,SHARD_COUNT=$SHARD_COUNT,RESUME=1,ROUND_SELF_CONTINUE=${ROUND_SELF_CONTINUE:-1},CYCLE=${CYCLE:-1}" "$MAP_SCRIPT")

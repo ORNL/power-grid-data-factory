@@ -83,6 +83,18 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Record a failed quality threshold in the report without returning a nonzero process status.",
     )
+    parser.add_argument(
+        "--linear-solvers",
+        default="default,ma27,ma57",
+        help="Comma-separated Ipopt linear solver attempt order ('default' = MUMPS). HSL is only required if ma* is listed.",
+    )
+    parser.add_argument(
+        "--quality-metric",
+        choices=("failure", "software_error"),
+        default="failure",
+        help="Fraction compared with --max-failure-fraction: all non-valid outcomes, or only software/model errors "
+        "(use software_error for extreme-severity campaigns where infeasible/nonconvergent outcomes are expected data).",
+    )
     return parser.parse_args()
 
 
@@ -128,8 +140,12 @@ def main() -> None:
     }
     linear_solver_counts: Counter[str] = Counter()
     solver_attempt_counts: Counter[str] = Counter()
+    linear_solvers = tuple(s.strip() for s in args.linear_solvers.split(",") if s.strip())
+    if not linear_solvers:
+        raise SystemExit("--linear-solvers must list at least one solver")
     hsl_library = os.environ.get("IPOPT_HSL_LIBRARY", "").strip()
-    if not hsl_library or not Path(hsl_library).is_file():
+    needs_hsl = any(s != "default" for s in linear_solvers)
+    if needs_hsl and (not hsl_library or not Path(hsl_library).is_file()):
         raise SystemExit("IPOPT_HSL_LIBRARY must name a readable Coin-HSL library for PF fallback")
 
     adapter = PowerModelsAdapter(repo_root=repo_root)
@@ -153,6 +169,7 @@ def main() -> None:
                     post_case,
                     controls=controls.model_dump(mode="json"),
                     hsl_library=hsl_library,
+                    linear_solvers=linear_solvers,
                 )
                 linear_solver_counts[str(result.get("linear_solver", "unknown"))] += 1
                 for attempt in result.get("solver_attempts") or []:
@@ -252,7 +269,12 @@ def main() -> None:
     exception_count = report["failed"] - nonvalid_outcomes
     attempted = report["solved"] + exception_count
     report["failure_fraction"] = report["failed"] / max(1, attempted)
-    report["ok"] = report["failure_fraction"] <= args.max_failure_fraction
+    report["valid_fraction"] = outcome_counts.get("converged_valid", 0) / max(1, attempted)
+    software_errors = outcome_counts.get("software_model_error", 0) + exception_count
+    report["software_error_fraction"] = software_errors / max(1, attempted)
+    report["quality_metric"] = args.quality_metric
+    metric = report["failure_fraction"] if args.quality_metric == "failure" else report["software_error_fraction"]
+    report["ok"] = metric <= args.max_failure_fraction
     manifest = _write_shard_manifest(runs_root, report, task="pf")
     report_path = campaign_root / "round_summaries" / f"round_{args.round_index:03d}_pf_execution_report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)

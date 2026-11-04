@@ -18,6 +18,19 @@ def _append_registry_record_jsonl(runs_root: Path, record: dict[str, Any]) -> No
 
 
 def append_registry_record_safe(runs_root: Path, record: dict[str, Any]) -> None:
+    # Serialize writers sharing a runs-root: the parquet update is read-modify-write.
+    import fcntl
+
+    runs_root.mkdir(parents=True, exist_ok=True)
+    with (runs_root / ".run_registry.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            _append_registry_record_unlocked(runs_root, record)
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def _append_registry_record_unlocked(runs_root: Path, record: dict[str, Any]) -> None:
     # Uses the parquet-backed writer when pandas is importable, else JSONL only (Cray Python).
     try:
         from grid_data_factory.storage.registry import append_registry_record

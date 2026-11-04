@@ -114,9 +114,10 @@ function to_powermodels_data(case_data)
         qmin = Float64(g[:qmin]) / base_mva
         qmax = Float64(g[:qmax]) / base_mva
         c = haskey(g, :cost) ? g[:cost] : [0.0, 1.0, 0.0]
-        # Interpret provided coefficients as [quad, linear, const].
-        c2 = length(c) >= 1 ? Float64(c[1]) : 0.0
-        c1 = length(c) >= 2 ? Float64(c[2]) : 1.0
+        # Coefficients are [quad, linear, const] in $/MW^2h, $/MWh, $/h; pg is per-unit,
+        # so rescale as PowerModels.make_per_unit! does to keep objectives in $/h.
+        c2 = (length(c) >= 1 ? Float64(c[1]) : 0.0) * base_mva^2
+        c1 = (length(c) >= 2 ? Float64(c[2]) : 1.0) * base_mva
         c0 = length(c) >= 3 ? Float64(c[3]) : 0.0
 
         pm_gen[string(idx)] = Dict(
@@ -211,6 +212,7 @@ result = Dict{String, Any}(
     "termination_status" => "not_implemented",
     "solver_name" => "powermodels",
     "task" => task,
+    "cost_convention" => "per_unit_scaled_v2",
 )
 
 if task == "ac_opf"

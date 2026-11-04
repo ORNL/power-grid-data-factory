@@ -1,19 +1,19 @@
 #!/bin/bash
 #SBATCH -J pgdf_pf_sup
-#SBATCH -A lrn070
+#SBATCH -A LRN116
 #SBATCH -p batch
 #SBATCH --qos=normal
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH --cpus-per-task=1
 #SBATCH -t 00:10:00
-#SBATCH -o /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.out
-#SBATCH -e /lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
+#SBATCH -o /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.out
+#SBATCH -e /lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory/data/scratch/logs/slurm-%x-%j.err
 
 set -euo pipefail
 ulimit -c 0  # disable core dumps: Julia/Ipopt crashes were filling Lustre
 
-ROOT=/lustre/orion/lrn070/proj-shared/mlupopa/OPF/power_grid_data_factory
+ROOT=/lustre/orion/lrn116/proj-shared/mlupopa/OPF/power_grid_data_factory
 SUPERVISOR_SCRIPT=$ROOT/configs/slurm/riker_pf_campaign_supervisor.sbatch
 DRIVE_SCRIPT=$ROOT/scripts/drive_campaign.py
 PYBIN=${PYBIN:-$ROOT/.venv-riker/bin/python}
@@ -22,7 +22,7 @@ CAMPAIGN_ID=${CAMPAIGN_ID:-riker_pf_complement_large_v1}
 ROUNDS=${ROUNDS:-5}
 COUNT=${COUNT:-100000}
 SEED_BASE=${SEED_BASE:-20260925}
-ACCOUNT=${ACCOUNT:-lrn070}
+ACCOUNT=${ACCOUNT:-LRN116}
 QOS=${QOS:-normal}
 ROUND_SBATCH=${ROUND_SBATCH:-configs/slurm/riker_pf_prepare.sbatch}
 CONFIG=${CONFIG:-configs/pf_campaign_riker.yaml}
@@ -31,11 +31,14 @@ RUNS_ROOT=${RUNS_ROOT:-data/outputs/runs/$CAMPAIGN_ID}
 ROUND_NODES=${ROUND_NODES:-64}
 ROUND_TASKS_PER_NODE=${ROUND_TASKS_PER_NODE:-32}
 ROUND_TIME=${ROUND_TIME:-36:00:00}
-PREP_TIME=${PREP_TIME:-04:00:00}
+PREP_TIME=${PREP_TIME:-16:00:00}
 SHARD_MULTIPLIER=${SHARD_MULTIPLIER:-8}
 ROUND_SHARD_COUNT=${ROUND_SHARD_COUNT:-$((ROUND_NODES * ROUND_TASKS_PER_NODE * SHARD_MULTIPLIER))}
 MAX_FAILURE_FRACTION=${MAX_FAILURE_FRACTION:-0.5}
-COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/current/env.sh}
+TIMEOUT_S=${TIMEOUT_S:-1200}
+PF_LINEAR_SOLVERS=${PF_LINEAR_SOLVERS:-default,ma27,ma57}
+PF_QUALITY_METRIC=${PF_QUALITY_METRIC:-failure}
+COINHSL_ENV=${COINHSL_ENV:-$HOME/.local/coinhsl/riker/env.sh}
 DEP_TYPE=${DEP_TYPE:-afterany}
 ROUND_SELF_CONTINUE=${ROUND_SELF_CONTINUE:-1}
 CYCLE=${CYCLE:-1}
@@ -57,7 +60,7 @@ PLAN_DIR=$ROOT/data/outputs/campaigns/$CAMPAIGN_ID/round_summaries
 mkdir -p "$PLAN_DIR"
 PLAN_FILE=$PLAN_DIR/pf_supervisor_cycle_${CYCLE}_plan.json
 
-echo "[$(date -u +%FT%TZ)] PF supervisor cycle=$CYCLE/$MAX_CYCLES campaign=$CAMPAIGN_ID rounds=$ROUNDS"
+echo "[$(date -u +%FT%TZ)] PF supervisor cycle=$CYCLE/$MAX_CYCLES campaign=$CAMPAIGN_ID rounds=$ROUNDS prep_time=$PREP_TIME timeout_s=$TIMEOUT_S linear_solvers=$PF_LINEAR_SOLVERS quality_metric=$PF_QUALITY_METRIC"
 
 QOS_ARGS=()
 [[ -n "$QOS" ]] && QOS_ARGS=(--qos "$QOS")
@@ -84,6 +87,9 @@ if ! PYTHONPATH="$ROOT/src" "$PYBIN" "$DRIVE_SCRIPT" \
   --set "ROUND_TIME=$ROUND_TIME" \
   --set "SHARD_COUNT=$ROUND_SHARD_COUNT" \
   --set "MAX_FAILURE_FRACTION=$MAX_FAILURE_FRACTION" \
+  --set "TIMEOUT_S=$TIMEOUT_S" \
+  --set "PF_LINEAR_SOLVERS=$PF_LINEAR_SOLVERS" \
+  --set "PF_QUALITY_METRIC=$PF_QUALITY_METRIC" \
   --set "COINHSL_ENV=$COINHSL_ENV" \
   --set "ROUND_SELF_CONTINUE=$ROUND_SELF_CONTINUE" \
   --set "SUPERVISOR_SCRIPT=$SUPERVISOR_SCRIPT" \
