@@ -231,6 +231,12 @@ function solve_request(case_data, payload)
             "sb" => "yes",
             "tol" => 1e-8,
         ]
+        haskey(options, :max_iter) && push!(solver_attrs, "max_iter" => Int(options[:max_iter]))
+        if haskey(options, :ipopt_options)
+            for (key, value) in pairs(options[:ipopt_options])
+                push!(solver_attrs, String(key) => (value isa AbstractString ? String(value) : value))
+            end
+        end
         let linear_solver = haskey(options, :linear_solver) ? String(strip(options[:linear_solver])) : String(strip(get(ENV, "IPOPT_LINEAR_SOLVER", "")))
             !isempty(linear_solver) && push!(solver_attrs, "linear_solver" => linear_solver)
         end
