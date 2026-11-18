@@ -186,19 +186,23 @@ function to_powermodels_data(case_data)
     )
 end
 
+# Branch flows omitted: PowerModels reads one p_start/q_start per branch for both arcs.
+const AC_WARM_START_FIELDS = Dict(
+    "bus" => ("vm", "va"),
+    "gen" => ("pg", "qg"),
+)
+
 function apply_ac_warm_start!(pm_data, solution)
-    PowerModels.update_data!(pm_data, solution)
-    for bus in values(pm_data["bus"])
-        haskey(bus, "vm") && (bus["vm_start"] = bus["vm"])
-        haskey(bus, "va") && (bus["va_start"] = bus["va"])
-    end
-    for gen in values(pm_data["gen"])
-        haskey(gen, "pg") && (gen["pg_start"] = gen["pg"])
-        haskey(gen, "qg") && (gen["qg_start"] = gen["qg"])
-    end
-    for branch in values(pm_data["branch"])
-        for field in ("pf", "qf", "pt", "qt")
-            haskey(branch, field) && (branch[field * "_start"] = branch[field])
+    sol = sanitize_json_value(solution)
+    for (comp, fields) in AC_WARM_START_FIELDS
+        haskey(sol, comp) && haskey(pm_data, comp) || continue
+        for (id, vals) in sol[comp]
+            target = get(pm_data[comp], string(id), nothing)
+            (target === nothing || !(vals isa AbstractDict)) && continue
+            for field in fields
+                v = get(vals, field, nothing)
+                v isa Real && (target[field * "_start"] = Float64(v))
+            end
         end
     end
 end
@@ -231,6 +235,12 @@ function solve_request(case_data, payload)
             "sb" => "yes",
             "tol" => 1e-8,
         ]
+        haskey(options, :max_iter) && push!(solver_attrs, "max_iter" => Int(options[:max_iter]))
+        if haskey(options, :ipopt_options)
+            for (key, value) in pairs(options[:ipopt_options])
+                push!(solver_attrs, String(key) => (value isa AbstractString ? String(value) : value))
+            end
+        end
         let linear_solver = haskey(options, :linear_solver) ? String(strip(options[:linear_solver])) : String(strip(get(ENV, "IPOPT_LINEAR_SOLVER", "")))
             !isempty(linear_solver) && push!(solver_attrs, "linear_solver" => linear_solver)
         end

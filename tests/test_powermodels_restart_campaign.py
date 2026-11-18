@@ -78,6 +78,46 @@ class PowerModelsRestartCampaignTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "warm-start candidate mismatch"):
                 run_campaign._load_warm_start_solution(root, candidate)
 
+    def test_filters_by_case_id_samples_path_and_limit(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runs = root / "runs"
+            paths = []
+            for shard in ("shard_00000", "shard_00001"):
+                samples = runs / shard / "ac_opf" / "samples.jsonl"
+                samples.parent.mkdir(parents=True)
+                records = [
+                    {
+                        "candidate_id": f"{shard}_{case}",
+                        "case_id": case,
+                        "termination_status": "ITERATION_LIMIT",
+                        "inputs": {"candidate": {"candidate_id": f"{shard}_{case}"}},
+                        "result": {"raw_result": {"solution": {"bus": {}}}},
+                    }
+                    for case in ("big", "small", "big2")
+                ]
+                samples.write_text("".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
+                paths.append(samples)
+
+            by_case = prepare.collect_restart_candidates(root, runs, {"ITERATION_LIMIT"}, case_ids={"big"})
+            self.assertEqual([c["candidate_id"] for c in by_case], ["shard_00000_big", "shard_00001_big"])
+
+            only_second = prepare.collect_restart_candidates(
+                root, runs, {"ITERATION_LIMIT"}, case_ids={"big"}, sample_paths=[paths[1]]
+            )
+            self.assertEqual([c["candidate_id"] for c in only_second], ["shard_00001_big"])
+
+            limited = prepare.collect_restart_candidates(root, runs, {"ITERATION_LIMIT"}, limit=2)
+            self.assertEqual(len(limited), 2)
+
+    def test_parse_ipopt_option_casts_values(self) -> None:
+        self.assertEqual(run_campaign._parse_ipopt_option("max_cpu_time=100"), ("max_cpu_time", 100))
+        self.assertEqual(run_campaign._parse_ipopt_option("mu_init=1e-4"), ("mu_init", 1e-4))
+        self.assertEqual(run_campaign._parse_ipopt_option("mu_strategy=adaptive"), ("mu_strategy", "adaptive"))
+        for bad in ("mu_init", "=1"):
+            with self.assertRaisesRegex(ValueError, "KEY=VALUE"):
+                run_campaign._parse_ipopt_option(bad)
+
 
 if __name__ == "__main__":
     unittest.main()

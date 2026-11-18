@@ -20,6 +20,14 @@ def parse_args() -> argparse.Namespace:
         default=[],
         help="Source status to select; repeat as needed (default: ALMOST_LOCALLY_SOLVED).",
     )
+    parser.add_argument("--case-id", action="append", default=[], help="Restrict to these case IDs; repeatable.")
+    parser.add_argument(
+        "--samples-path",
+        action="append",
+        default=[],
+        help="Scan only these samples.jsonl files (relative to the source runs root); avoids a full rglob.",
+    )
+    parser.add_argument("--limit", type=int, default=0, help="Stop after this many selected candidates.")
     return parser.parse_args()
 
 
@@ -34,15 +42,21 @@ def collect_restart_candidates(
     repo_root: Path,
     source_runs_root: Path,
     statuses: set[str],
+    case_ids: set[str] | None = None,
+    sample_paths: list[Path] | None = None,
+    limit: int = 0,
 ) -> list[dict[str, Any]]:
     selected: dict[str, dict[str, Any]] = {}
     needles = [f'"termination_status": "{status}"'.encode() for status in statuses]
     compact_needles = [f'"termination_status":"{status}"'.encode() for status in statuses]
 
-    sample_paths = sorted(
-        path for path in source_runs_root.rglob("samples.jsonl") if path.parent.name == "ac_opf"
-    )
+    if sample_paths is None:
+        sample_paths = sorted(
+            path for path in source_runs_root.rglob("samples.jsonl") if path.parent.name == "ac_opf"
+        )
     for samples_path in sample_paths:
+        if limit and len(selected) >= limit:
+            break
         with samples_path.open("rb") as source:
             while True:
                 offset = source.tell()
@@ -57,6 +71,8 @@ def collect_restart_candidates(
                     continue
                 status = str(record.get("termination_status", ""))
                 if status not in statuses:
+                    continue
+                if case_ids and str(record.get("case_id", "")) not in case_ids:
                     continue
                 candidate = dict(((record.get("inputs") or {}).get("candidate") or {}))
                 candidate_id = str(record.get("candidate_id", candidate.get("candidate_id", "")))
@@ -74,6 +90,8 @@ def collect_restart_candidates(
                     "run_id": record.get("run_id"),
                 }
                 selected[candidate_id] = candidate
+                if limit and len(selected) >= limit:
+                    break
     return [selected[candidate_id] for candidate_id in sorted(selected)]
 
 
@@ -88,7 +106,15 @@ def main() -> None:
         output = (repo_root / output).resolve()
     statuses = set(args.termination_status or ["ALMOST_LOCALLY_SOLVED"])
 
-    candidates = collect_restart_candidates(repo_root, source_runs_root, statuses)
+    sample_paths = [source_runs_root / path for path in args.samples_path] or None
+    candidates = collect_restart_candidates(
+        repo_root,
+        source_runs_root,
+        statuses,
+        case_ids=set(args.case_id) or None,
+        sample_paths=sample_paths,
+        limit=args.limit,
+    )
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(f".{output.name}.tmp.{os.getpid()}")
     with temporary.open("w", encoding="utf-8") as destination:

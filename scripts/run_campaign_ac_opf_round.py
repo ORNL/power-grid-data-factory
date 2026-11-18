@@ -98,6 +98,18 @@ def _load_warm_start_solution(repo_root: Path, candidate: dict[str, Any]) -> dic
     return solution
 
 
+def _parse_ipopt_option(item: str) -> tuple[str, Any]:
+    key, sep, raw = item.partition("=")
+    if not sep or not key.strip():
+        raise ValueError(f"--ipopt-option expects KEY=VALUE, got {item!r}")
+    for cast in (int, float):
+        try:
+            return key.strip(), cast(raw)
+        except ValueError:
+            pass
+    return key.strip(), raw.strip()
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Run selected adaptive-campaign candidates through AC-OPF and update post-solve ledgers.")
     p.add_argument("--campaign-id", required=True)
@@ -116,6 +128,14 @@ def parse_args() -> argparse.Namespace:
         "--linear-solvers",
         default="",
         help="Comma-separated exact Ipopt linear-solver sequence; excludes the default solver unless named.",
+    )
+    p.add_argument("--max-iter", type=int, default=0, help="Ipopt max_iter; 0 keeps the Ipopt default.")
+    p.add_argument(
+        "--ipopt-option",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Extra Ipopt option; repeat as needed (e.g. mu_init=1e-4). Overrides built-in settings such as tol.",
     )
     p.add_argument("--execution-policy", default="", help="Optional per-case enable/timeout YAML policy.")
     p.add_argument("--max-candidates", type=int, default=0)
@@ -193,6 +213,10 @@ def main() -> None:
     if linear_solvers and fallback_solvers:
         raise ValueError("--linear-solvers and --linear-solver-fallbacks are mutually exclusive")
     solver_options = {"timeout_s": args.timeout_s}
+    if args.max_iter > 0:
+        solver_options["max_iter"] = args.max_iter
+    if args.ipopt_option:
+        solver_options["ipopt_options"] = dict(_parse_ipopt_option(item) for item in args.ipopt_option)
     if linear_solvers:
         solver_options["linear_solvers"] = linear_solvers
     else:
