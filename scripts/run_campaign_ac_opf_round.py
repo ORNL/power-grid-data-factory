@@ -135,7 +135,7 @@ def parse_args() -> argparse.Namespace:
         action="append",
         default=[],
         metavar="KEY=VALUE",
-        help="Extra Ipopt option; repeat as needed (e.g. mu_init=1e-4).",
+        help="Extra Ipopt option; repeat as needed (e.g. mu_init=1e-4). Overrides built-in settings such as tol.",
     )
     p.add_argument("--execution-policy", default="", help="Optional per-case enable/timeout YAML policy.")
     p.add_argument("--max-candidates", type=int, default=0)

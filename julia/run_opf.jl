@@ -186,10 +186,10 @@ function to_powermodels_data(case_data)
     )
 end
 
+# Branch flows omitted: PowerModels reads one p_start/q_start per branch for both arcs.
 const AC_WARM_START_FIELDS = Dict(
     "bus" => ("vm", "va"),
     "gen" => ("pg", "qg"),
-    "branch" => ("pf", "qf", "pt", "qt"),
 )
 
 function apply_ac_warm_start!(pm_data, solution)
