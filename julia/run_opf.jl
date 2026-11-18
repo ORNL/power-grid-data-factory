@@ -186,19 +186,23 @@ function to_powermodels_data(case_data)
     )
 end
 
+const AC_WARM_START_FIELDS = Dict(
+    "bus" => ("vm", "va"),
+    "gen" => ("pg", "qg"),
+    "branch" => ("pf", "qf", "pt", "qt"),
+)
+
 function apply_ac_warm_start!(pm_data, solution)
-    PowerModels.update_data!(pm_data, solution)
-    for bus in values(pm_data["bus"])
-        haskey(bus, "vm") && (bus["vm_start"] = bus["vm"])
-        haskey(bus, "va") && (bus["va_start"] = bus["va"])
-    end
-    for gen in values(pm_data["gen"])
-        haskey(gen, "pg") && (gen["pg_start"] = gen["pg"])
-        haskey(gen, "qg") && (gen["qg_start"] = gen["qg"])
-    end
-    for branch in values(pm_data["branch"])
-        for field in ("pf", "qf", "pt", "qt")
-            haskey(branch, field) && (branch[field * "_start"] = branch[field])
+    sol = sanitize_json_value(solution)
+    for (comp, fields) in AC_WARM_START_FIELDS
+        haskey(sol, comp) && haskey(pm_data, comp) || continue
+        for (id, vals) in sol[comp]
+            target = get(pm_data[comp], string(id), nothing)
+            (target === nothing || !(vals isa AbstractDict)) && continue
+            for field in fields
+                v = get(vals, field, nothing)
+                v isa Real && (target[field * "_start"] = Float64(v))
+            end
         end
     end
 end
